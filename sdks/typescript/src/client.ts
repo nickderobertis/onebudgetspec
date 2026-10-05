@@ -123,7 +123,19 @@ function strings(name: string, values: readonly string[] | undefined): string[] 
 
 /** The flags and operands naming the budgets files, after `--` so none reads as a flag. */
 function files(options: FileOptions): string[] {
-  return [...(options.recursive ? ["--recursive"] : []), "--", ...strings("paths", options.paths)];
+  const { recursive } = options;
+  if (recursive !== undefined && typeof recursive !== "boolean") {
+    throw new TypeError(`recursive must be true or false, not ${JSON.stringify(recursive)}`);
+  }
+  return [...(recursive ? ["--recursive"] : []), "--", ...strings("paths", options.paths)];
+}
+
+/** `value`, which a JavaScript caller may pass as anything, when it is a string or absent. */
+function optionalString(name: string, value: string | undefined): string | undefined {
+  if (value !== undefined && typeof value !== "string") {
+    throw new TypeError(`${name} must be a string, not ${JSON.stringify(value)}`);
+  }
+  return value;
 }
 
 /** The selection flags, each value joined to its flag so none can read as a flag. */
@@ -137,7 +149,8 @@ function selection(options: SelectionOptions): string[] {
 
 /** Run the binary with `args` and resolve its stdout, or reject with its message. */
 function run(binary: string | undefined, args: string[], cwd: string | undefined): Promise<string> {
-  const [program, ...prefix] = resolveBinary(binary);
+  const [program, ...prefix] = resolveBinary(optionalString("binary", binary));
+  optionalString("cwd", cwd);
   return new Promise((resolve, reject) => {
     const child = spawn(program, [...prefix, ...args], {
       cwd,

@@ -222,7 +222,14 @@ def test_stdout_that_is_not_the_report_raises(
 
 @pytest.mark.parametrize(
     "arguments",
-    [{"ids": "api"}, {"labels": ["api", 3]}, {"paths": "budgets.yaml"}, {"paths": Path("x")}],
+    [
+        {"ids": "api"},
+        {"labels": ["api", 3]},
+        {"paths": "budgets.yaml"},
+        {"paths": Path("x")},
+        {"recursive": "false"},
+        {"recursive": 1},
+    ],
 )
 def test_a_lone_string_or_a_non_string_is_refused_before_anything_runs(
     tmp_path: Path, arguments: dict

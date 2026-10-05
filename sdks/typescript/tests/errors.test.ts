@@ -144,9 +144,13 @@ test.each<[Record<string, unknown>]>([
   [{ labels: ["api", 3] }],
   [{ excludeLabels: [null] }],
   [{ paths: "budgets.yaml" }],
+  [{ recursive: "false" }],
+  [{ recursive: 1 }],
+  [{ cwd: 3 }],
+  [{ binary: ["onebudgetspec"] }],
 ])("%p is refused before anything runs", async (options) => {
   const dir = scratch();
-  const call = () => check({ ...options, cwd: dir, binary: join(dir, "never-run") });
+  const call = () => check({ cwd: dir, binary: join(dir, "never-run"), ...options });
   await expect(call()).rejects.toBeInstanceOf(TypeError);
 });
 

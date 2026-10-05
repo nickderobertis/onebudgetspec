@@ -105,6 +105,8 @@ def _paths(paths: Sequence[StrPath] | None) -> list[str]:
 
 def _files(paths: Sequence[StrPath] | None, recursive: bool) -> list[str]:
     """The flags and operands naming the budgets files, after ``--`` so none reads as a flag."""
+    if not isinstance(recursive, bool):
+        raise TypeError(f"recursive must be True or False, not {recursive!r}")
     return [*(["--recursive"] if recursive else []), "--", *_paths(paths)]
 
 
