@@ -123,9 +123,12 @@ def disagreements(root: Path = ROOT) -> list[str]:
             "writes as the release version"
         )
     sdk = json.loads((root / "sdks/typescript/package.json").read_text())
-    cli = sdk.get("optionalDependencies", {})
-    if cli != {"@onebudgetspec/cli": "workspace:*"} or "@onebudgetspec/cli" in sdk.get(
-        "dependencies", {}
+    cli = sdk.get("optionalDependencies") if isinstance(sdk, dict) else None
+    required = sdk.get("dependencies", {}) if isinstance(sdk, dict) else None
+    if (
+        cli != {"@onebudgetspec/cli": "workspace:*"}
+        or not isinstance(required, dict)
+        or "@onebudgetspec/cli" in required
     ):
         problems.append(
             f"sdks/typescript/package.json: optional dependencies {cli}, expected "

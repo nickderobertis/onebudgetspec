@@ -194,3 +194,25 @@ def test_a_target_whose_probe_asks_for_another_package_is_named(tmp_path: Path) 
         "sdk-npm: publishes dist/sdk-npm, built as sdk-typescript (@onebudgetspec/sdk), "
         "not ['@onebudgetspec/cli']"
     ]
+
+
+def test_a_release_workflow_or_wheel_config_of_another_shape_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    pyproject = root / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text().replace("[tool.maturin]", "[tool.not-maturin]"))
+    workflow = root / ".github/workflows/release.yml"
+    workflow.write_text("on: release\njobs: [build, publish]\n")
+    assert release.artifact_problems(root) == [
+        "scripts/build-dist.sh cli-wheel does not build onebudgetspec-cli",
+        ".github/workflows/release.yml: `jobs` is not a mapping of jobs",
+    ]
+
+
+def test_a_job_or_step_of_another_shape_publishes_nothing(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    workflow = root / ".github/workflows/release.yml"
+    workflow.write_text(
+        "on: release\njobs:\n  odd: just a string\n  stepless:\n    steps: none\n"
+        "  publish:\n    steps:\n      - bash scripts/release/publish.sh sdk-npm dist/sdk-npm\n"
+    )
+    assert release.artifact_problems(root) == []

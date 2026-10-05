@@ -14,10 +14,10 @@ import shutil
 import subprocess
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from jsonschema import Draft202012Validator, FormatChecker
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, JsonValue, ValidationError
 
 from ._generated.check_report import CheckReport
 from ._generated.list_report import ListReport
@@ -328,7 +328,7 @@ def list_budgets(
     return _report(ListReport, "list-report", _run(binary, args, cwd))
 
 
-def schema(*, binary: StrPath | None = None) -> dict[str, Any]:
+def schema(*, binary: StrPath | None = None) -> dict[str, JsonValue]:
     """The JSON Schema bundle the binary prints: ``onebudgetspec schema``.
 
     Raises:

@@ -102,7 +102,11 @@ def parse(args: list[str]) -> Invocation:
 
 
 def normalize(report: dict[str, Any], case: CaseSpec, name: str) -> dict[str, Any]:
-    """The normalization conformance/README.md defines, applied to a report in place."""
+    """The normalization conformance/README.md defines, applied to a report in place.
+
+    The report is plain JSON (``Any``), rewritten field by field the way the README states
+    it; its typed form is the model under test, compared after this runs.
+    """
     timed = case.get("timed", [])
     for result in report["results"]:
         result["started_at"] = EPOCH

@@ -11,8 +11,11 @@ import { join, resolve } from "node:path";
 import { compile } from "json-schema-to-typescript";
 
 /** The bundle roots the SDK's calls return, and the module each is generated into. */
-const ROOTS = { "check-report": "check-report.ts", "list-report": "list-report.ts" } as const;
-type Root = keyof typeof ROOTS;
+type Root = "check-report" | "list-report";
+const ROOTS: Record<Root, string> = {
+  "check-report": "check-report.ts",
+  "list-report": "list-report.ts",
+};
 const ROOT_NAMES: readonly Root[] = ["check-report", "list-report"];
 const PACKAGE = resolve(import.meta.dir, "..");
 const WORKSPACE = resolve(PACKAGE, "../..");

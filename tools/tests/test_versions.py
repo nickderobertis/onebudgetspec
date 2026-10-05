@@ -63,6 +63,7 @@ def test_each_sdk_s_pin_on_the_cli_is_held_to_the_workspace_version() -> None:
         {"optionalDependencies": {"@onebudgetspec/cli": "0.0.9"}},
         {"optionalDependencies": {}, "dependencies": {"@onebudgetspec/cli": "workspace:*"}},
         {"dependencies": {"@onebudgetspec/cli": "workspace:*"}},
+        {"dependencies": ["@onebudgetspec/cli"]},
     ],
 )
 def test_a_typescript_sdk_pin_other_than_the_workspace_s_optional_launcher_is_named(
