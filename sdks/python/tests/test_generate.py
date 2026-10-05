@@ -93,6 +93,7 @@ def fake_binary(directory: Path, printed: str) -> Path:
         ("not json", "the binary's schema is not JSON"),
         ('{"version": 1, "roots": {"check-report": {}}}', "lacks an integer `version`"),
         ('{"version": "1", "roots": {}}', "lacks an integer `version`"),
+        ('{"version": true, "roots": {}}', "lacks an integer `version`"),
     ],
 )
 def test_a_bundle_of_another_shape_is_refused_with_a_next_step(

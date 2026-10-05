@@ -152,7 +152,8 @@ def _run(binary: StrPath | None, args: list[str], cwd: StrPath | None) -> bytes:
 
 def _report(model: type[_Report], stdout: bytes) -> _Report:
     try:
-        return model.model_validate_json(stdout)
+        # Strict: a report field of the wrong JSON type is refused, never coerced.
+        return model.model_validate_json(stdout, strict=True)
     except ValidationError as error:
         raise OnebudgetspecError(
             f"onebudgetspec: the binary printed no valid {model.__name__}: {error}",

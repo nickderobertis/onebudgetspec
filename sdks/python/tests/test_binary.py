@@ -199,6 +199,13 @@ def test_a_status_that_is_no_report_raises_with_what_the_binary_said(tmp_path: P
     [
         ("not json", check, "no valid CheckReport"),
         ('{"schema_version": 1, "budgets": [], "extra": 1}', list_budgets, "no valid ListReport"),
+        (
+            '{"schema_version": 1, "budgets": [{"id": "a", "file": "budgets.yaml", '
+            '"description": null, "labels": [], "measure": "elapsed", "command": ["true"], '
+            '"unit": "seconds", "direction": "max", "threshold": "60", "timeout_seconds": null}]}',
+            list_budgets,
+            "no valid ListReport",
+        ),
         ("not json", schema, "not JSON"),
         ("[]", schema, "not a JSON object"),
     ],

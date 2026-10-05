@@ -53,9 +53,9 @@ class SchemaBundle:
         except ValueError as error:
             raise GenerateError(f"the binary's schema is not JSON ({error}); {REBUILD}") from error
         match document:
-            case {"version": int(version), "roots": dict(roots)} if all(
-                isinstance(roots.get(root), dict) for root in ROOTS
-            ):
+            case {"version": int(version), "roots": dict(roots)} if not isinstance(
+                version, bool
+            ) and all(isinstance(roots.get(root), dict) for root in ROOTS):
                 return cls(version, {root: roots[root] for root in ROOTS})
             case _:
                 raise GenerateError(

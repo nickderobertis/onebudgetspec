@@ -167,7 +167,28 @@ function run(binary: string | undefined, args: string[], cwd: string | undefined
 }
 
 /** An RFC 3339 timestamp, as the reports' `date-time` fields carry. */
-const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i;
+const RFC3339 = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-](\d{2}):(\d{2}))$/i;
+/** Whether `value` is an RFC 3339 timestamp naming a real instant: a day its month has, and
+ * an hour, minute, second and offset in range (a leap second allowed). */
+function isDateTime(value: string): boolean {
+  const parts = RFC3339.exec(value);
+  if (parts === null) return false;
+  // Groups 9 and 10 are the offset's hours and minutes, absent for `Z`.
+  const field = (group: number) => Number(parts[group] ?? 0);
+  const [year, month, day] = [field(1), field(2), field(3)];
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return (
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth &&
+    field(4) <= 23 &&
+    field(5) <= 59 &&
+    field(6) <= 60 &&
+    field(9) <= 23 &&
+    field(10) <= 59
+  );
+}
 const isUnsigned = (bits: number) => (value: number) =>
   Number.isInteger(value) && value >= 0 && value < 2 ** bits;
 // Every format the schema names is checked: the timestamps, and the numeric widths the
@@ -175,8 +196,10 @@ const isUnsigned = (bits: number) => (value: number) =>
 const ajv = new Ajv2020({
   allErrors: true,
   formats: {
-    "date-time": (value: string) => RFC3339.test(value) && !Number.isNaN(Date.parse(value)),
-    double: { type: "number", validate: (value: number) => Number.isFinite(value) },
+    "date-time": isDateTime,
+    // A double is any JSON number: ajv's own `number` check already refuses a value that
+    // overflows to Infinity.
+    double: true,
     uint32: { type: "number", validate: isUnsigned(32) },
     uint64: { type: "number", validate: isUnsigned(64) },
   },

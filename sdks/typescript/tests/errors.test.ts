@@ -1,6 +1,6 @@
 // How a call that gets no report rejects, and what it refuses before anything runs.
 import { afterAll, expect, test } from "bun:test";
-import { writeFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { check, listBudgets, OnebudgetspecError, schema, validate } from "../src/index.ts";
 import { builtBinary, cleanScratch, recording, rejection, runCli, scratch } from "./helpers.ts";
@@ -57,33 +57,6 @@ test.each<[string, string, Call, string]>([
   ["not json", "check", checkWith, "printed no JSON"],
   ['{"schema_version": 1, "budgets": [], "extra": 1}', "list", listWith, "no valid list-report"],
   ['{"schema_version": 1}', "check", checkWith, "no valid check-report"],
-  [
-    JSON.stringify({
-      schema_version: 1,
-      results: [
-        {
-          id: "late",
-          file: "budgets.yaml",
-          labels: [],
-          unit: "seconds",
-          direction: "max",
-          threshold: 1,
-          verdict: "within",
-          actual: 0.5,
-          headroom: 0.5,
-          headroom_percent: 50,
-          detail: null,
-          error: null,
-          started_at: "yesterday",
-          ended_at: "1970-01-01T00:00:00Z",
-          host: { load1: null, cpus: 1, mem_available_mib: null, conditions: {} },
-        },
-      ],
-    }),
-    "check",
-    checkWith,
-    'must match format "date-time"',
-  ],
 
   ["not json", "schema", schemaWith, "not JSON"],
   ["[]", "schema", schemaWith, "not a JSON object"],
@@ -91,6 +64,76 @@ test.each<[string, string, Call, string]>([
   const dir = scratch();
   const liar = recording(join(dir, "bin"), "liar", join(dir, "ran.log"), `echo '${printed}'`);
   const refused = await rejection(call(liar), OnebudgetspecError);
+  expect(refused.message).toContain(reason);
+});
+
+/** A check report with one result, its fields overridden by `result` and `host`, printed
+ * raw so a value JSON allows but the schema's formats refuse can be written. */
+function reportWith(result: Record<string, string>, host: Record<string, string> = {}): string {
+  const fields: Record<string, string> = {
+    id: '"late"',
+    file: '"budgets.yaml"',
+    labels: "[]",
+    unit: '"seconds"',
+    direction: '"max"',
+    threshold: "1",
+    verdict: '"within"',
+    actual: "0.5",
+    headroom: "0.5",
+    headroom_percent: "50",
+    detail: "null",
+    error: "null",
+    started_at: '"2026-10-05T10:00:00Z"',
+    ended_at: '"2026-10-05T10:00:01.5+02:00"',
+    ...result,
+  };
+  const hostFields: Record<string, string> = {
+    load1: "null",
+    cpus: "1",
+    mem_available_mib: "null",
+    conditions: "{}",
+    ...host,
+  };
+  const object = (entries: Record<string, string>) =>
+    `{${Object.entries(entries)
+      .map(([key, value]) => `"${key}": ${value}`)
+      .join(", ")}}`;
+  return `{"schema_version": 1, "results": [${object({ ...fields, host: object(hostFields) })}]}`;
+}
+
+test("a report whose every format holds is returned", async () => {
+  const dir = scratch();
+  const program = join(dir, "onebudgetspec");
+  writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${reportWith({})}\nEOF\n`);
+  chmodSync(program, 0o755);
+  const report = await check({ binary: program });
+  expect(report.results[0]?.ended_at).toBe("2026-10-05T10:00:01.5+02:00");
+});
+
+test.each<[string, Record<string, string>, Record<string, string>, string]>([
+  ["a timestamp that is not one", { started_at: '"yesterday"' }, {}, 'format "date-time"'],
+  ["a day its month lacks", { started_at: '"2026-02-30T00:00:00Z"' }, {}, 'format "date-time"'],
+  ["an hour past 23", { ended_at: '"2026-10-05T24:00:00Z"' }, {}, 'format "date-time"'],
+  [
+    "an offset past 23 hours",
+    { ended_at: '"2026-10-05T10:00:00+24:00"' },
+    {},
+    'format "date-time"',
+  ],
+  ["a measurement too large for a double", { actual: "1e400" }, {}, "number"],
+  ["more CPUs than 32 bits hold", {}, { cpus: "4294967296" }, 'format "uint32"'],
+  [
+    "more memory than 64 bits hold",
+    {},
+    { mem_available_mib: "18446744073709551616" },
+    'format "uint64"',
+  ],
+])("%s is refused", async (_what, result, host, reason) => {
+  const dir = scratch();
+  const program = join(dir, "onebudgetspec");
+  writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${reportWith(result, host)}\nEOF\n`);
+  chmodSync(program, 0o755);
+  const refused = await rejection(check({ binary: program }), OnebudgetspecError);
   expect(refused.message).toContain(reason);
 });
 
