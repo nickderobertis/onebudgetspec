@@ -1,6 +1,45 @@
-"""The onebudgetspec Python SDK, released at the same version as the command line."""
+"""The onebudgetspec Python SDK: check, validate and list budgets through the binary.
 
-__all__ = ["__version__"]
+Each call runs the ``onebudgetspec`` binary once and returns its JSON report as a model
+generated from ``onebudgetspec schema``.
+"""
+
+from ._client import (
+    BINARY_ENV,
+    CLI_DISTRIBUTION,
+    OnebudgetspecError,
+    StrPath,
+    check,
+    list_budgets,
+    resolve_binary,
+    schema,
+    validate,
+)
+from ._generated import SCHEMA_BUNDLE_VERSION
+from ._generated.check_report import CheckReport, CheckResult, Direction, Host, Verdict
+from ._generated.list_report import ListedBudget, ListReport, Measure
+
+__all__ = [
+    "BINARY_ENV",
+    "CLI_DISTRIBUTION",
+    "SCHEMA_BUNDLE_VERSION",
+    "CheckReport",
+    "CheckResult",
+    "Direction",
+    "Host",
+    "ListReport",
+    "ListedBudget",
+    "Measure",
+    "OnebudgetspecError",
+    "StrPath",
+    "Verdict",
+    "__version__",
+    "check",
+    "list_budgets",
+    "resolve_binary",
+    "schema",
+    "validate",
+]
 
 #: The version of this package, which releases in lock step with the ``onebudgetspec`` binary.
 __version__ = "0.1.0"

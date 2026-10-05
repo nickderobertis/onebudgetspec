@@ -105,9 +105,11 @@ case "$ARTIFACT" in
     written_since_start "$OUT" '*.whl'
     ;;
   sdk-typescript)
+    # bun's pack, because it writes the CLI's `workspace:*` as the release version.
+    # llmlint: ignore[work_goes_through_command_surface] release.yml runs this on fresh runners that never run 'just bootstrap', whose uv and cargo steps that job lacks; the locked install is this build's own input, as in the npm-launcher arm.
     quietly bun install --frozen-lockfile --cwd "$ROOT"
     quietly bun run --cwd "$ROOT/sdks/typescript" build
-    quietly npm pack "$ROOT/sdks/typescript" --silent --pack-destination "$OUT"
+    (cd "$ROOT/sdks/typescript" && quietly bun pm pack --quiet --destination "$OUT")
     written_since_start "$OUT" '*.tgz'
     ;;
   *) usage "unknown artifact '$ARTIFACT'" ;;

@@ -5,7 +5,7 @@ performs the measurement, a unit, a direction and a threshold; `onebudgetspec ch
 every selected command once and reports the actual value, the budget and the headroom.
 
 It ships as a Rust SDK (`onebudgetspec-core`) and a command line (`onebudgetspec`), with
-Python and TypeScript SDKs released beside them at the same version.
+Python and TypeScript SDKs released beside them at the same version (see [SDKs](#sdks)).
 
 ## Principles
 
@@ -94,6 +94,43 @@ budget gate-time: actual 1395 seconds, budget 1800 seconds, headroom 405 seconds
 The npm launcher adds three of its own, each with the reason on stderr: `64` on a platform
 no carrier is published for, `69` when the carrier package is missing or its binary
 cannot run, and `70` when the binary was ended by a signal.
+
+## SDKs
+
+Three SDKs, released at the binary's version. The Rust SDK is the engine itself; the Python
+and TypeScript SDKs run the `onebudgetspec` binary once per call, parse the JSON it prints,
+and return the reports as types generated from `onebudgetspec schema`, so they never drift
+from it.
+
+| | Rust | Python | TypeScript |
+| --- | --- | --- | --- |
+| Package | `onebudgetspec-core` (crates.io) | `onebudgetspec-sdk` (PyPI), imported as `onebudgetspec_sdk` | `@onebudgetspec/sdk` (npm) |
+| Install | `cargo add onebudgetspec-core` | `pip install onebudgetspec-sdk`, which installs `onebudgetspec-cli` at the same version | `npm install @onebudgetspec/sdk`, which installs its optional dependency `@onebudgetspec/cli` at the same version |
+| Calls | `load(paths, recursive)`, then `.select(&Selection)` and `.check()` or `.list_report()`, or `.all().list_report()` to validate; `schema_bundle()` | `check(paths=None, ids=None, labels=None, exclude_labels=None, recursive=False, cwd=None) -> CheckReport`, `validate(paths=None, recursive=False, cwd=None) -> ListReport`, `list_budgets(...)` with `check`'s arguments `-> ListReport`, `schema() -> dict` | `check({paths, ids, labels, excludeLabels, recursive, cwd})`, `validate({paths, recursive, cwd})`, `listBudgets({paths, ids, labels, excludeLabels, recursive, cwd})`, `schema()`, each a promise of the generated type |
+| Binary | none: it measures in process | the `binary=` argument, then `ONEBUDGETSPEC_BIN`, then the `onebudgetspec` the `onebudgetspec-cli` wheel installed, then `onebudgetspec` on `PATH` | the `binary` option, then `ONEBUDGETSPEC_BIN`, then the launcher of the resolved `@onebudgetspec/cli` package |
+| Tests and journeys it owes | `crates/onebudgetspec-core/tests/api.rs`, `crates/onebudgetspec-core/tests/schema.rs`, and every CLI journey and conformance case, which drive it through the binary | `sdks/python/tests/test_conformance.py` (every conformance case through `check`, `list_budgets` and `validate`), `sdks/python/tests/test_binary.py` (resolution order and refusals), `sdks/python/tests/test_generate.py` (the model generator), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` | `sdks/typescript/tests/conformance.test.ts`, `sdks/typescript/tests/binary.test.ts`, `sdks/typescript/tests/errors.test.ts` and `sdks/typescript/tests/generator.test.ts` (the same concerns), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` |
+
+In Python and TypeScript, exit statuses `0`, `1` and `3` return the report, since the
+verdicts are in it; status `2` (an invalid invocation or budgets file) raises
+`OnebudgetspecError` (Python) or rejects with it (TypeScript), carrying the CLI's own
+message and `exit_code`/`exitCode` `2`.
+
+```python
+from onebudgetspec_sdk import check
+
+report = check(labels=["api"], exclude_labels=["slow"], cwd="services")
+for result in report.results:
+    print(result.id, result.verdict, result.actual, result.headroom, result.host.conditions)
+```
+
+```ts
+import { check } from "@onebudgetspec/sdk";
+
+const report = await check({ labels: ["api"], excludeLabels: ["slow"], cwd: "services" });
+for (const result of report.results) {
+  console.log(result.id, result.verdict, result.actual, result.headroom, result.host.conditions);
+}
+```
 
 ## Nesting budgets files
 

@@ -6,6 +6,8 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "js"]
   },
+  "//": "The TypeScript SDK: report types and runtime schemas generated from the binary's `onebudgetspec schema` by scripts/generate.ts, whose `--check` runs under lint, and a client that runs the binary. Its tests run every conformance case through the SDK against the cargo-built binary, so it depends on that binary and on the cases.",
+  "implicitDependencies": ["onebudgetspec", "conformance"],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
@@ -29,8 +31,21 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "bun run biome lint --error-on-warnings sdks/typescript"
-      }
+        "commands": [
+          "bun run biome lint --error-on-warnings sdks/typescript",
+          "bun run --cwd sdks/typescript generate:check"
+        ],
+        "parallel": false
+      },
+      "dependsOn": ["onebudgetspec:build"]
+    },
+    "generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run --cwd sdks/typescript generate"
+      },
+      "dependsOn": ["onebudgetspec:build"],
+      "cache": false
     },
     "typecheck": {
       "executor": "nx:run-commands",
@@ -43,7 +58,8 @@
       "options": {
         "command": "bun test --coverage",
         "cwd": "sdks/typescript"
-      }
+      },
+      "dependsOn": ["onebudgetspec:build"]
     }
   }
 }

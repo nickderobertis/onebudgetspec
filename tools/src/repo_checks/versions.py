@@ -74,6 +74,8 @@ def places() -> list[Place]:
         Place("Cargo.toml", r'^(onebudgetspec-core = \{[^}]*version = "=)([^"]+)(")'),
         Place("pyproject.toml", r'^(version = ")([^"]+)(")'),
         Place("sdks/python/pyproject.toml", r'^(version = ")([^"]+)(")'),
+        # The SDK runs the binary its wheel's release ships, so it pins that release.
+        Place("sdks/python/pyproject.toml", r'^(dependencies = \["onebudgetspec-cli==)([^"]+)(")'),
         Place("sdks/python/src/onebudgetspec_sdk/__init__.py", r'^(__version__ = ")([^"]+)(")'),
         Place("sdks/typescript/package.json", r'^(  "version": ")([^"]+)(")'),
         Place("sdks/typescript/src/index.ts", r'^(export const VERSION = ")([^"]+)(")'),
@@ -119,6 +121,19 @@ def disagreements(root: Path = ROOT) -> list[str]:
         problems.append(
             f"npm/cli/package.json: carriers {carriers}, expected {expected}, which packing "
             "writes as the release version"
+        )
+    sdk = json.loads((root / "sdks/typescript/package.json").read_text())
+    cli = sdk.get("optionalDependencies") if isinstance(sdk, dict) else None
+    required = sdk.get("dependencies", {}) if isinstance(sdk, dict) else None
+    if (
+        cli != {"@onebudgetspec/cli": "workspace:*"}
+        or not isinstance(required, dict)
+        or "@onebudgetspec/cli" in required
+    ):
+        problems.append(
+            f"sdks/typescript/package.json: optional dependencies {cli}, expected "
+            "{'@onebudgetspec/cli': 'workspace:*'} and no other kind, which packing writes "
+            "as the release version"
         )
     rust = tomllib.loads((root / "Cargo.toml").read_text())["workspace"]["package"]["rust-version"]
     msrv = tomllib.loads((root / "clippy.toml").read_text()).get("msrv")

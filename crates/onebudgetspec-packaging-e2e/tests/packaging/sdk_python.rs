@@ -1,13 +1,97 @@
-//! The `onebudgetspec-sdk` wheel installs into a fresh environment and imports as
-//! `onebudgetspec_sdk` at the release version.
+//! The `onebudgetspec-sdk` wheel, installed into a fresh environment beside the
+//! `onebudgetspec-cli` wheel it requires, checks, validates and lists a conformance case and
+//! prints the schema through the binary that wheel installed.
 
-use crate::common::{VERSION, artifact, succeed, venv_with};
+use std::path::Path;
+use std::process::Command;
+
+use serde_json::Value;
+
+use crate::common::{SDK_CASE, VERSION, artifact, assert_sdk_answers, conformance_case, succeed};
+
+/// Each call over the case named by argv[1], with the selection its case.json gives.
+const DRIVE: &str = r#"
+import json, sys
+from pathlib import Path
+import onebudgetspec_sdk as sdk
+
+case = Path(sys.argv[1])
+args = json.loads((case / "case.json").read_text())["args"]
+flags = {"--id": [], "--label": [], "--exclude-label": []}
+words = iter(args[1:])
+for word in words:
+    if word in flags:
+        flags[word].append(next(words))
+selection = {
+    "ids": flags["--id"],
+    "labels": flags["--label"],
+    "exclude_labels": flags["--exclude-label"],
+}
+print(json.dumps({
+    "check": sdk.check(cwd=case, **selection).model_dump(mode="json"),
+    "list": sdk.list_budgets(cwd=case, **selection).model_dump(mode="json"),
+    "validate": sdk.validate(cwd=case).model_dump(mode="json"),
+    "schema": sdk.schema(),
+    "binary": str(sdk.resolve_binary()),
+}))
+"#;
+
+/// The `Requires-Dist` lines of the wheel's own METADATA.
+const REQUIRES: &str = r#"
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as wheel:
+    name = next(n for n in wheel.namelist() if n.endswith(".dist-info/METADATA"))
+    for line in wheel.read(name).decode().splitlines():
+        if line.startswith("Requires-Dist: "):
+            print(line.removeprefix("Requires-Dist: "))
+"#;
+
+/// A fresh environment under `dir` with `wheels` installed and their other requirements
+/// resolved; returns its `bin` directory.
+fn venv_with_requirements(dir: &Path, wheels: &[&Path]) -> std::path::PathBuf {
+    let venv = dir.join("venv");
+    succeed("uv", &["venv", "--quiet", venv.to_str().unwrap()], dir);
+    let python = venv.join("bin/python");
+    let mut args = vec![
+        "pip",
+        "install",
+        "--quiet",
+        "--python",
+        python.to_str().unwrap(),
+    ];
+    args.extend(wheels.iter().map(|wheel| wheel.to_str().unwrap()));
+    succeed("uv", &args, dir);
+    venv.join("bin")
+}
 
 #[test]
-fn the_python_sdk_installs_and_imports() {
+fn the_wheel_requires_the_cli_at_exactly_the_workspace_version() {
     let wheel = artifact("sdk-python");
+    let name = wheel.file_name().unwrap().to_string_lossy().into_owned();
+    assert!(
+        name.starts_with(&format!("onebudgetspec_sdk-{VERSION}-")),
+        "{name}"
+    );
+    let requires = succeed(
+        "python3",
+        &["-c", REQUIRES, wheel.to_str().unwrap()],
+        Path::new("."),
+    );
+    let cli: Vec<&str> = requires
+        .lines()
+        .filter(|line| line.starts_with("onebudgetspec-cli"))
+        .collect();
+    assert_eq!(cli, [format!("onebudgetspec-cli=={VERSION}")], "{requires}");
+}
+
+#[test]
+fn the_installed_sdk_answers_a_conformance_case_through_the_wheel_s_binary() {
+    let sdk = artifact("sdk-python");
+    let cli = artifact("cli-wheel");
     let dir = tempfile::tempdir().unwrap();
-    let bin = venv_with(dir.path(), &wheel);
+    let bin = venv_with_requirements(dir.path(), &[&sdk, &cli]);
+    let installed = bin.join("onebudgetspec").canonicalize().unwrap();
+
     let version = succeed(
         bin.join("python"),
         &[
@@ -26,4 +110,26 @@ fn the_python_sdk_installs_and_imports() {
         dir.path(),
     );
     assert_eq!(typed.trim(), "True", "the wheel ships no py.typed marker");
+
+    let (case_dir, case) = conformance_case(dir.path(), SDK_CASE);
+    // No ONEBUDGETSPEC_BIN and only the environment's own bin on PATH: the SDK must find
+    // the binary the onebudgetspec-cli wheel installed.
+    let output = Command::new(bin.join("python"))
+        .args(["-c", DRIVE, case_dir.to_str().unwrap()])
+        .env_remove("ONEBUDGETSPEC_BIN")
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .current_dir(dir.path())
+        .output()
+        .expect("the environment's python runs");
+    assert!(
+        output.status.success(),
+        "the SDK failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut answers: Value = serde_json::from_slice(&output.stdout).expect("one JSON document");
+    let resolved = Path::new(answers["binary"].as_str().unwrap())
+        .canonicalize()
+        .unwrap();
+    answers["binary"] = resolved.to_string_lossy().into_owned().into();
+    assert_sdk_answers(&answers, &case_dir, &case, &installed);
 }

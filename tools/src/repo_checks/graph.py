@@ -31,7 +31,9 @@ _EVERYTHING_BELOW_TOOLING: set[ProjectType] = {
 #: For each project type, the types it may depend on.
 ALLOWED: dict[ProjectType, set[ProjectType]] = {
     "contract": set(),
-    "sdk": set(),
+    # An SDK's models are generated from the binary's schema and its tests run the
+    # conformance cases against the binary, so a change to either must select it.
+    "sdk": {"binary", "contract"},
     "distribution": set(),
     "binary": {"contract"},
     "e2e": {"binary", "contract", "distribution", "sdk"},

@@ -6,6 +6,8 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "python"]
   },
+  "//": "The Python SDK: report models generated from the binary's `onebudgetspec schema` by generate.py, whose `--check` runs under lint, and a client that runs the binary. Its tests run every conformance case through the SDK against the cargo-built binary, so it depends on that binary and on the cases.",
+  "implicitDependencies": ["onebudgetspec", "conformance"],
   "targets": {
     "format": {
       "executor": "nx:run-commands",
@@ -24,9 +26,23 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync ruff check --quiet .",
+        "commands": [
+          "uv run --frozen --no-sync ruff check --quiet .",
+          "uv run --frozen --no-sync python generate.py --check"
+        ],
+        "cwd": "sdks/python",
+        "parallel": false
+      },
+      "dependsOn": ["onebudgetspec:build"]
+    },
+    "generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync python generate.py",
         "cwd": "sdks/python"
-      }
+      },
+      "dependsOn": ["onebudgetspec:build"],
+      "cache": false
     },
     "typecheck": {
       "executor": "nx:run-commands",
@@ -42,7 +58,7 @@
       },
       "outputs": ["{workspaceRoot}/target/python-coverage"],
       "cache": false,
-      "dependsOn": ["workspace:coverage-clear"]
+      "dependsOn": ["onebudgetspec:build", "workspace:coverage-clear"]
     },
     "build": {
       "executor": "nx:run-commands",

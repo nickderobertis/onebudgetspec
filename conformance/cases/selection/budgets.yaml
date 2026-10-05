@@ -1,0 +1,30 @@
+schema_version: 1
+budgets:
+  - id: api-latency
+    labels: [api]
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 120}']
+    unit: ms
+    direction: max
+    threshold: 200
+  - id: api-retries
+    labels: [api, slow]
+    measure: reported
+    command: ["false"]
+    unit: retries
+    direction: max
+    threshold: 3
+  - id: web-bundle
+    labels: [web]
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 180}']
+    unit: kib
+    direction: max
+    threshold: 250
+  - id: batch-throughput
+    labels: [batch]
+    measure: reported
+    command: ["false"]
+    unit: rows/s
+    direction: min
+    threshold: 1000

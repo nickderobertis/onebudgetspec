@@ -1,0 +1,9 @@
+schema_version: 1
+budgets:
+  - id: api-latency
+    labels: [api]
+    measure: reported
+    command: ["sh", "-c", "printf '{\"value\": 150}' > \"$ONEBUDGETSPEC_RESULT\""]
+    unit: ms
+    direction: max
+    threshold: 200

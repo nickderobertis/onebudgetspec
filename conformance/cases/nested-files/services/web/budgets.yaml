@@ -1,0 +1,9 @@
+schema_version: 1
+budgets:
+  - id: web-bundle
+    labels: [web]
+    measure: reported
+    command: ["sh", "-c", "printf '{\"value\": 300, \"detail\": \"vendor chunk\"}' > \"$ONEBUDGETSPEC_RESULT\""]
+    unit: kib
+    direction: max
+    threshold: 250
