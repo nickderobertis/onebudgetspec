@@ -256,11 +256,11 @@ def _step_runs(root: Path) -> list[str] | None:
     if not isinstance(jobs, dict):
         return None
     return [
-        str(step.get("run", ""))
+        step["run"]
         for body in jobs.values()
         if isinstance(body, dict) and isinstance(body.get("steps"), list)
         for step in body["steps"]
-        if isinstance(step, dict)
+        if isinstance(step, dict) and isinstance(step.get("run"), str)
     ]
 
 
