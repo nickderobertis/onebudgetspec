@@ -132,26 +132,72 @@ def _document(path: Path) -> dict:
     return document
 
 
+def _scalar(value: object) -> str | None:
+    """A YAML scalar as GitHub reads it in an expression context, or None for any other value."""
+    match value:
+        case bool():
+            return "true" if value else "false"
+        case str() | int() | float():
+            return str(value)
+        case _:
+            return None
+
+
+def _strings(value: object, where: str) -> dict[str, str]:
+    """``value`` as a mapping of names to scalars, each read as a string."""
+    if not isinstance(value, dict):
+        raise InvalidWorkflow(f"{where} is not a mapping of names to values")
+    read = {name: _scalar(item) for name, item in value.items()}
+    if not all(isinstance(name, str) for name in read) or None in read.values():
+        raise InvalidWorkflow(f"{where} is not a mapping of names to values")
+    return {str(name): item for name, item in read.items() if item is not None}
+
+
+def _step(where: str, step: object) -> Step:
+    """``step``, its id, run and env checked and read as strings; other keys kept."""
+    if not isinstance(step, dict):
+        raise InvalidWorkflow(f"{where} is not a mapping")
+    for field in ("id", "run"):
+        if field in step and not isinstance(step[field], str):
+            raise InvalidWorkflow(f"{where} `{field}` is not a string")
+    read: dict = dict(step)
+    if "env" in step:
+        read["env"] = _strings(step["env"], f"{where} `env`")
+    return cast(Step, read)
+
+
 def _job(workflow: str, name: object, body: object) -> JobBody:
-    """``body``, checked for the fields this module reads."""
+    """``body`` with each field this module reads checked and read as GitHub reads it.
+
+    Keys this module does not model are kept, so a secret read anywhere in the job (in a
+    step's `with:`, say) is still found by scanning it.
+    """
+    where = f"{workflow}: job {name}"
     if not isinstance(body, dict):
-        raise InvalidWorkflow(f"{workflow}: job {name} is not a mapping")
-    if not isinstance(body.get("if", ""), (str, bool)):
-        raise InvalidWorkflow(f"{workflow}: job {name}'s `if` is not a string")
+        raise InvalidWorkflow(f"{where} is not a mapping")
+    read: dict = dict(body)
+    if "if" in body:
+        condition = body["if"]
+        if isinstance(condition, bool):
+            read["if"] = "true" if condition else "false"
+        elif not isinstance(condition, str):
+            raise InvalidWorkflow(f"{where}'s `if` is not a string")
     needs = body.get("needs", [])
     if not (
         isinstance(needs, str)
         or (isinstance(needs, list) and all(isinstance(n, str) for n in needs))
     ):
-        raise InvalidWorkflow(f"{workflow}: job {name}'s `needs` is not a job id or a list of them")
+        raise InvalidWorkflow(f"{where}'s `needs` is not a job id or a list of them")
     steps = body.get("steps", [])
-    if not isinstance(steps, list) or not all(isinstance(step, dict) for step in steps):
-        raise InvalidWorkflow(f"{workflow}: job {name}'s `steps` is not a list of mappings")
+    if not isinstance(steps, list):
+        raise InvalidWorkflow(f"{where}'s `steps` is not a list of mappings")
+    if not all(isinstance(step, dict) for step in steps):
+        raise InvalidWorkflow(f"{where}'s `steps` is not a list of mappings")
+    read["steps"] = [_step(f"{where}'s step {n}", step) for n, step in enumerate(steps, 1)]
     for field in ("outputs", "env"):
-        if not isinstance(body.get(field, {}), dict):
-            raise InvalidWorkflow(f"{workflow}: job {name}'s `{field}` is not a mapping")
-    # Every field read here was checked above.
-    return cast(JobBody, body)
+        if field in body:
+            read[field] = _strings(body[field], f"{where}'s `{field}`")
+    return cast(JobBody, read)
 
 
 def load(root: Path = ROOT) -> list[Job]:

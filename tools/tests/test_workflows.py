@@ -249,3 +249,58 @@ def test_malformed_triggers_are_named(tmp_path: Path, on: str) -> None:
     (directory / "bad.yml").write_text(f"on: {on}\njobs: {{}}\n")
     with pytest.raises(workflows.InvalidWorkflow, match="`on` is not an event name"):
         workflows.triggers(tmp_path, "bad.yml")
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        (
+            "on: push\njobs:\n  build:\n    steps:\n      - id: [1]\n",
+            "job build's step 1 `id` is not a string",
+        ),
+        (
+            "on: push\njobs:\n  build:\n    steps:\n      - run: [ls]\n",
+            "job build's step 1 `run` is not a string",
+        ),
+        (
+            "on: push\njobs:\n  build:\n    steps:\n      - env: [A]\n",
+            "job build's step 1 `env` is not a mapping of names to values",
+        ),
+        (
+            "on: push\njobs:\n  build:\n    outputs:\n      x: [1]\n",
+            "job build's `outputs` is not a mapping of names to values",
+        ),
+        (
+            "on: push\njobs:\n  build:\n    env:\n      A: {b: 1}\n",
+            "job build's `env` is not a mapping of names to values",
+        ),
+    ],
+)
+def test_malformed_step_and_mapping_fields_are_named(
+    tmp_path: Path, text: str, reason: str
+) -> None:
+    directory = tmp_path / ".github/workflows"
+    directory.mkdir(parents=True)
+    (directory / "bad.yml").write_text(text)
+    with pytest.raises(workflows.InvalidWorkflow, match=reason):
+        workflows.load(tmp_path)
+
+
+def test_yaml_scalars_read_as_github_reads_them(tmp_path: Path) -> None:
+    directory = tmp_path / ".github/workflows"
+    directory.mkdir(parents=True)
+    (directory / "w.yml").write_text(
+        "on: push\njobs:\n  never:\n    if: false\n  always:\n    if: true\n"
+        "  numbered:\n    env:\n      COUNT: 3\n    steps:\n      - env:\n          ENABLED: true\n"
+    )
+    jobs = {job.name: job for job in workflows.load(tmp_path)}
+    assert (
+        workflows.runs(jobs["never"], event="push", secrets={}, variables={}, root=tmp_path)
+        is False
+    )
+    assert (
+        workflows.runs(jobs["always"], event="push", secrets={}, variables={}, root=tmp_path)
+        is True
+    )
+    assert jobs["numbered"].body["env"] == {"COUNT": "3"}
+    assert jobs["numbered"].steps()[0]["env"] == {"ENABLED": "true"}
