@@ -45,6 +45,30 @@ What ships names none of the sibling libraries it is used beside, depends on non
 mentions no plans, design documents or approvals; `tools/src/repo_checks/boundary.py`
 enforces it. A judged-lint suppression directive is the one exempt occurrence.
 
+## SDKs
+
+Three, side by side; the Python and TypeScript SDKs run the binary and parse its JSON, and
+never reimplement or link the engine. Their models are generated from `onebudgetspec
+schema` (`sdks/python/generate.py`, `sdks/typescript/scripts/generate.ts`); each
+generator's `--check` runs under its project's `lint` and fails on drift. Statuses 0, 1
+and 3 return the report; 2 raises or rejects `OnebudgetspecError` with the CLI's message.
+
+- **Rust** — `onebudgetspec-core` (`cargo add onebudgetspec-core`): `load`, `select`,
+  `check`, `list_report`, `schema_bundle`, in process. Owes `crates/onebudgetspec-core/tests/`
+  and, through the binary, every journey and conformance case.
+- **Python** — `onebudgetspec-sdk` (`pip install onebudgetspec-sdk`, requiring
+  `onebudgetspec-cli==` the workspace version): `check`, `validate`, `list_budgets`,
+  `schema`. Binary: `binary=`, `ONEBUDGETSPEC_BIN`, the cli wheel's, `PATH`. Owes
+  `sdks/python/tests/test_conformance.py` (every case), `test_binary.py` (resolution,
+  refusals) and the `sdk_python.rs` journey.
+- **TypeScript** — `@onebudgetspec/sdk` (`npm install @onebudgetspec/sdk`, with
+  `@onebudgetspec/cli` optional at the workspace version): `check`, `validate`,
+  `listBudgets`, `schema`. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
+  `@onebudgetspec/cli` launcher. Owes `sdks/typescript/tests/conformance.test.ts`,
+  `binary.test.ts`, `errors.test.ts` and the `sdk_typescript.rs` journey.
+
+A new conformance case must use only flags both SDK runners parse; each fails on any other.
+
 ## Journeys
 
 `tools/tests/test_journeys.py` fails when this list and the journey files differ.
@@ -69,8 +93,8 @@ enforces it. A judged-lint suppression directive is the one exempt occurrence.
 - `crates/onebudgetspec-e2e/tests/journeys/validate.rs` — `validate` accepts a good file, running nothing.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/cli_wheel.rs` — the wheel's binary checks a case exactly as the cargo build does.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs` — the launcher runs its carrier like the cargo build, and refuses a missing, broken or killed one.
-- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` — the Python SDK wheel installs and imports, typed.
-- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` — the TypeScript SDK tarball installs and imports, with types.
+- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` — the SDK wheel pins `onebudgetspec-cli` at the workspace version, and installed beside it answers a conformance case through every call, typed.
+- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` — the SDK tarball takes `@onebudgetspec/cli` as an optional dependency at the workspace version, answers a conformance case through every call beside the launcher, and type-checks a consumer.
 
 ## Commits, releases, and merging
 
