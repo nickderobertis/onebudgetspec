@@ -7,12 +7,16 @@ the script in the environment's ``bin``.
 """
 
 import json
+import shutil
+import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 from conftest import run_cli
 
+import onebudgetspec_sdk
 from onebudgetspec_sdk import (
     BINARY_ENV,
     OnebudgetspecError,
@@ -22,6 +26,8 @@ from onebudgetspec_sdk import (
     schema,
     validate,
 )
+from onebudgetspec_sdk._client import _require_validators
+from onebudgetspec_sdk._generated.schemas import REPORT_SCHEMAS
 
 
 def recording(directory: Path, name: str, log: Path, body: str) -> Path:
@@ -418,3 +424,48 @@ def test_a_bundle_of_another_shape_raises_naming_what_to_do(
     assert "is not a schema bundle" in message
     assert "budgets-file" in message and "list-report" in message
     assert "reinstall onebudgetspec-cli" in message
+
+
+def test_a_generated_format_the_sdk_cannot_check_fails_naming_it(tmp_path: Path) -> None:
+    """A report schema naming a format with no validator here is refused, never skipped.
+
+    The format is a test-only stand-in planted in a copy of the generated schemas; the copy
+    is imported and driven through ``check`` as a user would.
+    """
+    package = tmp_path / "onebudgetspec_sdk"
+    shutil.copytree(
+        Path(onebudgetspec_sdk.__file__).parent,
+        package,
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
+    schemas = package / "_generated" / "schemas.py"
+    schemas.write_text(schemas.read_text().replace('"format": "uint32"', '"format": "uint16"', 1))
+    program = printing(tmp_path, report_with({}, {"cpus": "70000"}))
+    driven = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.path.insert(0, sys.argv[1]); import onebudgetspec_sdk as sdk; "
+            "assert sdk.__file__.startswith(sys.argv[1]); "
+            "print(sdk.check(binary=sys.argv[2]).results[0].host.cpus)",
+            str(tmp_path),
+            str(program),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert driven.returncode != 0, f"cpus {driven.stdout.strip()} passed an unchecked format"
+    assert "'uint16'" in driven.stderr
+    assert "has no validator" in driven.stderr
+    assert "onebudgetspec-sdk release that matches the binary" in driven.stderr
+
+
+def test_the_generated_schemas_name_only_checked_formats() -> None:
+    """Every format the shipped report schemas name has a validator.
+
+    A format without one is refused by the same check the import runs.
+    """
+    _require_validators(REPORT_SCHEMAS)
+    with pytest.raises(OnebudgetspecError, match=r"\['uint16'\].*no validator"):
+        _require_validators({"properties": {"n": {"type": "integer", "format": "uint16"}}})

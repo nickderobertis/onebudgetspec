@@ -219,6 +219,37 @@ def _is_double(value: object) -> bool:
     return not isinstance(value, float) or math.isfinite(value)
 
 
+def _formats_named(schema: object) -> set[str]:
+    """Every ``format`` a JSON Schema names, at any depth."""
+    if isinstance(schema, dict):
+        named = {schema["format"]} if isinstance(schema.get("format"), str) else set()
+        return named.union(*(_formats_named(value) for value in schema.values()))
+    if isinstance(schema, list):
+        return set().union(*(_formats_named(item) for item in schema))
+    return set()
+
+
+def _require_validators(schemas: object) -> None:
+    """Refuse report schemas naming a format no validator here checks.
+
+    ``FormatChecker`` passes a format it has no check for, so a report schema naming one would
+    let its values through unchecked; this makes that a failure at import instead.
+
+    Raises:
+        OnebudgetspecError: a format the schemas name has no validator in this module.
+    """
+    unchecked = sorted(_formats_named(schemas) - set(_FORMATS.checkers))
+    if unchecked:
+        raise OnebudgetspecError(
+            f"onebudgetspec: the report schemas name the format(s) {unchecked}, which this SDK "
+            "has no validator for, so it cannot check the binary's reports; install the "
+            "onebudgetspec-sdk release that matches the binary, or, developing this SDK, add a "
+            "validator for each to onebudgetspec_sdk/_client.py",
+            exit_code=None,
+        )
+
+
+_require_validators(REPORT_SCHEMAS)
 _VALIDATORS = {
     root: Draft202012Validator(schema, format_checker=_FORMATS)
     for root, schema in REPORT_SCHEMAS.items()
