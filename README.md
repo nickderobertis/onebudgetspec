@@ -89,7 +89,7 @@ budget gate-time: actual 1395 seconds, budget 1800 seconds, headroom 405 seconds
 | 0 | every selected budget is within |
 | 1 | at least one is over, and none errored |
 | 2 | the invocation or a file is invalid; nothing was run |
-| 3 | at least one measurement errored |
+| 3 | at least one measurement errored, or the report could not be written (the reason is on stderr) |
 
 ## Nesting budgets files
 

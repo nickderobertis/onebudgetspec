@@ -82,19 +82,19 @@ fn text_stdout_holds_none_of_the_command_output() {
     }
 }
 
-/// A report that cannot be written is said so on stderr, and the exit status is still the
-/// verdict's, for every verb that writes one.
+/// A report that cannot be written is an error: exit status 3 and the reason on stderr,
+/// for every verb that writes one, even when every budget is within.
 #[cfg(target_os = "linux")]
 #[test]
 fn an_unwritable_stdout_is_reported_on_stderr() {
     let fixture = Fixture::new();
     noisy(&fixture);
-    for (args, status) in [
-        (&["check", "--json"][..], 0),
-        (&["check"][..], 0),
-        (&["validate"][..], 0),
-        (&["list"][..], 0),
-        (&["schema"][..], 0),
+    for args in [
+        &["check", "--json"][..],
+        &["check"][..],
+        &["validate"][..],
+        &["list", "--json"][..],
+        &["schema"][..],
     ] {
         let full = std::fs::OpenOptions::new()
             .write(true)
@@ -107,9 +107,9 @@ fn an_unwritable_stdout_is_reported_on_stderr() {
             .output()
             .expect("onebudgetspec runs");
         let stderr = String::from_utf8(output.stderr).unwrap();
-        assert_eq!(output.status.code(), Some(status), "{args:?}: {stderr}");
+        assert_eq!(output.status.code(), Some(3), "{args:?}: {stderr}");
         assert!(
-            stderr.contains("cannot write the report to stdout"),
+            stderr.contains("onebudgetspec: cannot write the report: No space left on device"),
             "{args:?}: {stderr}"
         );
     }

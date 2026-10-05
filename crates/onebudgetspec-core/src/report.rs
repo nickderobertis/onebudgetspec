@@ -168,7 +168,7 @@ pub mod exit {
     pub const OVER: i32 = 1;
     /// The invocation or a file is invalid; nothing was run.
     pub const INVALID: i32 = 2;
-    /// At least one measurement errored.
+    /// At least one measurement errored, or the report could not be written.
     pub const ERROR: i32 = 3;
 }
 

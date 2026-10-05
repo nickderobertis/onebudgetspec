@@ -42,15 +42,15 @@ fn run(command: &Command, output: Output) -> Result<i32, Error> {
             let budgets = load(&args.files.paths, args.files.recursive)?;
             let selected = budgets.select(&selection(&args.select))?;
             let report = selected.check();
-            delivered(match output {
+            let written = match output {
                 Output::Json => render::json(stdout, &report),
                 Output::Text => render::check_text(stdout, &report),
-            });
-            Ok(report.exit_code())
+            };
+            Ok(delivered(written, report.exit_code()))
         }
         Command::Validate(files) => {
             let budgets = load(&files.paths, files.recursive)?;
-            delivered(match output {
+            let written = match output {
                 Output::Json => render::json(stdout, &budgets.all().list_report()),
                 Output::Text => writeln!(
                     stdout,
@@ -58,35 +58,37 @@ fn run(command: &Command, output: Output) -> Result<i32, Error> {
                     budgets.budget_count(),
                     budgets.files().len()
                 ),
-            });
-            Ok(exit::WITHIN)
+            };
+            Ok(delivered(written, exit::WITHIN))
         }
         Command::List(args) => {
             let budgets = load(&args.files.paths, args.files.recursive)?;
             let report = budgets.select(&selection(&args.select))?.list_report();
-            delivered(match output {
+            let written = match output {
                 Output::Json => render::json(stdout, &report),
                 Output::Text => render::list_text(stdout, &report),
-            });
-            Ok(exit::WITHIN)
+            };
+            Ok(delivered(written, exit::WITHIN))
         }
-        Command::Schema => {
-            delivered(render::json(stdout, &schema_bundle()));
-            Ok(exit::WITHIN)
-        }
+        Command::Schema => Ok(delivered(
+            render::json(stdout, &schema_bundle()),
+            exit::WITHIN,
+        )),
     }
 }
 
-/// Say on stderr when the report could not be written to stdout.
-///
-/// The exit status stays the outcome's: the contract fixes it to 0, 1, 2 or 3 by what was
-/// measured, and a consumer reads the verdict from it whether or not stdout was writable.
-fn delivered(written: std::io::Result<()>) {
-    if let Err(error) = written {
-        // llmlint: ignore[cli_output_contract] the exit statuses are a frozen contract keyed to the measured outcome, which other repositories read; a stdout failure is reported here on stderr with its reason and a next step rather than given a status the contract does not define.
-        eprintln!(
-            "onebudgetspec: cannot write the report to stdout ({error}); re-run with stdout writable, for example redirected to a file"
-        );
+/// The exit status once the report is written: `outcome` when it was, and `3` (an error)
+/// with the reason on stderr when it could not be, because an answer nobody received must
+/// never read as a pass.
+fn delivered(written: std::io::Result<()>, outcome: i32) -> i32 {
+    match written {
+        Ok(()) => outcome,
+        Err(error) => {
+            eprintln!(
+                "onebudgetspec: cannot write the report: {error}; re-run with stdout writable, for example redirected to a file"
+            );
+            exit::ERROR
+        }
     }
 }
 
