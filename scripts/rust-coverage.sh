@@ -18,8 +18,9 @@ readonly MIN_LINES=95
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 for tool in llvm-cov nextest; do
-  if ! cargo "$tool" --version >/dev/null 2>&1; then
-    echo "rust-coverage: cargo-$tool is not installed; install it with 'cargo binstall cargo-$tool', then re-run." >&2
+  if ! probe="$(cargo "$tool" --version 2>&1)"; then
+    printf '%s\n' "$probe" >&2
+    echo "rust-coverage: 'cargo $tool' did not run (above); install it with 'cargo binstall cargo-$tool', or fix the error shown, then re-run." >&2
     exit 1
   fi
 done
@@ -40,9 +41,9 @@ case "$REQUEST" in
     ;;
   --report)
     # Nothing to hold to the floor when this invocation selected no Rust suite.
-    if [ -z "$(find target/llvm-cov-target -maxdepth 1 -name '*.profraw' -print -quit 2>/dev/null)" ]; then
-      exit 0
-    fi
+    shopt -s nullglob
+    profiles=(target/llvm-cov-target/*.profraw)
+    [ ${#profiles[@]} -gt 0 ] || exit 0
     if ! report="$(cargo llvm-cov report --summary-only --show-missing-lines --fail-under-lines "$MIN_LINES" 2>&1)"; then
       printf '%s\n' "$report" >&2
       echo "rust-coverage: below ${MIN_LINES}% lines over every crate's run, or no run to report on (above)." >&2

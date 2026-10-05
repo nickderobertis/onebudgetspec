@@ -22,9 +22,9 @@ case "$REQUEST" in
     ;;
   --report)
     # Nothing to hold to the floor when this invocation selected no Python suite.
-    if [ -z "$(find "$DATA" -maxdepth 1 -name '.coverage.*' -print -quit 2>/dev/null)" ]; then
-      exit 0
-    fi
+    shopt -s nullglob
+    data=("$DATA"/.coverage.*)
+    [ ${#data[@]} -gt 0 ] || exit 0
     cd "$ROOT"
     if ! log="$(uv run --frozen --no-sync coverage combine --quiet --data-file="$DATA/.coverage" "$DATA" 2>&1 \
       && uv run --frozen --no-sync coverage report --data-file="$DATA/.coverage" --skip-covered --show-missing --fail-under="$MIN_LINES" 2>&1)"; then
