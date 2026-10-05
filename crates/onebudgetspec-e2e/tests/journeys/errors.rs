@@ -45,6 +45,26 @@ fn every_kind_of_failed_measurement_is_an_error() {
             budget("null-value", &writes(r#"{"value": null}"#)),
             "rather than a number",
         ),
+        (
+            budget("boolean-value", &writes(r#"{"value": true}"#)),
+            "a boolean rather than a number",
+        ),
+        (
+            budget("object-value", &writes(r#"{"value": {"p95": 3}}"#)),
+            "an object rather than a number",
+        ),
+        (
+            budget("unknown-key", &writes(r#"{"value": 3, "unit": "ms"}"#)),
+            "unknown key \"unit\"",
+        ),
+        (
+            budget("killed", &json!(["sh", "-c", "kill -9 $$"])),
+            "terminated by signal 9",
+        ),
+        (
+            budget("missing-program", &json!(["./no-such-program"])),
+            "cannot run ./no-such-program",
+        ),
         // Over budget AND failing: the error wins.
         (
             budget(

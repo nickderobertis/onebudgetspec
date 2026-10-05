@@ -412,10 +412,13 @@ fn describe_exit(program: &str, status: ExitStatus) -> String {
     #[cfg(unix)]
     {
         use std::os::unix::process::ExitStatusExt;
-        if let Some(signal) = status.signal() {
-            return format!("{program} was terminated by signal {signal}");
-        }
+        // A process that has exited without a status was ended by a signal.
+        format!(
+            "{program} was terminated by signal {}",
+            status.signal().unwrap_or_default()
+        )
     }
+    #[cfg(not(unix))]
     format!("{program} exited abnormally")
 }
 

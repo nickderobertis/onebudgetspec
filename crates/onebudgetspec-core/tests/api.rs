@@ -291,6 +291,55 @@ budgets:
 }
 
 #[test]
+fn selections_and_vocabularies_read_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = two_budgets(dir.path());
+    let budgets = load(&[file], false).unwrap();
+    let none = budgets
+        .select(&Selection {
+            labels: vec!["absent".into()],
+            ..Selection::default()
+        })
+        .unwrap();
+    assert!(none.is_empty());
+    assert!(none.check().results.is_empty());
+    let all = budgets.all();
+    assert!(!all.is_empty());
+    let ids: Vec<_> = all.entries().iter().map(|s| s.budget.id.as_str()).collect();
+    assert_eq!(ids, ["gate-time", "startup"]);
+    assert_eq!(all.entries()[0].file.display, budgets.files()[0].display);
+
+    assert_eq!(
+        [Verdict::Within, Verdict::Over, Verdict::Error].map(Verdict::as_str),
+        ["within", "over", "error"]
+    );
+    assert_eq!(
+        [Measure::Elapsed, Measure::Reported].map(Measure::as_str),
+        ["elapsed", "reported"]
+    );
+    assert_eq!(
+        [Direction::Max, Direction::Min].map(Direction::as_str),
+        ["max", "min"]
+    );
+}
+
+#[test]
+fn a_refusal_reads_as_its_problems_and_a_next_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("budgets.yaml");
+    write(&file, "schema_version: 3\nbudgets: []\n");
+    let one = load(std::slice::from_ref(&file), false).unwrap_err();
+    assert!(one.to_string().contains("schema_version"), "{one}");
+    assert!(
+        one.to_string()
+            .ends_with("fix the problem above, then re-run; nothing was measured"),
+        "{one}"
+    );
+    let missing = load(&[dir.path().join("nope.yaml")], false).unwrap_err();
+    assert!(missing.to_string().contains("\nnext: "), "{missing}");
+}
+
+#[test]
 fn the_schema_bundle_has_the_three_roots() {
     let bundle = schema_bundle();
     let roots = bundle["roots"].as_object().unwrap();

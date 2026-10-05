@@ -97,6 +97,11 @@ fn list_selects_like_check() {
         .expect_status(2);
     assert!(fixture.log("ran.log").is_empty(), "list ran a command");
 
+    let text = fixture.run(["list", "--recursive", "--id", "api-latency"]);
+    assert_eq!(
+        text.expect_status(0).stdout,
+        "api-latency (api/budgets.yaml): reported min 30 ms [api]\n"
+    );
     let text = fixture.run(["list", "--recursive", "--label", "web"]);
     assert_eq!(
         text.expect_status(0).stdout,

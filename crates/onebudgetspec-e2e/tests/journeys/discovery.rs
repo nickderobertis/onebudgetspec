@@ -105,3 +105,23 @@ fn validate_recursive_refuses_an_invalid_nested_file() {
     );
     fixture.run(["validate", "--recursive"]).expect_status(0);
 }
+
+#[cfg(unix)]
+#[test]
+fn a_directory_recursive_discovery_cannot_read_is_refused() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = Fixture::new();
+    nested(&fixture);
+    let locked = fixture.path().join("zeta");
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let readable = std::fs::read_dir(&locked).is_ok();
+    let run = fixture.run(["check", "--recursive"]);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    if readable {
+        // Running as root: permissions lock nothing, so there is no refusal to see.
+        return;
+    }
+    run.expect_status(2);
+    assert!(run.stderr.contains("cannot search"), "{}", run.stderr);
+}

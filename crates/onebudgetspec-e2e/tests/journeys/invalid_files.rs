@@ -95,6 +95,23 @@ const DEFECTS: &[(&str, Defect, &str)] = &[
         "budgets[0].unit",
     ),
     (
+        "unsupported schema_version",
+        |f| f["schema_version"] = json!(2),
+        "schema_version",
+    ),
+    (
+        "empty condition command",
+        |f| f["conditions"][0]["command"] = json!([]),
+        "conditions[0].command",
+    ),
+    (
+        "missing budgets",
+        |f| {
+            f.as_object_mut().unwrap().remove("budgets");
+        },
+        "budgets",
+    ),
+    (
         "malformed condition name",
         |f| f["conditions"][0]["name"] = json!("Probe"),
         "conditions[0].name",
@@ -177,6 +194,24 @@ fn a_non_finite_threshold_is_refused() {
         fixture.write("budgets.yaml", &yaml);
         assert_refused(&fixture, infinite, "budgets[0].threshold");
     }
+}
+
+#[test]
+fn a_file_that_is_not_a_mapping_and_one_with_several_problems_are_refused() {
+    let fixture = Fixture::new();
+    base(&fixture);
+    fixture.write("budgets.yaml", "- just\n- a list\n");
+    assert_refused(&fixture, "a list", "budgets.yaml");
+
+    let mut contents = base(&fixture);
+    contents["budgets"][0]["id"] = json!("Bad");
+    contents["budgets"][0]["unit"] = json!("Bad");
+    fixture.budgets("budgets.yaml", &contents);
+    let run = fixture.run(["validate"]);
+    run.expect_status(2);
+    assert!(run.stderr.contains("budgets[0].id"), "{}", run.stderr);
+    assert!(run.stderr.contains("budgets[0].unit"), "{}", run.stderr);
+    assert!(run.stderr.contains("problems above"), "{}", run.stderr);
 }
 
 #[test]
