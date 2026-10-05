@@ -47,11 +47,12 @@ enforces it. A judged-lint suppression directive is the one exempt occurrence.
 
 ## SDKs
 
+<!-- llmlint: ignore-block[instruction_layer_localized] The three SDKs are documented here side by side by requirement: one place states each SDK's package, install, calls, binary order and owed tests so they can be compared, and nesting them would split that comparison across three files. -->
 Three, side by side; the Python and TypeScript SDKs run the binary and parse its JSON, and
 never reimplement or link the engine. Their models are generated from `onebudgetspec
-schema` (`sdks/python/generate.py`, `sdks/typescript/scripts/generate.ts`); each
-generator's `--check` runs under its project's `lint` and fails on drift. Statuses 0, 1
-and 3 return the report; 2 raises or rejects `OnebudgetspecError` with the CLI's message.
+schema` (`sdks/python/generate.py`, `sdks/typescript/scripts/generate.ts`): `just generate`
+regenerates them, and each generator's `--check` runs under its project's `lint`. Statuses
+0, 1 and 3 return the report; 2 raises or rejects `OnebudgetspecError` with the CLI's message.
 
 - **Rust** — `onebudgetspec-core` (`cargo add onebudgetspec-core`): `load`, `select`,
   `check`, `list_report`, `schema_bundle`, in process. Owes `crates/onebudgetspec-core/tests/`
@@ -60,14 +61,15 @@ and 3 return the report; 2 raises or rejects `OnebudgetspecError` with the CLI's
   `onebudgetspec-cli==` the workspace version): `check`, `validate`, `list_budgets`,
   `schema`. Binary: `binary=`, `ONEBUDGETSPEC_BIN`, the cli wheel's, `PATH`. Owes
   `sdks/python/tests/test_conformance.py` (every case), `test_binary.py` (resolution,
-  refusals) and the `sdk_python.rs` journey.
+  refusals), `test_generate.py` (the generator) and the `sdk_python.rs` journey.
 - **TypeScript** — `@onebudgetspec/sdk` (`npm install @onebudgetspec/sdk`, with
-  `@onebudgetspec/cli` optional at the workspace version): `check`, `validate`,
-  `listBudgets`, `schema`. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
+  `@onebudgetspec/cli` optional, `workspace:*` packed as the workspace version): `check`,
+  `validate`, `listBudgets`, `schema`. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
   `@onebudgetspec/cli` launcher. Owes `sdks/typescript/tests/conformance.test.ts`,
-  `binary.test.ts`, `errors.test.ts` and the `sdk_typescript.rs` journey.
+  `binary.test.ts`, `errors.test.ts`, `generator.test.ts` and the `sdk_typescript.rs` journey.
 
 A new conformance case must use only flags both SDK runners parse; each fails on any other.
+<!-- llmlint: ignore-end[instruction_layer_localized] -->
 
 ## Journeys
 
