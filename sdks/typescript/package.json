@@ -27,7 +27,7 @@
     "generate:check": "bun scripts/generate.ts --check"
   },
   "optionalDependencies": {
-    "@onebudgetspec/cli": "0.1.0"
+    "@onebudgetspec/cli": "workspace:*"
   },
   "publishConfig": {
     "access": "public"

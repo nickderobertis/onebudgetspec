@@ -170,8 +170,7 @@ def test_an_artifact_built_from_another_package_is_named(tmp_path: Path) -> None
     build.write_text(
         build.read_text()
         .replace("--package onebudgetspec-sdk ", "--package onebudgetspec-repo-checks ")
-        .replace('npm pack "$ROOT/sdks/typescript"', 'npm pack "$ROOT/npm/cli"')
-        .replace('"$ROOT/sdks/typescript" build', '"$ROOT/npm/cli" build')
+        .replace("$ROOT/sdks/typescript", "$ROOT/npm/cli")
     )
     assert release.artifact_problems(root) == [
         "scripts/build-dist.sh sdk-python does not build onebudgetspec-sdk",
