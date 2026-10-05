@@ -27,6 +27,7 @@ pub struct CheckReport {
 /// One budget's measurement.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(transform = every_field_required)]
 pub struct CheckResult {
     /// The budget's id.
     pub id: String,
@@ -43,20 +44,15 @@ pub struct CheckResult {
     /// `within`, `over` or `error`.
     pub verdict: Verdict,
     /// The measured value; null on an error.
-    #[schemars(required)]
     pub actual: Option<f64>,
     /// `threshold - actual` under `max`, `actual - threshold` under `min`; negative when
     /// over, null on an error.
-    #[schemars(required)]
     pub headroom: Option<f64>,
     /// `headroom / threshold * 100`; null on an error or when the threshold is 0.
-    #[schemars(required)]
     pub headroom_percent: Option<f64>,
     /// The `detail` a `reported` command wrote; null when it wrote none.
-    #[schemars(required)]
     pub detail: Option<String>,
     /// Why the measurement failed; null unless `verdict` is `error`.
-    #[schemars(required)]
     pub error: Option<String>,
     /// When the measurement started (RFC 3339).
     pub started_at: DateTime<Utc>,
@@ -93,14 +89,13 @@ impl Verdict {
 /// The host conditions recorded beside a result.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(transform = every_field_required)]
 pub struct Host {
     /// The 1-minute load average; null where unreadable.
-    #[schemars(required)]
     pub load1: Option<f64>,
     /// The CPUs available to this process.
     pub cpus: u32,
     /// Available memory in MiB; null where unreadable.
-    #[schemars(required)]
     pub mem_available_mib: Option<u64>,
     /// Each condition the file declares, and for a `reported` result each condition its
     /// command returned, by name.
@@ -122,13 +117,13 @@ pub struct ListReport {
 /// One budget as `list` reports it: every field the file gives, plus the file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
+#[schemars(transform = every_field_required)]
 pub struct ListedBudget {
     /// The budget's id.
     pub id: String,
     /// The budgets file's path, as discovered or given.
     pub file: String,
     /// The budget's description; null when it has none.
-    #[schemars(required)]
     pub description: Option<String>,
     /// The budget's labels, empty when it has none.
     pub labels: Vec<String>,
@@ -143,8 +138,24 @@ pub struct ListedBudget {
     /// The budget's threshold.
     pub threshold: f64,
     /// The budget's timeout; null when it has none.
-    #[schemars(required)]
     pub timeout_seconds: Option<u64>,
+}
+
+/// Mark every property required, nullable ones included: a report always carries every
+/// key, `null` where it has no value.
+fn every_field_required(schema: &mut schemars::Schema) {
+    let keys: Vec<serde_json::Value> = schema
+        .get("properties")
+        .and_then(serde_json::Value::as_object)
+        .map(|properties| {
+            properties
+                .keys()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect()
+        })
+        .unwrap_or_default();
+    schema.insert("required".into(), serde_json::Value::Array(keys));
 }
 
 /// The exit statuses `onebudgetspec` and this library's callers share.
