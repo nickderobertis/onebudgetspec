@@ -133,3 +133,27 @@ test("a generated file it cannot write is refused with a next step", () => {
   expect(refused.status).toBe(1);
   expect(refused.stderr).toContain("make it writable");
 });
+
+test("a binary that cannot execute is refused with a next step", () => {
+  const program = join(scratch(), "onebudgetspec");
+  writeFileSync(program, "not a program\n");
+  chmodSync(program, 0o644);
+  const refused = generate(workspace(), program);
+  expect(refused.status).toBe(1);
+  expect(refused.stderr).toContain(`cannot run ${program}`);
+  expect(refused.stderr).toContain("run 'just generate'");
+});
+
+test("a root the compiler cannot turn into types is refused, writing nothing", () => {
+  const copy = workspace();
+  const before = contents(copy);
+  const unresolvable = '{"$ref": "#/$defs/Missing"}';
+  const refused = generate(
+    copy,
+    fakeBinary(`{"version": 1, "roots": {"check-report": ${unresolvable}, "list-report": {}}}`),
+  );
+  expect(refused.status).toBe(1);
+  expect(refused.stderr).toContain('cannot compile the "check-report" root');
+  expect(refused.stderr).toContain("run 'just bootstrap'");
+  expect(contents(copy)).toEqual(before);
+});

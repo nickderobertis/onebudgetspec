@@ -363,3 +363,20 @@ def test_a_schema_version_of_true_is_not_1(tmp_path: Path) -> None:
     printed = report_with({}).replace('"schema_version": 1', '"schema_version": true')
     with pytest.raises(OnebudgetspecError, match="schema_version: 1 was expected"):
         check(binary=printing(tmp_path, printed))
+
+
+def test_a_measurement_and_threshold_past_integer_range_come_back_as_doubles(
+    tmp_path: Path, built_binary: Path
+) -> None:
+    """The binary prints ``1e20`` and ``1e300`` as doubles, and the SDK returns them as such."""
+    (tmp_path / "report.sh").write_text(
+        '#!/bin/sh\nprintf \'{"value": 1e20}\' > "$ONEBUDGETSPEC_RESULT"\n'
+    )
+    (tmp_path / "budgets.yaml").write_text(
+        "schema_version: 1\nbudgets:\n  - id: huge\n    measure: reported\n"
+        '    command: ["sh", "report.sh"]\n'
+        "    unit: bytes\n    direction: max\n    threshold: 1e300\n"
+    )
+    assert '"actual": 1e+20' in run_cli(built_binary, ["check", "--json"], tmp_path).stdout
+    [result] = check(cwd=tmp_path, binary=built_binary).results
+    assert (result.verdict, result.actual, result.threshold) == ("within", 1e20, 1e300)

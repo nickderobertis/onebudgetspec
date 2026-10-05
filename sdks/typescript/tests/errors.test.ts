@@ -212,3 +212,17 @@ test("a value shaped like a flag is passed as a value", async () => {
   );
   expect(refused.message).toContain("--version");
 });
+
+test("a measurement and threshold too large for an integer come back as the doubles they are", async () => {
+  const dir = scratch();
+  writeFileSync(
+    join(dir, "budgets.yaml"),
+    "schema_version: 1\nbudgets:\n  - id: huge\n    measure: reported\n" +
+      `    command: ["/bin/sh", "-c", "printf '{\\"value\\": 1e20}' > \\"$ONEBUDGETSPEC_RESULT\\""]\n` +
+      "    unit: bytes\n    direction: max\n    threshold: 1e300\n",
+  );
+  const printed = runCli(["check", "--json"], dir);
+  expect(printed.stdout).toContain('"actual": 1e+20');
+  const [result] = (await check({ cwd: dir, binary: builtBinary() })).results;
+  expect([result?.verdict, result?.actual, result?.threshold]).toEqual(["within", 1e20, 1e300]);
+});

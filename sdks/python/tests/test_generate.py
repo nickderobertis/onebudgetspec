@@ -136,3 +136,34 @@ def test_an_unwritable_generated_file_is_refused_with_a_next_step(
     refused = generate(package, built_binary)
     assert refused.returncode == 1
     assert "make it writable" in refused.stderr
+
+
+def test_a_binary_that_cannot_execute_is_refused_with_a_next_step(
+    package: Path, tmp_path: Path
+) -> None:
+    """A binary present but not executable is named, with what to do."""
+    program = tmp_path / "onebudgetspec"
+    program.write_text("not a program\n")
+    program.chmod(0o644)
+    refused = generate(package, program)
+    assert refused.returncode == 1
+    assert f"cannot run {program}" in refused.stderr
+    assert "run 'just generate'" in refused.stderr
+
+
+def test_a_missing_formatter_is_refused_with_a_next_step(
+    package: Path, built_binary: Path, tmp_path: Path
+) -> None:
+    """Without ruff on PATH the generator says how to install it, and writes nothing."""
+    before = contents(package)
+    refused = subprocess.run(
+        [sys.executable, str(package / "generate.py")],
+        cwd=package,
+        env={**os.environ, "ONEBUDGETSPEC_BIN": str(built_binary), "PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refused.returncode == 1
+    assert "ruff is not on PATH; run 'just bootstrap'" in refused.stderr
+    assert contents(package) == before

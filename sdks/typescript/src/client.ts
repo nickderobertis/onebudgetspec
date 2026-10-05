@@ -213,9 +213,11 @@ const isWholeAndNonNegative = (value: number) => Number.isInteger(value) && valu
 const UINT64_MAX = 2n ** 64n - 1n;
 
 /**
- * `stdout` parsed as JSON, refusing an integer literal no report field can hold: past the
- * range a double holds exactly, each integer literal must fit in a uint64, read exactly from
- * its source text. A runtime that does not expose the source cannot tell, so it refuses.
+ * `stdout` parsed as JSON, refusing an integer literal no report field can hold. The integer
+ * fields are unsigned, so a bare integer literal past the range a double holds exactly must
+ * fit in a uint64, read exactly from its source text; a literal with a fraction or exponent
+ * is a double (`1e20`), which the schema's own checks judge. A runtime that does not expose
+ * the source cannot tell the two apart, so it refuses.
  */
 function parseReport(stdout: string): unknown {
   return JSON.parse(stdout, (_key: string, value: unknown, ...context: unknown[]) => {
@@ -224,7 +226,8 @@ function parseReport(stdout: string): unknown {
     }
     const [info] = context;
     const source = isObject(info) && typeof info.source === "string" ? info.source : undefined;
-    if (source === undefined || !/^\d+$/.test(source) || BigInt(source) > UINT64_MAX) {
+    if (source !== undefined && !/^-?\d+$/.test(source)) return value;
+    if (source === undefined || source.startsWith("-") || BigInt(source) > UINT64_MAX) {
       throw new RangeError(`${source ?? value} is not an integer a report field can hold`);
     }
     return value;
