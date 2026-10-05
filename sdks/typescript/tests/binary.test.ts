@@ -9,8 +9,17 @@ import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:tes
 import { cpSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as inTree from "../src/index.ts";
-import { BINARY_ENV, type OnebudgetspecError } from "../src/index.ts";
-import { builtBinary, cleanScratch, ROOT, ran, recording, runCli, scratch } from "./helpers.ts";
+import { BINARY_ENV } from "../src/index.ts";
+import {
+  builtBinary,
+  cleanScratch,
+  ROOT,
+  ran,
+  recording,
+  rejection,
+  runCli,
+  scratch,
+} from "./helpers.ts";
 
 type Sdk = typeof inTree;
 
@@ -22,16 +31,10 @@ afterEach(() => {
   delete process.env[BINARY_ENV];
 });
 
-/** What `call` rejects with, which must be the SDK's error. The installed copy is its own
- * module, with its own class, so the class is matched by name. */
-async function rejection(call: Promise<unknown>): Promise<OnebudgetspecError> {
-  try {
-    await call;
-  } catch (error) {
-    expect((error as Error).name).toBe("OnebudgetspecError");
-    return error as OnebudgetspecError;
-  }
-  throw new Error("the call resolved; it should have rejected");
+/** The SDK's entry module at `path`, which is a copy of this one. */
+async function importSdk(path: string): Promise<Sdk> {
+  const imported: Sdk = await import(path);
+  return imported;
 }
 
 /** A project with this SDK, the CLI launcher and a recording carrier installed, and every
@@ -69,7 +72,7 @@ async function installed(): Promise<{
   );
   recording(join(carrier, "bin"), "package", log, body);
   return {
-    sdk: (await import(join(sdk, "src", "index.ts"))) as Sdk,
+    sdk: await importSdk(join(sdk, "src", "index.ts")),
     log,
     explicit: recording(join(dir, "explicit"), "explicit", log, body),
     variable: recording(join(dir, "variable"), "variable", log, body),
@@ -135,26 +138,32 @@ describe("the binary a call runs", () => {
         recursive: true,
       },
     );
-    const refused = await rejection(sdk.schema());
+    const refused = await rejection(sdk.schema(), sdk.OnebudgetspecError);
     expect(refused.exitCode).toBe(69);
     expect(refused.message).toContain("is not installed");
   });
 
-  test("a package that names no launcher rejects", async () => {
+  test.each([
+    [JSON.stringify({ name: "@onebudgetspec/cli" }), "names no onebudgetspec launcher"],
+    [JSON.stringify({ bin: { onebudgetspec: 3 } }), "names no onebudgetspec launcher"],
+    [JSON.stringify({ bin: "bin/onebudgetspec.js" }), "names no onebudgetspec launcher"],
+    ["not json", "cannot read"],
+  ])("a package manifest %p rejects", async (manifest, reason) => {
     const { sdk, dir } = await installed();
     writeFileSync(
       join(dir, "project", "node_modules", "@onebudgetspec", "cli", "package.json"),
-      JSON.stringify({ name: "@onebudgetspec/cli" }),
+      manifest,
     );
-    const refused = await rejection(sdk.schema());
+    const refused = await rejection(sdk.schema(), sdk.OnebudgetspecError);
     expect(refused.exitCode).toBeNull();
-    expect(refused.message).toContain("names no onebudgetspec launcher");
+    expect(refused.message).toContain(reason);
+    expect(refused.message).toContain("reinstall @onebudgetspec/cli");
   });
 
   test("no package and no variable rejects naming the ways to provide a binary", async () => {
     const { sdk, dir } = await installed();
     rmSync(join(dir, "project", "node_modules", "@onebudgetspec", "cli"), { recursive: true });
-    const refused = await rejection(sdk.schema());
+    const refused = await rejection(sdk.schema(), sdk.OnebudgetspecError);
     expect(refused.exitCode).toBeNull();
     for (const way of ["@onebudgetspec/cli", BINARY_ENV, "binary"]) {
       expect(refused.message).toContain(way);

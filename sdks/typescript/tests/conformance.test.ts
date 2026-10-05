@@ -17,7 +17,7 @@ import {
   schema,
   validate,
 } from "../src/index.ts";
-import { builtBinary, CASES, cleanScratch, runCli, scratch } from "./helpers.ts";
+import { builtBinary, CASES, cleanScratch, rejection, runCli, scratch } from "./helpers.ts";
 
 type Case = {
   description: string;
@@ -107,16 +107,6 @@ function exitStatus(report: CheckReport): number {
   return verdicts.has("error") ? 3 : verdicts.has("over") ? 1 : 0;
 }
 
-async function rejection(call: Promise<unknown>): Promise<OnebudgetspecError> {
-  try {
-    await call;
-  } catch (error) {
-    expect(error).toBeInstanceOf(OnebudgetspecError);
-    return error as OnebudgetspecError;
-  }
-  throw new Error("the call resolved; it should have rejected");
-}
-
 const caseNames = readdirSync(CASES)
   .filter((name) => statSync(join(CASES, name)).isDirectory())
   .sort();
@@ -124,7 +114,9 @@ const caseNames = readdirSync(CASES)
 function prepare(name: string): { spec: Case; work: string; invocation: Invocation } {
   const work = join(scratch(), name);
   cpSync(join(CASES, name), work, { recursive: true });
-  const spec = JSON.parse(readFileSync(join(work, "case.json"), "utf8")) as Case;
+  // case.json is repository data in the shape conformance/README.md fixes, and parse()
+  // below refuses any argument it cannot pass on.
+  const spec: Case = JSON.parse(readFileSync(join(work, "case.json"), "utf8"));
   return { spec, work, invocation: parse(spec.args) };
 }
 
@@ -154,7 +146,7 @@ describe("check returns the report each case expects", () => {
           cwd: work,
         });
       if (spec.exit === 2) {
-        const refused = await rejection(call());
+        const refused = await rejection(call(), OnebudgetspecError);
         const cli = runCli(spec.args, work);
         expect(cli.status).toBe(2);
         expect(refused.exitCode).toBe(2);
@@ -188,19 +180,17 @@ describe("listBudgets and validate answer as the binary does", () => {
           cwd: work,
         });
       if (listing.status === 2) {
-        const refused = await rejection(listCall());
+        const refused = await rejection(listCall(), OnebudgetspecError);
         expect([refused.exitCode, refused.message]).toEqual([2, listing.stderr.trim()]);
         expect(spec.exit).toBe(2);
       } else {
         const listed = await listCall();
         expect(listed).toEqual(JSON.parse(listing.stdout));
         // What list selects is what check measured, in the same order.
-        const expected = JSON.parse(readFileSync(join(work, "expected.json"), "utf8")) as {
-          results: Record<string, unknown>[];
-        };
-        const keys = ["id", "file", "labels", "unit", "direction", "threshold"] as const;
+        const expected: CheckReport = JSON.parse(readFileSync(join(work, "expected.json"), "utf8"));
+        const keys = new Set(["id", "file", "labels", "unit", "direction", "threshold"]);
         const pick = (entry: object) =>
-          Object.fromEntries(keys.map((key) => [key, (entry as Record<string, unknown>)[key]]));
+          Object.fromEntries(Object.entries(entry).filter(([key]) => keys.has(key)));
         expect(listed.budgets.map(pick)).toEqual(expected.results.map(pick));
       }
 
@@ -208,7 +198,7 @@ describe("listBudgets and validate answer as the binary does", () => {
       const validateCall = () =>
         validate({ paths: invocation.paths, recursive: invocation.recursive, cwd: work });
       if (validation.status === 2) {
-        const refused = await rejection(validateCall());
+        const refused = await rejection(validateCall(), OnebudgetspecError);
         expect([refused.exitCode, refused.message]).toEqual([2, validation.stderr.trim()]);
       } else {
         expect(validation.status).toBe(0);

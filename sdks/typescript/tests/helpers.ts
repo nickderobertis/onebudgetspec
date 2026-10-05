@@ -58,3 +58,20 @@ export function recording(directory: string, name: string, log: string, body: st
 export function ran(log: string): string[] {
   return existsSync(log) ? readFileSync(log, "utf8").split(/\s+/).filter(Boolean) : [];
 }
+
+/**
+ * What `call` rejects with, which must be an instance of `kind`: the SDK's error class,
+ * passed in because an installed copy of the SDK is its own module with its own class.
+ */
+export async function rejection<E extends Error>(
+  call: Promise<unknown>,
+  kind: abstract new (...args: never[]) => E,
+): Promise<E> {
+  try {
+    await call;
+  } catch (error) {
+    if (error instanceof kind) return error;
+    throw error;
+  }
+  throw new Error("the call resolved; it should have rejected");
+}

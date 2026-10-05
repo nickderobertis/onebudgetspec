@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { Ajv2020 } from "ajv/dist/2020.js";
+import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
 import type { CheckReport } from "./generated/check-report.ts";
 import type { ListReport } from "./generated/list-report.ts";
 import { reportSchemas } from "./generated/schemas.ts";
@@ -63,6 +63,33 @@ export class OnebudgetspecError extends Error {
 /** The argv prefix that runs the binary: the program and any arguments before the call's. */
 export type Program = readonly [string, ...string[]];
 
+/** The `onebudgetspec` launcher a `@onebudgetspec/cli` manifest names, checked. */
+function launcherOf(manifestPath: string): string {
+  const reinstall = `reinstall ${CLI_PACKAGE}`;
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch (error) {
+    throw new OnebudgetspecError(
+      `onebudgetspec: cannot read ${manifestPath} (${error}); ${reinstall}`,
+      null,
+    );
+  }
+  const bin = isObject(manifest) ? manifest.bin : undefined;
+  const launcher = isObject(bin) ? bin.onebudgetspec : undefined;
+  if (typeof launcher !== "string" || launcher === "") {
+    throw new OnebudgetspecError(
+      `onebudgetspec: ${manifestPath} names no onebudgetspec launcher; ${reinstall}`,
+      null,
+    );
+  }
+  return launcher;
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /**
  * The binary a call runs. In order: `binary` when given, then `ONEBUDGETSPEC_BIN` when set
  * and non-empty, then the launcher of the `@onebudgetspec/cli` package this package
@@ -82,16 +109,7 @@ export function resolveBinary(binary?: string): Program {
       null,
     );
   }
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as {
-    bin?: Record<string, string>;
-  };
-  const launcher = manifest.bin?.onebudgetspec;
-  if (launcher === undefined) {
-    throw new OnebudgetspecError(
-      `onebudgetspec: ${manifestPath} names no onebudgetspec launcher; reinstall ${CLI_PACKAGE}`,
-      null,
-    );
-  }
+  const launcher = launcherOf(manifestPath);
   return [process.execPath, join(dirname(manifestPath), launcher)];
 }
 
@@ -148,27 +166,39 @@ function run(binary: string | undefined, args: string[], cwd: string | undefined
   });
 }
 
-const ajv = new Ajv2020({ allErrors: true, validateFormats: false });
-const validators = {
-  "check-report": ajv.compile<CheckReport>(reportSchemas["check-report"]),
-  "list-report": ajv.compile<ListReport>(reportSchemas["list-report"]),
-};
+/** An RFC 3339 timestamp, as the reports' `date-time` fields carry. */
+const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/i;
+const isUnsigned = (bits: number) => (value: number) =>
+  Number.isInteger(value) && value >= 0 && value < 2 ** bits;
+// Every format the schema names is checked: the timestamps, and the numeric widths the
+// binary's Rust types carry.
+const ajv = new Ajv2020({
+  allErrors: true,
+  formats: {
+    "date-time": (value: string) => RFC3339.test(value) && !Number.isNaN(Date.parse(value)),
+    double: { type: "number", validate: (value: number) => Number.isFinite(value) },
+    uint32: { type: "number", validate: isUnsigned(32) },
+    uint64: { type: "number", validate: isUnsigned(64) },
+  },
+});
+const checkReport = ajv.compile<CheckReport>(reportSchemas["check-report"]);
+const listReport = ajv.compile<ListReport>(reportSchemas["list-report"]);
 
-function report<T>(root: keyof typeof validators, stdout: string): T {
+/** `stdout` as the report `validator` accepts, or the reason it is not one. */
+function report<T>(validator: ValidateFunction<T>, root: string, stdout: string): T {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout);
   } catch (error) {
     throw new OnebudgetspecError(`onebudgetspec: the binary printed no JSON: ${error}`, null);
   }
-  const validator = validators[root];
   if (!validator(parsed)) {
     throw new OnebudgetspecError(
       `onebudgetspec: the binary printed no valid ${root}: ${ajv.errorsText(validator.errors)}`,
       null,
     );
   }
-  return parsed as T;
+  return parsed;
 }
 
 /**
@@ -178,7 +208,7 @@ function report<T>(root: keyof typeof validators, stdout: string): T {
  */
 export async function check(options: CheckOptions = {}): Promise<CheckReport> {
   const args = ["check", "--json", ...selection(options), ...files(options)];
-  return report<CheckReport>("check-report", await run(options.binary, args, options.cwd));
+  return report(checkReport, "check-report", await run(options.binary, args, options.cwd));
 }
 
 /**
@@ -187,13 +217,13 @@ export async function check(options: CheckOptions = {}): Promise<CheckReport> {
  */
 export async function validate(options: ValidateOptions = {}): Promise<ListReport> {
   const args = ["validate", "--json", ...files(options)];
-  return report<ListReport>("list-report", await run(options.binary, args, options.cwd));
+  return report(listReport, "list-report", await run(options.binary, args, options.cwd));
 }
 
 /** Report the selected budgets, running no command: `onebudgetspec list`. */
 export async function listBudgets(options: ListOptions = {}): Promise<ListReport> {
   const args = ["list", "--json", ...selection(options), ...files(options)];
-  return report<ListReport>("list-report", await run(options.binary, args, options.cwd));
+  return report(listReport, "list-report", await run(options.binary, args, options.cwd));
 }
 
 /** The JSON Schema bundle the binary prints: `onebudgetspec schema`. */
@@ -205,8 +235,8 @@ export async function schema(options: SchemaOptions = {}): Promise<Record<string
   } catch (error) {
     throw new OnebudgetspecError(`onebudgetspec: the schema is not JSON: ${error}`, null);
   }
-  if (typeof bundle !== "object" || bundle === null || Array.isArray(bundle)) {
+  if (!isObject(bundle)) {
     throw new OnebudgetspecError("onebudgetspec: the schema is not a JSON object", null);
   }
-  return bundle as Record<string, unknown>;
+  return bundle;
 }

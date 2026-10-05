@@ -1,9 +1,10 @@
 // Generate the SDK's report types and runtime schemas from the binary's own
 // `onebudgetspec schema`.
 //
-// `bun scripts/generate.ts` writes src/generated; `--check` writes nothing and fails, naming
-// each file, when what is committed differs from what the current schema generates. The
-// binary is ONEBUDGETSPEC_BIN when set, else the workspace's target/debug/onebudgetspec.
+// `bun scripts/generate.ts` (`just generate`) writes src/generated; `--check` (run by
+// `just lint`) writes nothing and fails, naming each file, when what is committed differs
+// from what the current schema generates. The binary is ONEBUDGETSPEC_BIN when set, else the
+// workspace's target/debug/onebudgetspec.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -11,26 +12,25 @@ import { compile } from "json-schema-to-typescript";
 
 /** The bundle roots the SDK's calls return, and the module each is generated into. */
 const ROOTS = { "check-report": "check-report.ts", "list-report": "list-report.ts" } as const;
+type Root = keyof typeof ROOTS;
+const ROOT_NAMES: readonly Root[] = ["check-report", "list-report"];
 const PACKAGE = resolve(import.meta.dir, "..");
 const WORKSPACE = resolve(PACKAGE, "../..");
 const GENERATED = join(PACKAGE, "src", "generated");
-
-const given = process.argv.slice(2);
-if (given.some((argument) => argument !== "--check")) {
-  fail("unknown argument; pass nothing, or --check");
-}
-const checking = given.includes("--check");
+/** What to do when the binary is missing or prints no usable bundle. */
+const REBUILD = "run 'just generate', which builds the binary first, or set ONEBUDGETSPEC_BIN";
+const TOOLS = "run 'just bootstrap' to install the generator's tools, then 'just generate'";
 
 function fail(message: string): never {
   console.error(`generate: ${message}`);
   process.exit(1);
 }
 
-function run(command: string, args: string[], input?: string): string {
+function run(command: string, args: string[], nextStep: string, input?: string): string {
   const ran = spawnSync(command, args, { encoding: "utf8", input, cwd: WORKSPACE });
-  if (ran.error) fail(`cannot run ${command}: ${ran.error.message}`);
+  if (ran.error) fail(`cannot run ${command} (${ran.error.message}); ${nextStep}`);
   if (ran.status !== 0) {
-    fail(`${command} ${args.join(" ")} exited ${ran.status}:\n${ran.stderr.trim()}`);
+    fail(`${command} ${args.join(" ")} exited ${ran.status}:\n${ran.stderr.trim()}\n${nextStep}`);
   }
   return ran.stdout;
 }
@@ -38,37 +38,81 @@ function run(command: string, args: string[], input?: string): string {
 /** `content` as biome formats a file named `name`, so the committed files pass format-check. */
 function formatted(name: string, content: string): string {
   const biome = join(WORKSPACE, "node_modules", ".bin", "biome");
-  return run(biome, ["format", `--stdin-file-path=sdks/typescript/src/generated/${name}`], content);
+  const path = `--stdin-file-path=sdks/typescript/src/generated/${name}`;
+  return run(biome, ["format", path], TOOLS, content);
 }
 
-const binary = process.env.ONEBUDGETSPEC_BIN || join(WORKSPACE, "target", "debug", "onebudgetspec");
-if (!existsSync(binary)) {
-  fail(
-    `${binary} is missing; build it with 'cargo build -p onebudgetspec' or set ONEBUDGETSPEC_BIN`,
-  );
+type SchemaBundle = { version: number; roots: Record<Root, Record<string, unknown>> };
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-const bundle = JSON.parse(run(binary, ["schema"])) as {
-  version: number;
-  roots: Record<string, Record<string, unknown>>;
-};
+
+/** The schema `root` of `roots`, or a failure naming it. */
+function rootOf(roots: Record<string, unknown>, root: Root): Record<string, unknown> {
+  const schema = roots[root];
+  if (!isObject(schema)) fail(`the binary's schema bundle has no "${root}" root; ${REBUILD}`);
+  return schema;
+}
+
+/** The bundle the binary printed, refusing any other shape. */
+function parseBundle(text: string): SchemaBundle {
+  let document: unknown;
+  try {
+    document = JSON.parse(text);
+  } catch (error) {
+    fail(`the binary's schema is not JSON (${error}); ${REBUILD}`);
+  }
+  if (
+    !isObject(document) ||
+    typeof document.version !== "number" ||
+    !Number.isInteger(document.version) ||
+    !isObject(document.roots)
+  ) {
+    fail(
+      `the binary's schema bundle lacks an integer \`version\` or a \`roots\` object; ${REBUILD}`,
+    );
+  }
+  const { roots } = document;
+  return {
+    version: document.version,
+    roots: {
+      "check-report": rootOf(roots, "check-report"),
+      "list-report": rootOf(roots, "list-report"),
+    },
+  };
+}
+
+const given = process.argv.slice(2);
+if (given.some((argument) => argument !== "--check")) {
+  fail("unknown argument; run 'just generate', or 'just lint' to check");
+}
+const checking = given.includes("--check");
+
+const binary = process.env.ONEBUDGETSPEC_BIN || join(WORKSPACE, "target", "debug", "onebudgetspec");
+if (!existsSync(binary)) fail(`${binary} is missing; ${REBUILD}`);
+const bundle = parseBundle(run(binary, ["schema"], REBUILD));
 
 const header = (root: string) =>
   `// Generated by sdks/typescript/scripts/generate.ts from the "${root}" root of\n` +
   "// `onebudgetspec schema`. Do not edit: re-run the generator.\n";
 
 const wanted = new Map<string, string>();
-for (const [root, file] of Object.entries(ROOTS)) {
-  const schema = bundle.roots[root];
-  if (schema === undefined) fail(`the schema bundle has no "${root}" root`);
-  const types = await compile(schema, root, {
-    bannerComment: header(root),
-    additionalProperties: false,
-    format: false,
-    strictIndexSignatures: true,
-  });
+for (const root of ROOT_NAMES) {
+  const file = ROOTS[root];
+  let types: string;
+  try {
+    types = await compile(bundle.roots[root], root, {
+      bannerComment: header(root),
+      additionalProperties: false,
+      format: false,
+      strictIndexSignatures: true,
+    });
+  } catch (error) {
+    fail(`json-schema-to-typescript cannot compile the "${root}" root (${error}); ${TOOLS}`);
+  }
   wanted.set(file, formatted(file, types));
 }
-const schemas = Object.fromEntries(Object.keys(ROOTS).map((root) => [root, bundle.roots[root]]));
 wanted.set(
   "schemas.ts",
   formatted(
@@ -78,26 +122,30 @@ wanted.set(
       "/** The version of the schema bundle these types were generated from. */\n" +
       `export const SCHEMA_BUNDLE_VERSION = ${JSON.stringify(bundle.version)};\n\n` +
       "/** The bundle roots the client's reports are validated against. */\n" +
-      `export const reportSchemas = ${JSON.stringify(schemas)} as const;\n`,
+      `export const reportSchemas = ${JSON.stringify(bundle.roots)} as const;\n`,
   ),
 );
 
-const present = existsSync(GENERATED) ? readdirSync(GENERATED) : [];
-const stale = [...wanted].filter(([name, content]) => {
-  const path = join(GENERATED, name);
-  return !existsSync(path) || readFileSync(path, "utf8") !== content;
-});
-const extra = present.filter((name) => !wanted.has(name));
-if (checking) {
-  for (const name of [...stale.map(([name]) => name), ...extra]) {
-    console.error(
-      `generate: src/generated/${name} differs from what \`onebudgetspec schema\` generates; ` +
-        "run 'bun run generate' in sdks/typescript",
-    );
+try {
+  const present = existsSync(GENERATED) ? readdirSync(GENERATED) : [];
+  const stale = [...wanted].filter(([name, content]) => {
+    const path = join(GENERATED, name);
+    return !existsSync(path) || readFileSync(path, "utf8") !== content;
+  });
+  const extra = present.filter((name) => !wanted.has(name));
+  if (checking) {
+    for (const name of [...stale.map(([name]) => name), ...extra]) {
+      console.error(
+        `generate: src/generated/${name} differs from what \`onebudgetspec schema\` generates; ` +
+          "run 'just generate'",
+      );
+    }
+    if (stale.length > 0 || extra.length > 0) process.exit(1);
+  } else {
+    mkdirSync(GENERATED, { recursive: true });
+    for (const [name, content] of stale) writeFileSync(join(GENERATED, name), content);
+    for (const name of extra) rmSync(join(GENERATED, name));
   }
-  if (stale.length > 0 || extra.length > 0) process.exit(1);
-} else {
-  mkdirSync(GENERATED, { recursive: true });
-  for (const [name, content] of stale) writeFileSync(join(GENERATED, name), content);
-  for (const name of extra) rmSync(join(GENERATED, name));
+} catch (error) {
+  fail(`cannot read or write ${GENERATED} (${error}); make it writable, then run 'just generate'`);
 }
