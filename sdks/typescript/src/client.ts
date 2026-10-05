@@ -203,13 +203,34 @@ function isDateTime(value: string): boolean {
     field(10) <= 59
   );
 }
-/** An integer that fits in `bits` unsigned bits. A JSON number past 2^53 rounds to a
- * double, so the largest uint64 reads as 2^64 itself: past 53 bits the bound admits it, and
- * refuses anything larger. */
-const isUnsigned = (bits: number) => (value: number) =>
-  Number.isInteger(value) &&
-  value >= 0 &&
-  (value < 2 ** bits || (bits > 53 && value === 2 ** bits));
+/** Whether an integer fits in 32 unsigned bits. */
+const isUint32 = (value: number) => Number.isInteger(value) && value >= 0 && value < 2 ** 32;
+/** Whether a number is a non-negative integer: a uint64 as far as a double can say. Its upper
+ * bound is checked exactly on the literal while parsing (see {@link parseReport}), since the
+ * largest uint64 and the first integer past it read as the same double. */
+const isWholeAndNonNegative = (value: number) => Number.isInteger(value) && value >= 0;
+/** The widest integer a report carries, a uint64. */
+const UINT64_MAX = 2n ** 64n - 1n;
+
+/**
+ * `stdout` parsed as JSON, refusing an integer literal no report field can hold: past the
+ * range a double holds exactly, each integer literal must fit in a uint64, read exactly from
+ * its source text. A runtime that does not expose the source cannot tell, so it refuses.
+ */
+function parseReport(stdout: string): unknown {
+  return JSON.parse(stdout, (_key: string, value: unknown, ...context: unknown[]) => {
+    if (typeof value !== "number" || Number.isSafeInteger(value) || !Number.isInteger(value)) {
+      return value;
+    }
+    const [info] = context;
+    const source = isObject(info) && typeof info.source === "string" ? info.source : undefined;
+    if (source === undefined || !/^\d+$/.test(source) || BigInt(source) > UINT64_MAX) {
+      throw new RangeError(`${source ?? value} is not an integer a report field can hold`);
+    }
+    return value;
+  });
+}
+
 // Every format the schema names is checked: the timestamps, and the numeric widths the
 // binary's Rust types carry.
 const ajv = new Ajv2020({
@@ -219,8 +240,8 @@ const ajv = new Ajv2020({
     // A double is any JSON number: ajv's own `number` check already refuses a value that
     // overflows to Infinity.
     double: true,
-    uint32: { type: "number", validate: isUnsigned(32) },
-    uint64: { type: "number", validate: isUnsigned(64) },
+    uint32: { type: "number", validate: isUint32 },
+    uint64: { type: "number", validate: isWholeAndNonNegative },
   },
 });
 const checkReport = ajv.compile<CheckReport>(reportSchemas["check-report"]);
@@ -230,9 +251,9 @@ const listReport = ajv.compile<ListReport>(reportSchemas["list-report"]);
 function report<T>(validator: ValidateFunction<T>, root: string, stdout: string): T {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = parseReport(stdout);
   } catch (error) {
-    throw new OnebudgetspecError(`onebudgetspec: the binary printed no JSON: ${error}`, null);
+    throw new OnebudgetspecError(`onebudgetspec: the binary printed no ${root}: ${error}`, null);
   }
   if (!validator(parsed)) {
     throw new OnebudgetspecError(

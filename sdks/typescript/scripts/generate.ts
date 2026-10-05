@@ -125,7 +125,7 @@ wanted.set(
       "/** The version of the schema bundle these types were generated from. */\n" +
       `export const SCHEMA_BUNDLE_VERSION = ${JSON.stringify(bundle.version)};\n\n` +
       "/** The bundle roots the client's reports are validated against. */\n" +
-      `export const reportSchemas = ${JSON.stringify(bundle.roots)} as const;\n`,
+      `export const reportSchemas = ${JSON.stringify(bundle.roots)};\n`,
   ),
 );
 

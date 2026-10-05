@@ -54,7 +54,7 @@ const listWith: Call = (binary) => listBudgets({ binary });
 const schemaWith: Call = (binary) => schema({ binary });
 
 test.each<[string, string, Call, string]>([
-  ["not json", "check", checkWith, "printed no JSON"],
+  ["not json", "check", checkWith, "printed no check-report: SyntaxError"],
   ['{"schema_version": 1, "budgets": [], "extra": 1}', "list", listWith, "no valid list-report"],
   ['{"schema_version": 1}', "check", checkWith, "no valid check-report"],
 
@@ -162,7 +162,14 @@ test.each<[string, Record<string, string>, Record<string, string>, string]>([
   ["negative CPUs", {}, { cpus: "-1" }, 'format "uint32"'],
   ["fractional memory", {}, { mem_available_mib: "1.5" }, 'format "uint64"'],
   ["negative memory", {}, { mem_available_mib: "-1" }, 'format "uint64"'],
-  ["memory of 2^65", {}, { mem_available_mib: "36893488147419103232" }, 'format "uint64"'],
+  [
+    "memory one past the largest uint64",
+    {},
+    { mem_available_mib: "18446744073709551616" },
+    "18446744073709551616 is not an integer a report field can hold",
+  ],
+  ["memory of 2^65", {}, { mem_available_mib: "36893488147419103232" }, "can hold"],
+  ["a negative integer past 2^53", { actual: "-9007199254740993" }, {}, "can hold"],
 ])("%s is refused", async (_what, result, host, reason) => {
   const dir = scratch();
   const program = join(dir, "onebudgetspec");

@@ -237,4 +237,4 @@ export const reportSchemas = {
     title: "list-report",
     type: "object",
   },
-} as const;
+};
