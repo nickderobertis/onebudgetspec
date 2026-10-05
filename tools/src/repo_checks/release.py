@@ -129,6 +129,10 @@ def platform_problems(root: Path = ROOT) -> list[str]:
     release = yaml.safe_load((root / ".github/workflows/release.yml").read_text())
     matrix = release["jobs"]["native"]["strategy"]["matrix"]["include"]
     in_release = sorted(mapping.get(row["target"], f"unmapped {row['target']}") for row in matrix)
+    toolchain = tomllib.loads((root / "rust-toolchain.toml").read_text())["toolchain"]
+    in_toolchain = sorted(
+        mapping.get(target, f"unmapped {target}") for target in toolchain.get("targets", [])
+    )
     problems = []
     for platform in carriers:
         carrier = json.loads((root / f"npm/platforms/{platform}/package.json").read_text())
@@ -145,7 +149,27 @@ def platform_problems(root: Path = ROOT) -> list[str]:
         ("npm/cli/package.json", in_manifest),
         ("scripts/build-dist.sh", in_build),
         (".github/workflows/release.yml", in_release),
+        ("rust-toolchain.toml", in_toolchain),
     ):
         if found != carriers:
             problems.append(f"{where} lists {found}; npm/platforms holds {carriers}")
     return problems
+
+
+def launcher_status_problems(root: Path = ROOT) -> list[str]:
+    """Whether the README documents exactly the exit statuses the npm launcher returns."""
+    launcher = (root / "npm/cli/lib/launcher.js").read_text()
+    returned = sorted({int(code) for code in re.findall(r"status: (\d+),", launcher)})
+    readme = (root / "README.md").read_text()
+    paragraph = re.search(r"The npm launcher adds[^\n]*(?:\n[^\n]+)*", readme)
+    documented = (
+        sorted(int(code) for code in re.findall(r"`(\d+)`", paragraph.group(0)))
+        if paragraph
+        else []
+    )
+    if returned != documented:
+        return [
+            f"README.md documents launcher statuses {documented}; "
+            f"npm/cli/lib/launcher.js returns {returned}"
+        ]
+    return []

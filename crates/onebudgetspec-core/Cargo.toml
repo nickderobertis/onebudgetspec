@@ -28,10 +28,5 @@ libc.workspace = true
 [dev-dependencies]
 sha2.workspace = true
 
-[lints.rust]
-warnings = "deny"
-missing_docs = "deny"
-unsafe_op_in_unsafe_fn = "deny"
-
-[lints.clippy]
-pedantic = { level = "deny", priority = -1 }
+[lints]
+workspace = true

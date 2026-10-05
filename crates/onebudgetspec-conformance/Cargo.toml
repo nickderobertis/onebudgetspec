@@ -12,8 +12,5 @@ jsonschema.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 
-[lints.rust]
-warnings = "deny"
-
-[lints.clippy]
-pedantic = { level = "deny", priority = -1 }
+[lints]
+workspace = true

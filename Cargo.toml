@@ -34,6 +34,16 @@ tempfile = "3.27.0"
 jsonschema = { version = "0.58.5", default-features = false }
 sha2 = "0.11.0"
 
+# One lint policy for every crate and every build of it (check, test, build, clippy): a
+# compiler warning is an error, and clippy's pedantic group is denied.
+[workspace.lints.rust]
+warnings = "deny"
+missing_docs = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+
 [profile.release]
 strip = true
 

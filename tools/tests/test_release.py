@@ -9,6 +9,8 @@ from repo_checks import release
 
 FILES = (
     "release-targets.toml",
+    "rust-toolchain.toml",
+    "README.md",
     "scripts",
     ".github/workflows/release.yml",
     "crates",
@@ -71,7 +73,33 @@ def test_a_platform_missing_anywhere_is_named(tmp_path: Path) -> None:
         build.read_text().replace("    aarch64-apple-darwin) echo darwin-arm64 ;;\n", "")
     )
     problems = release.platform_problems(root)
-    assert len(problems) == 4, problems
+    # The launcher, its manifest, the build script, and the release matrix and toolchain
+    # (which the build script no longer maps), five places in all.
+    assert len(problems) == 5, problems
+
+
+def test_a_release_target_missing_from_the_toolchain_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    toolchain = root / "rust-toolchain.toml"
+    toolchain.write_text(toolchain.read_text().replace('    "x86_64-apple-darwin",\n', ""))
+    assert release.platform_problems(root) == [
+        "rust-toolchain.toml lists ['darwin-arm64', 'linux-arm64', 'linux-x64']; "
+        "npm/platforms holds ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']"
+    ]
+
+
+def test_the_readme_documents_the_launcher_s_statuses() -> None:
+    assert release.launcher_status_problems() == []
+
+
+def test_a_launcher_status_the_readme_omits_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    readme = root / "README.md"
+    readme.write_text(readme.read_text().replace(", and `70` when", ", and when"))
+    assert release.launcher_status_problems(root) == [
+        "README.md documents launcher statuses [64, 69]; "
+        "npm/cli/lib/launcher.js returns [64, 69, 70]"
+    ]
 
 
 def test_a_carrier_whose_manifest_names_another_platform_is_named(tmp_path: Path) -> None:

@@ -21,9 +21,5 @@ onebudgetspec-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 
-[lints.rust]
-warnings = "deny"
-
-[lints.clippy]
-pedantic = { level = "deny", priority = -1 }
-
+[lints]
+workspace = true
