@@ -33,15 +33,29 @@ readonly VERSION
 
 skipped=()
 
-# The packages a target publishes, read from release-targets.toml (its id and what it
-# covers), so a stray artifact is refused rather than uploaded.
+# The declaration of what each target publishes; ONEBUDGETSPEC_RELEASE_TARGETS points
+# elsewhere, as the tests do.
+readonly DECLARATION="${ONEBUDGETSPEC_RELEASE_TARGETS:-$ROOT/release-targets.toml}"
+
+# The packages a target publishes, read from the declaration (its id and what it covers),
+# so a stray artifact is refused rather than uploaded. Fails the run when the declaration
+# cannot be read or names no packages for the target, rather than publishing nothing.
 target_packages() {
-  python3 - "$ROOT/release-targets.toml" "$1" <<'PY'
+  local packages
+  packages="$(python3 - "$DECLARATION" "$1" <<'PY'
 import sys, tomllib
-for target in tomllib.load(open(sys.argv[1], "rb"))["target"]:
-    if target["name"] == sys.argv[2]:
-        print(" ".join(i.partition(":")[2] for i in [target["id"], *target.get("covers", [])]))
+try:
+    targets = tomllib.load(open(sys.argv[1], "rb"))["target"]
+    for target in targets:
+        if target["name"] == sys.argv[2]:
+            ids = [target["id"], *target.get("covers", [])]
+            print(" ".join(i.partition(":")[2] for i in ids))
+except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError, AttributeError) as error:
+    sys.exit(f"{type(error).__name__}: {error}")
 PY
+)" || fail "$DECLARATION cannot be read as a list of release targets (above)" "restore release-targets.toml from git, then re-run the release workflow"
+  [ -n "$packages" ] || fail "$DECLARATION names no packages for target $1" "restore release-targets.toml from git, then re-run the release workflow"
+  printf '%s\n' "$packages"
 }
 
 npm_publish() {
@@ -50,7 +64,7 @@ npm_publish() {
     || fail "$tarball holds no readable package/package.json" "rebuild it with scripts/build-dist.sh"
   name="${identity% *}"
   version="${identity#* }"
-  case " $(target_packages "$target") " in
+  case " $PACKAGES " in
     *" $name "*) ;;
     *) fail "$tarball is $name, which target $target does not publish" "publish only what scripts/build-dist.sh built for $target" ;;
   esac
@@ -86,7 +100,8 @@ case "$target" in
     # The SDK before the binary crate that depends on it, as release-targets.toml covers it.
     # ONEBUDGETSPEC_CRATES_API points the lookup elsewhere, as the tests do.
     api="${ONEBUDGETSPEC_CRATES_API:-https://crates.io/api/v1}"
-    for crate in $(target_packages crate | awk '{for (i = NF; i > 0; i--) print $i}'); do
+    PACKAGES="$(target_packages crate)" || exit 1
+    for crate in $(printf '%s\n' "$PACKAGES" | awk '{for (i = NF; i > 0; i--) print $i}'); do
       status="$(curl -sS -o /dev/null -w '%{http_code}' \
         -A "onebudgetspec-release (+https://github.com/nickderobertis/onebudgetspec)" \
         "$api/crates/$crate/$VERSION")" \
@@ -102,7 +117,7 @@ case "$target" in
   pypi | sdk-pypi)
     [ $# -eq 1 ] && [ -d "$1" ] || usage "$target takes the directory holding its wheels"
     need PYPI_TOKEN
-    name="$(target_packages "$target")"
+    name="$(target_packages "$target")" || exit 1
     for wheel in "$1"/*.whl; do
       # The identity the wheel's own metadata declares, not its file name.
       identity="$(python3 - "$wheel" <<'PY'
@@ -122,6 +137,7 @@ PY
   npm | sdk-npm)
     [ $# -gt 0 ] || usage "$target takes the directories holding its packed packages, carriers first"
     need NPM_TOKEN
+    PACKAGES="$(target_packages "$target")" || exit 1
     NPMRC="$(mktemp)"
     trap 'rm -f "$NPMRC"' EXIT
     registry="$(npm config get registry)"

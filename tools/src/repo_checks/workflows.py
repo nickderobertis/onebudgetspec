@@ -176,11 +176,12 @@ def _job(workflow: str, name: object, body: object) -> JobBody:
     if not isinstance(body, dict):
         raise InvalidWorkflow(f"{where} is not a mapping")
     read: dict = dict(body)
-    if "if" in body:
-        condition = body["if"]
-        if isinstance(condition, bool):
+    match body.get("if", ""):
+        case bool() as condition:
             read["if"] = "true" if condition else "false"
-        elif not isinstance(condition, str):
+        case str():
+            pass
+        case _:
             raise InvalidWorkflow(f"{where}'s `if` is not a string")
     needs = body.get("needs", [])
     if not (

@@ -479,3 +479,30 @@ def test_a_target_on_a_registry_the_probe_does_not_read_is_refused(tmp_path: Pat
     answered = probe_against(path, "maven:onebudgetspec")
     assert answered.returncode == 1
     assert "names maven:onebudgetspec on no registry this probe reads" in answered.stderr
+
+
+@pytest.mark.parametrize(
+    ("target", "token"),
+    [("crate", "CARGO_REGISTRY_TOKEN"), ("pypi", "PYPI_TOKEN"), ("sdk-npm", "NPM_TOKEN")],
+)
+@pytest.mark.parametrize(
+    ("declaration", "reason"),
+    [
+        ('target = "not a table"\n', "cannot be read as a list of release targets"),
+        ("[[target]\nid = ", "cannot be read as a list of release targets"),
+        (None, "cannot be read as a list of release targets"),
+        ('[[target]]\nname = "other"\nid = "crate:x"\n', "names no packages for target"),
+    ],
+)
+def test_publish_refuses_a_declaration_it_cannot_read(
+    tmp_path: Path, target: str, token: str, declaration: str | None, reason: str
+) -> None:
+    path = tmp_path / "release-targets.toml"
+    if declaration is not None:
+        path.write_text(declaration)
+    args = (target,) if target == "crate" else (target, str(tmp_path))
+    refused = publish(*args, **{token: "token", "ONEBUDGETSPEC_RELEASE_TARGETS": str(path)})
+    assert refused.returncode == 1, refused.stdout
+    assert f"{path} {reason}" in refused.stderr
+    assert "next: restore release-targets.toml from git" in refused.stderr
+    assert "already published" not in refused.stdout
