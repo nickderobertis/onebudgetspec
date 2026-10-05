@@ -7,9 +7,11 @@ import { spawnSync } from "node:child_process";
 import {
   chmodSync,
   cpSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -43,11 +45,18 @@ function generate(copy: string, binary: string, ...args: string[]) {
   return { status: ran.status, stderr: ran.stderr };
 }
 
-function contents(copy: string): Record<string, string> {
-  const directory = join(copy, "src", "generated");
-  return Object.fromEntries(
-    readdirSync(directory).map((name) => [name, readFileSync(join(directory, name), "utf8")]),
-  );
+/** Every entry under the generated directory by relative path, never following a link: a
+ * file maps to its text, a symlink to `-> <target>` and a directory to its own entries. */
+function contents(copy: string, directory = join(copy, "src", "generated"), prefix = "") {
+  const found: Record<string, string> = {};
+  for (const name of readdirSync(directory)) {
+    const path = join(directory, name);
+    const entry = lstatSync(path);
+    if (entry.isSymbolicLink()) found[prefix + name] = `-> ${readlinkSync(path)}`;
+    else if (entry.isDirectory()) Object.assign(found, contents(copy, path, `${prefix}${name}/`));
+    else found[prefix + name] = readFileSync(path, "utf8");
+  }
+  return found;
 }
 
 test("--check passes on the committed files and writes nothing", () => {
@@ -156,4 +165,71 @@ test("a root the compiler cannot turn into types is refused, writing nothing", (
   expect(refused.stderr).toContain('cannot compile the "check-report" root');
   expect(refused.stderr).toContain("run 'just bootstrap'");
   expect(contents(copy)).toEqual(before);
+});
+
+test("a directory where a model belongs is named stale and replaced", () => {
+  const copy = workspace();
+  const committed = contents(copy);
+  const model = join(copy, "src", "generated", "check-report.ts");
+  rmSync(model);
+  mkdirSync(model);
+  writeFileSync(join(model, "inside.txt"), "in the way\n");
+  const drifted = contents(copy);
+
+  const checked = generate(copy, builtBinary(), "--check");
+  expect(checked.status).toBe(1);
+  expect(checked.stderr).toContain("src/generated/check-report.ts differs");
+  expect(checked.stderr).not.toContain("cannot read or write");
+  expect(contents(copy)).toEqual(drifted);
+
+  expect(generate(copy, builtBinary())).toEqual({ status: 0, stderr: "" });
+  expect(contents(copy)).toEqual(committed);
+  expect(generate(copy, builtBinary(), "--check").status).toBe(0);
+});
+
+test("a symlink where a model belongs is replaced, never written through", () => {
+  const copy = workspace();
+  const committed = contents(copy);
+  const outside = join(scratch(), "outside.ts");
+  writeFileSync(outside, "// not the generator's\n");
+  const model = join(copy, "src", "generated", "list-report.ts");
+  rmSync(model);
+  symlinkSync(outside, model);
+  const drifted = contents(copy);
+
+  const checked = generate(copy, builtBinary(), "--check");
+  expect(checked.status).toBe(1);
+  expect(checked.stderr).toContain("src/generated/list-report.ts differs");
+  expect(contents(copy)).toEqual(drifted);
+
+  expect(generate(copy, builtBinary())).toEqual({ status: 0, stderr: "" });
+  expect(readFileSync(outside, "utf8")).toBe("// not the generator's\n");
+  expect(lstatSync(model).isSymbolicLink()).toBe(false);
+  expect(contents(copy)).toEqual(committed);
+  expect(generate(copy, builtBinary(), "--check").status).toBe(0);
+});
+
+test("an unexpected directory and a link to one outside are named and removed", () => {
+  const copy = workspace();
+  const committed = contents(copy);
+  const generated = join(copy, "src", "generated");
+  mkdirSync(join(generated, "notes", "inner"), { recursive: true });
+  writeFileSync(join(generated, "notes", "inner", "readme.txt"), "not a model\n");
+  const outside = join(scratch(), "outside");
+  mkdirSync(outside);
+  writeFileSync(join(outside, "keep.txt"), "keep me\n");
+  symlinkSync(outside, join(generated, "link"));
+  const drifted = contents(copy);
+
+  const checked = generate(copy, builtBinary(), "--check");
+  expect(checked.status).toBe(1);
+  for (const name of ["notes", "link"]) {
+    expect(checked.stderr).toContain(`src/generated/${name} differs`);
+  }
+  expect(contents(copy)).toEqual(drifted);
+
+  expect(generate(copy, builtBinary())).toEqual({ status: 0, stderr: "" });
+  expect(contents(copy)).toEqual(committed);
+  expect(readFileSync(join(outside, "keep.txt"), "utf8")).toBe("keep me\n");
+  expect(generate(copy, builtBinary(), "--check").status).toBe(0);
 });

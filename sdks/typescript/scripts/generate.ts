@@ -6,7 +6,16 @@
 // from what the current schema generates. The binary is ONEBUDGETSPEC_BIN when set, else the
 // workspace's target/debug/onebudgetspec.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join, resolve } from "node:path";
 import { compile } from "json-schema-to-typescript";
 
@@ -129,11 +138,26 @@ wanted.set(
   ),
 );
 
+/** Whether `path` is a regular file in place, never a symlink to one elsewhere. */
+function isModelFile(path: string): boolean {
+  return lstatSync(path, { throwIfNoEntry: false })?.isFile() ?? false;
+}
+
+/** Remove `path` without following a link: a link or file is unlinked, and a real directory
+ * is removed with its contents, whose own links are unlinked rather than followed. */
+function remove(path: string): void {
+  const entry = lstatSync(path, { throwIfNoEntry: false });
+  if (entry === undefined) return;
+  if (entry.isDirectory()) rmSync(path, { recursive: true });
+  else unlinkSync(path);
+}
+
 try {
   const present = existsSync(GENERATED) ? readdirSync(GENERATED) : [];
+  // A model's name held by anything but a regular file is stale, and is never read through.
   const stale = [...wanted].filter(([name, content]) => {
     const path = join(GENERATED, name);
-    return !existsSync(path) || readFileSync(path, "utf8") !== content;
+    return !isModelFile(path) || readFileSync(path, "utf8") !== content;
   });
   const extra = present.filter((name) => !wanted.has(name));
   if (checking) {
@@ -146,8 +170,12 @@ try {
     if (stale.length > 0 || extra.length > 0) process.exit(1);
   } else {
     mkdirSync(GENERATED, { recursive: true });
-    for (const [name, content] of stale) writeFileSync(join(GENERATED, name), content);
-    for (const name of extra) rmSync(join(GENERATED, name));
+    for (const [name, content] of stale) {
+      const path = join(GENERATED, name);
+      if (!isModelFile(path)) remove(path);
+      writeFileSync(path, content);
+    }
+    for (const name of extra) remove(join(GENERATED, name));
   }
 } catch (error) {
   fail(`cannot read or write ${GENERATED} (${error}); make it writable, then run 'just generate'`);
