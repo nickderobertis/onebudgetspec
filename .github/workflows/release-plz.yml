@@ -1,0 +1,76 @@
+# Conventional Commits on main drive the release: release-plz tags and cuts the GitHub
+# Release for a merged release pull request, and opens or updates the next one. The tag's
+# GitHub Release fires release.yml, which builds and publishes. `workflow_dispatch` re-runs
+# this bot once the release token exists, so it opens the first release pull request
+# without waiting for a push; releasing is still only ever merging that pull request.
+name: release-plz
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  # Whether the release token is provisioned. Until it is, release-plz is skipped, not failed.
+  guard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      enabled: ${{ steps.guard.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: guard
+        env:
+          RELEASE_PLZ_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+        run: bash scripts/ci-guard.sh RELEASE_PLZ_TOKEN
+
+  # llmlint: ignore-block[changed_behavior_has_e2e] these steps tag, cut a GitHub Release and auto-merge a pull request in the live repository with a token it is not given until releasing is provisioned; the guard that keeps them skipped until then is driven by tools/tests/test_workflows.py.
+  release-plz:
+    needs: [guard]
+    if: needs.guard.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    # Every write goes through RELEASE_PLZ_TOKEN, so the job's own token only reads.
+    permissions:
+      contents: read
+    concurrency:
+      group: release-plz
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # A PAT rather than GITHUB_TOKEN, so the tag and release it pushes fire release.yml.
+          token: ${{ secrets.RELEASE_PLZ_TOKEN }}
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: extractions/setup-just@v4
+      - uses: astral-sh/setup-uv@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: release-plz,cargo-semver-checks
+      - name: Tag and cut the GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+        run: release-plz release --git-token "$GITHUB_TOKEN"
+      - name: Open or update the release pull request
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+        run: release-plz release-pr --git-token "$GITHUB_TOKEN"
+      # release-plz writes the Cargo manifests only; the wheel, npm and SDK manifests are
+      # brought to the same version on the release branch, or its `check` would refuse it.
+      - name: Bring every other manifest to the release version
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+        run: bash scripts/sync-release-pr.sh
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
+        run: |
+          pr=$(gh pr list --json number,headRefName --jq 'map(select(.headRefName | startswith("release-plz-"))) | .[0].number // empty')
+          [ -z "$pr" ] || gh pr merge "$pr" --auto --squash --delete-branch
+  # llmlint: ignore-end[changed_behavior_has_e2e]

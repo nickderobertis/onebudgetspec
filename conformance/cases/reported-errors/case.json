@@ -1,0 +1,6 @@
+{
+  "description": "A reported result file left empty, not JSON, or without a value is an error; the other budgets are still measured.",
+  "args": ["check", "--json"],
+  "exit": 3,
+  "error_contains": { "empty-result": "empty", "not-json": "JSON", "no-value": "value" }
+}

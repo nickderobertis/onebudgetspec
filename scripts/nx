@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Invoke Nx, installing the locked Node toolchain first in a clone that has never had it,
+# so every `just` recipe works from a clean clone. Quiet on success: one line naming what
+# runs, and Nx's whole output replayed only when it fails.
+#
+# Usage: scripts/nx <nx arguments...>
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+readonly ROOT
+cd "$ROOT"
+
+if [ ! -x "node_modules/.bin/nx" ]; then
+  if ! command -v bun >/dev/null 2>&1; then
+    echo "nx: bun is not installed, and Nx runs every target here; install it from https://bun.sh, then re-run." >&2
+    exit 1
+  fi
+  if ! install_log="$(bun install --frozen-lockfile 2>&1)"; then
+    printf '%s\n' "$install_log" >&2
+    echo "nx: the locked install failed (above); run 'bun install' by hand to see why." >&2
+    exit 1
+  fi
+fi
+
+case " $* " in
+  *" --outputStyle"*) exec node_modules/.bin/nx "$@" ;;
+esac
+case "${1:-}" in
+  run | run-many | affected) ;;
+  *) exec node_modules/.bin/nx "$@" ;;
+esac
+
+echo "nx: $*" >&2
+if ! output="$(NX_DAEMON=false node_modules/.bin/nx "$@" --outputStyle=static 2>&1)"; then
+  printf '%s\n' "$output" >&2
+  echo "nx: 'nx $*' failed; the failing target and its output are above. Fix it, then re-run the same just recipe." >&2
+  exit 1
+fi

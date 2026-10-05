@@ -1,0 +1,5 @@
+# The tools project's ruff settings, for these tests.
+extend = "../../tools/pyproject.toml"
+
+[lint.extend-per-file-ignores]
+"**/test_*.py" = ["D103"]

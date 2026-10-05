@@ -1,0 +1,48 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "ci-scripts-integration",
+  "projectType": "library",
+  "tags": ["lang:python", "type:integration"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
+  "//": "The gate's scripts driven for real: ci-base.sh over real git histories, and build-dist.sh naming the artifact it built beside earlier builds. Its test target's inputs are those two scripts alone, so no other script's change selects it.",
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --config scripts/ci-tests/ruff.toml scripts/ci-tests"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check --config scripts/ci-tests/ruff.toml scripts/ci-tests"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff check --quiet --config scripts/ci-tests/ruff.toml scripts/ci-tests"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 scripts/ci-tests"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider --cov=. --cov-report=term-missing:skip-covered --cov-fail-under=95",
+        "cwd": "scripts/ci-tests"
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/scripts/ci-base.sh",
+        "{workspaceRoot}/scripts/build-dist.sh"
+      ]
+    }
+  }
+}

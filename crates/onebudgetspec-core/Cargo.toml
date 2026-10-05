@@ -1,0 +1,32 @@
+[package]
+name = "onebudgetspec-core"
+description = "Register measurable budgets in YAML and gate on them: load, discover, select, measure and report."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme = "../../README.md"
+keywords = ["budget", "performance", "gate", "measurement"]
+categories = ["development-tools::testing"]
+
+[dependencies]
+chrono.workspace = true
+ignore.workspace = true
+regex.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_norway.workspace = true
+serde_path_to_error.workspace = true
+tempfile.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[dev-dependencies]
+sha2.workspace = true
+
+[lints]
+workspace = true

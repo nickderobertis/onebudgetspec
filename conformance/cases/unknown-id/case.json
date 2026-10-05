@@ -1,0 +1,5 @@
+{
+  "description": "An id no file registers is an invocation error: exit 2, nothing measured, nothing on stdout.",
+  "args": ["check", "--json", "--id", "unknown"],
+  "exit": 2
+}

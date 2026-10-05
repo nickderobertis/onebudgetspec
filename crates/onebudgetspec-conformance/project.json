@@ -1,0 +1,46 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "onebudgetspec-conformance",
+  "projectType": "library",
+  "tags": ["lang:rust", "type:e2e"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "rust"]
+  },
+  "//": "Runs the conformance cases against the built binary, behind its own edge so a change that cannot reach the binary or the cases never spawns it.",
+  "implicitDependencies": ["onebudgetspec", "conformance"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec-conformance"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec-conformance -- --check"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo clippy --quiet -p onebudgetspec-conformance --all-targets --locked -- -D warnings"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo check --quiet -p onebudgetspec-conformance --all-targets --locked"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/rust-coverage.sh onebudgetspec-conformance"
+      },
+      "outputs": ["{workspaceRoot}/target/llvm-cov-target"],
+      "cache": false,
+      "dependsOn": ["workspace:coverage-clear", "onebudgetspec:build"]
+    }
+  }
+}

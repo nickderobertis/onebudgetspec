@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "within",
+      "file": "budgets.yaml",
+      "labels": ["api"],
+      "unit": "seconds",
+      "direction": "max",
+      "threshold": 1800.0,
+      "verdict": "within",
+      "actual": 1395.0,
+      "headroom": 405.0,
+      "headroom_percent": 22.5,
+      "detail": null,
+      "error": null,
+      "started_at": "1970-01-01T00:00:00Z",
+      "ended_at": "1970-01-01T00:00:00Z",
+      "host": {
+        "load1": 0.0,
+        "cpus": 1,
+        "mem_available_mib": 0,
+        "conditions": {}
+      }
+    },
+    {
+      "id": "equal",
+      "file": "budgets.yaml",
+      "labels": [],
+      "unit": "seconds",
+      "direction": "max",
+      "threshold": 1800.0,
+      "verdict": "within",
+      "actual": 1800.0,
+      "headroom": 0.0,
+      "headroom_percent": 0.0,
+      "detail": null,
+      "error": null,
+      "started_at": "1970-01-01T00:00:00Z",
+      "ended_at": "1970-01-01T00:00:00Z",
+      "host": {
+        "load1": 0.0,
+        "cpus": 1,
+        "mem_available_mib": 0,
+        "conditions": {}
+      }
+    },
+    {
+      "id": "over",
+      "file": "budgets.yaml",
+      "labels": [],
+      "unit": "seconds",
+      "direction": "max",
+      "threshold": 1800.0,
+      "verdict": "over",
+      "actual": 2000.0,
+      "headroom": -200.0,
+      "headroom_percent": -11.11111111111111,
+      "detail": "two retries",
+      "error": null,
+      "started_at": "1970-01-01T00:00:00Z",
+      "ended_at": "1970-01-01T00:00:00Z",
+      "host": {
+        "load1": 0.0,
+        "cpus": 1,
+        "mem_available_mib": 0,
+        "conditions": {}
+      }
+    }
+  ]
+}

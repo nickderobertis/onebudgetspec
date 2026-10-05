@@ -1,0 +1,5 @@
+{
+  "description": "A file with an unknown key is refused: exit 2, nothing measured, nothing on stdout.",
+  "args": ["check", "--json"],
+  "exit": 2
+}

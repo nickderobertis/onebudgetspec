@@ -1,0 +1,20 @@
+schema_version: 1
+budgets:
+  - id: bad-name
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 1, "conditions": {"Gate-Load": "1"}}']
+    unit: seconds
+    direction: max
+    threshold: 1800
+  - id: not-a-string
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 1, "conditions": {"gate_runs": 6}}']
+    unit: seconds
+    direction: max
+    threshold: 1800
+  - id: not-an-object
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 1, "conditions": ["gate_runs"]}']
+    unit: seconds
+    direction: max
+    threshold: 1800

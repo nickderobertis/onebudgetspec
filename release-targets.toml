@@ -1,0 +1,49 @@
+# What this repository publishes, and the only identifiers scripts/release/release-probe.py answers
+# for. Every `id` is `<registry>:<name>`. The five short names are a contract with the
+# repositories that wait on a release by name, so they never change: `crate`, `pypi`, `npm`,
+# `sdk-pypi` and `sdk-npm`. Everything else a release carries is a `covers` entry under the
+# target that publishes it.
+schema_version = 2
+probe = "scripts/release/release-probe.py"
+
+[[target]]
+id = "crate:onebudgetspec"
+name = "crate"
+what = "The `onebudgetspec` binary crate and the `onebudgetspec-core` Rust SDK, from crates.io."
+published_by = ".github/workflows/release.yml — the publish-crates job, through scripts/release/publish.sh crate."
+manifest = "crates/onebudgetspec/Cargo.toml"
+covers = ["crate:onebudgetspec-core"]
+
+[[target]]
+id = "pypi:onebudgetspec-cli"
+name = "pypi"
+what = "The `onebudgetspec` binary as a wheel, so `pip install onebudgetspec-cli` puts it on PATH."
+published_by = ".github/workflows/release.yml — the publish-pypi job, through scripts/release/publish.sh pypi, from the wheels scripts/build-dist.sh cli-wheel built."
+manifest = "pyproject.toml"
+
+[[target]]
+id = "npm:@onebudgetspec/cli"
+name = "npm"
+what = "The `onebudgetspec` binary as an npm launcher, which runs the carrier for the host it is installed on."
+published_by = ".github/workflows/release.yml — the publish-npm job, through scripts/release/publish.sh npm, carriers first."
+manifest = "npm/cli/package.json"
+covers = [
+    "npm:@onebudgetspec/cli-linux-x64",
+    "npm:@onebudgetspec/cli-linux-arm64",
+    "npm:@onebudgetspec/cli-darwin-x64",
+    "npm:@onebudgetspec/cli-darwin-arm64",
+]
+
+[[target]]
+id = "pypi:onebudgetspec-sdk"
+name = "sdk-pypi"
+what = "The Python SDK, imported as `onebudgetspec_sdk`."
+published_by = ".github/workflows/release.yml — the publish-sdk-pypi job, through scripts/release/publish.sh sdk-pypi."
+manifest = "sdks/python/pyproject.toml"
+
+[[target]]
+id = "npm:@onebudgetspec/sdk"
+name = "sdk-npm"
+what = "The TypeScript SDK, imported as `@onebudgetspec/sdk`."
+published_by = ".github/workflows/release.yml — the publish-sdk-npm job, through scripts/release/publish.sh sdk-npm."
+manifest = "sdks/typescript/package.json"

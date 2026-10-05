@@ -1,0 +1,46 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "readme-examples",
+  "projectType": "library",
+  "tags": ["lang:python", "type:integration"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
+  "//": "The README's example budgets files, extracted by examples.py, laid out as the README describes and validated by the built binary. Behind its own edge: only the README, the binary or this project select it.",
+  "implicitDependencies": ["onebudgetspec"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --config tools/readme/ruff.toml tools/readme"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check --config tools/readme/ruff.toml tools/readme"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff check --quiet --config tools/readme/ruff.toml tools/readme"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 tools/readme"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider --cov=examples --cov-report=term-missing:skip-covered --cov-fail-under=95",
+        "cwd": "tools/readme"
+      },
+      "dependsOn": ["onebudgetspec:build"],
+      "inputs": ["default", "^default", "{workspaceRoot}/README.md"]
+    }
+  }
+}

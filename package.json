@@ -1,0 +1,17 @@
+{
+  "name": "onebudgetspec-workspace",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "sdks/typescript",
+    "npm/cli",
+    "npm/platforms/*"
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/bun": "1.4.2",
+    "nx": "23.2.1",
+    "typescript": "7.0.2"
+  }
+}

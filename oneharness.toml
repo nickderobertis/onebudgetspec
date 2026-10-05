@@ -1,0 +1,14 @@
+# Which harness and model the judged lint (llmlint.yml) drives. Fallback mode: codex is
+# tried first and claude-code runs where codex cannot (a Claude Code session, say), so one
+# committed file works for every contributor with no environment override.
+# Docs: https://github.com/nickderobertis/oneharness
+run_mode = "fallback"
+harnesses = ["codex", "claude-code"]
+
+[harness.codex]
+model = "gpt-5.5"
+
+[harness.claude-code]
+model = "claude-opus-4-8"
+# Lets claude-code run as root in a container without refusing.
+env = { IS_SANDBOX = "1" }

@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "results": [
+    {
+      "id": "collides",
+      "file": "budgets.yaml",
+      "labels": [],
+      "unit": "seconds",
+      "direction": "max",
+      "threshold": 1800.0,
+      "verdict": "error",
+      "actual": null,
+      "headroom": null,
+      "headroom_percent": null,
+      "detail": null,
+      "error": "<error>",
+      "started_at": "1970-01-01T00:00:00Z",
+      "ended_at": "1970-01-01T00:00:00Z",
+      "host": {
+        "load1": 0.0,
+        "cpus": 1,
+        "mem_available_mib": 0,
+        "conditions": {
+          "dispatches": "3"
+        }
+      }
+    },
+    {
+      "id": "host-value",
+      "file": "budgets.yaml",
+      "labels": [],
+      "unit": "seconds",
+      "direction": "max",
+      "threshold": 1800.0,
+      "verdict": "error",
+      "actual": null,
+      "headroom": null,
+      "headroom_percent": null,
+      "detail": null,
+      "error": "<error>",
+      "started_at": "1970-01-01T00:00:00Z",
+      "ended_at": "1970-01-01T00:00:00Z",
+      "host": {
+        "load1": 0.0,
+        "cpus": 1,
+        "mem_available_mib": 0,
+        "conditions": {
+          "dispatches": "3"
+        }
+      }
+    },
+    {
+      "id": "fine",
+      "file": "budgets.yaml",
+      "labels": [],
+      "unit": "seconds",
+      "direction": "max",
+      "threshold": 1800.0,
+      "verdict": "within",
+      "actual": 1.0,
+      "headroom": 1799.0,
+      "headroom_percent": 99.94444444444444,
+      "detail": null,
+      "error": null,
+      "started_at": "1970-01-01T00:00:00Z",
+      "ended_at": "1970-01-01T00:00:00Z",
+      "host": {
+        "load1": 0.0,
+        "cpus": 1,
+        "mem_available_mib": 0,
+        "conditions": {
+          "dispatches": "3"
+        }
+      }
+    }
+  ]
+}

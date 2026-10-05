@@ -1,0 +1,59 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "onebudgetspec-packaging-e2e",
+  "projectType": "library",
+  "tags": ["lang:rust", "type:e2e"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "rust", "js", "python"]
+  },
+  "//": "The packaging journeys: every distribution built by scripts/build-dist.sh, installed with no registry, and driven. The most expensive suite, so it sits behind its own edge to the packages it installs. It has no coverage target: it builds release artifacts, which carry no instrumentation; the code it drives is measured by the other suites.",
+  "implicitDependencies": [
+    "onebudgetspec",
+    "npm-cli",
+    "npm-cli-linux-x64",
+    "npm-cli-linux-arm64",
+    "npm-cli-darwin-x64",
+    "npm-cli-darwin-arm64",
+    "sdk-python",
+    "sdk-typescript"
+  ],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec-packaging-e2e"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec-packaging-e2e -- --check"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo clippy --quiet -p onebudgetspec-packaging-e2e --all-targets --locked -- -D warnings"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo check --quiet -p onebudgetspec-packaging-e2e --all-targets --locked"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo test --quiet -p onebudgetspec-packaging-e2e --locked"
+      },
+      "dependsOn": ["onebudgetspec:build"],
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/scripts/build-dist.sh",
+        "{workspaceRoot}/pyproject.toml"
+      ]
+    }
+  }
+}

@@ -1,0 +1,23 @@
+schema_version: 1
+conditions:
+  - name: dispatches
+    command: ["echo", "3"]
+budgets:
+  - id: collides
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 1, "conditions": {"dispatches": "9", "gate_load": "2.1"}}']
+    unit: seconds
+    direction: max
+    threshold: 1800
+  - id: host-value
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 1, "conditions": {"load1": "0.0"}}']
+    unit: seconds
+    direction: max
+    threshold: 1800
+  - id: fine
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 1}']
+    unit: seconds
+    direction: max
+    threshold: 1800

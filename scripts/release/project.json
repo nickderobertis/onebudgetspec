@@ -1,0 +1,40 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "release-scripts",
+  "projectType": "library",
+  "tags": ["lang:bash", "type:tooling"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
+  "//": "What the release workflow runs to publish and what other repositories run to ask what is published: publish.sh and release-probe.py. scripts-integration drives both against local registries.",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run --frozen --no-sync shellcheck scripts/release/publish.sh",
+          "uv run --frozen --no-sync ruff check --quiet --config scripts/release/ruff.toml scripts/release/release-probe.py"
+        ],
+        "parallel": false
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check --config scripts/release/ruff.toml scripts/release/release-probe.py"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --config scripts/release/ruff.toml scripts/release/release-probe.py"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 scripts/release/release-probe.py"
+      }
+    }
+  }
+}

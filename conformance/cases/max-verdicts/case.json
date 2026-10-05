@@ -1,0 +1,5 @@
+{
+  "description": "Under max: below the threshold and equal to it are within, above it is over.",
+  "args": ["check", "--json"],
+  "exit": 1
+}

@@ -1,0 +1,17 @@
+schema_version: 1
+conditions:
+  - name: dispatches
+    command: ["echo", "3"]
+budgets:
+  - id: gate-time
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 1395, "conditions": {"gate_load": "2.1", "dispatches_max": "6"}}']
+    unit: seconds
+    direction: max
+    threshold: 1800
+  - id: plain
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 10}']
+    unit: seconds
+    direction: max
+    threshold: 1800

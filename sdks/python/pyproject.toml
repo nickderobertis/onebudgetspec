@@ -1,0 +1,36 @@
+[project]
+# llmlint: ignore[names_match_behavior] the package name is fixed by the release contract other repositories install against, and this package's interface is the release version until its API lands on it.
+name = "onebudgetspec-sdk"
+version = "0.1.0"
+description = "The onebudgetspec Python SDK package, versioned with the onebudgetspec command line; it exposes the release version."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Nick DeRobertis" }]
+classifiers = ["Typing :: Typed"]
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/nickderobertis/onebudgetspec"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/onebudgetspec_sdk"]
+
+[dependency-groups]
+dev = ["pytest>=9.0", "pytest-cov>=7.1", "ruff>=0.16.4", "ty>=0.0.74"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

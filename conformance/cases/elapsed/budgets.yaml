@@ -1,0 +1,8 @@
+schema_version: 1
+budgets:
+  - id: nap
+    measure: elapsed
+    command: ["sleep", "0.1"]
+    unit: seconds
+    direction: max
+    threshold: 60

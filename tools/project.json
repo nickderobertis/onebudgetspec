@@ -1,0 +1,95 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "repo-checks",
+  "projectType": "library",
+  "tags": ["lang:python", "type:tooling"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
+  "//": "The checks the repository holds itself to: workflow guards, the library boundary, version and platform agreement, the release declaration, the project graph and the AGENTS.md journey list, plus the extraction and guard logic other projects use. It reads every other project, so it depends on all of them, and its test inputs name the root files it reads.",
+  "implicitDependencies": [
+    "onebudgetspec-core",
+    "onebudgetspec",
+    "onebudgetspec-e2e",
+    "onebudgetspec-packaging-e2e",
+    "npm-cli",
+    "sdk-python",
+    "sdk-typescript",
+    "scripts",
+    "conformance",
+    "npm-cli-linux-x64",
+    "npm-cli-linux-arm64",
+    "npm-cli-darwin-x64",
+    "npm-cli-darwin-arm64",
+    "onebudgetspec-conformance",
+    "scripts-integration",
+    "release-scripts"
+  ],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet .",
+        "cwd": "tools"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check .",
+        "cwd": "tools"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run --frozen --no-sync ruff check --quiet .",
+          "uv run --frozen --no-sync actionlint",
+          "bun run biome lint --error-on-warnings ../nx.json ../biome.json ../package.json ../.claude"
+        ],
+        "cwd": "tools",
+        "parallel": false
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/.github/**/*",
+        "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/.claude/**/*"
+      ]
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning",
+        "cwd": "tools"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/python-coverage.sh tools --cov=repo_checks"
+      },
+      "dependsOn": ["onebudgetspec:build", "workspace:coverage-clear"],
+      "outputs": ["{workspaceRoot}/target/python-coverage"],
+      "cache": false,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/.github/**/*",
+        "{workspaceRoot}/scripts/**/*",
+        "{workspaceRoot}/AGENTS.md",
+        "{workspaceRoot}/README.md",
+        "{workspaceRoot}/release-targets.toml",
+        "{workspaceRoot}/rust-toolchain.toml",
+        "{workspaceRoot}/clippy.toml",
+        "{workspaceRoot}/Cargo.toml",
+        "{workspaceRoot}/Cargo.lock",
+        "{workspaceRoot}/uv.lock",
+        "{workspaceRoot}/bun.lock",
+        "{workspaceRoot}/pyproject.toml",
+        "{workspaceRoot}/nx.json"
+      ]
+    }
+  }
+}

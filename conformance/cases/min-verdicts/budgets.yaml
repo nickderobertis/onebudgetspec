@@ -1,0 +1,26 @@
+schema_version: 1
+budgets:
+  - id: within
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 250}']
+    unit: requests/s
+    direction: min
+    threshold: 200
+  - id: equal
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 200}']
+    unit: requests/s
+    direction: min
+    threshold: 200
+  - id: over
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 150}']
+    unit: requests/s
+    direction: min
+    threshold: 200
+  - id: zero-threshold
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 3}']
+    unit: requests/s
+    direction: min
+    threshold: 0

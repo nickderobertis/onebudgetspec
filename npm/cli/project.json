@@ -1,0 +1,49 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "npm-cli",
+  "projectType": "library",
+  "tags": ["lang:javascript", "type:distribution"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "js"]
+  },
+  "//": "The @onebudgetspec/cli launcher, a member of the bun workspace whose carriers it names as `workspace:*`, which `bun pm pack` (scripts/build-dist.sh) writes as the release version. Its decisions are unit-tested here; onebudgetspec-packaging-e2e installs and drives the packed launcher.",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/build-dist.sh npm-launcher dist/npm"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format --write npm/cli"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format npm/cli"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome lint --error-on-warnings npm/cli"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun test --coverage",
+        "cwd": "npm/cli"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run tsc --noEmit -p npm/cli/tsconfig.json"
+      }
+    }
+  }
+}

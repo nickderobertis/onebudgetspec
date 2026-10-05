@@ -1,0 +1,27 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "python-coverage",
+  "projectType": "library",
+  "tags": ["type:workspace"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
+  "//": "The Python line floor: one report over the combined data of the SDK's and the repository checks' instrumented test runs, held to 95%, depending on those test targets alone. scripts-integration holds its own floor behind its own edge.",
+  "// suppression": "llmlint: ignore-file[expensive_tests_stay_behind_their_own_edge] this coverage aggregate must depend on its language's test targets, which create-repo's coverage_combined rules require and this rule refuses; reconciling the two is a create-repo follow-up.",
+  "implicitDependencies": ["sdk-python", "repo-checks"],
+  "targets": {
+    "coverage": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/python-coverage.sh --report"
+      },
+      "dependsOn": [
+        {
+          "projects": ["sdk-python", "repo-checks"],
+          "target": "test"
+        }
+      ],
+      "cache": false
+    }
+  }
+}

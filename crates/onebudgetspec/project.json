@@ -1,0 +1,52 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "onebudgetspec",
+  "projectType": "library",
+  "tags": ["lang:rust", "type:binary"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "rust"]
+  },
+  "//": "The CLI binary over onebudgetspec-core. `build` produces target/debug/onebudgetspec for the targets that spawn the uninstrumented binary; its `test` builds it instrumented, as the journeys' and conformance tests do, so their runs measure it.",
+  "implicitDependencies": ["onebudgetspec-core"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec -- --check"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo clippy --quiet -p onebudgetspec --all-targets --locked -- -D warnings"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo check --quiet -p onebudgetspec --all-targets --locked"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/rust-coverage.sh onebudgetspec"
+      },
+      "outputs": ["{workspaceRoot}/target/llvm-cov-target"],
+      "cache": false,
+      "dependsOn": ["workspace:coverage-clear"]
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo build --quiet -p onebudgetspec --locked"
+      }
+    }
+  }
+}

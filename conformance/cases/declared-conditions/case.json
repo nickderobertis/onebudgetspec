@@ -1,0 +1,5 @@
+{
+  "description": "Declared conditions are recorded, trimmed, beside every result of the file; a failing one records unknown.",
+  "args": ["check", "--json"],
+  "exit": 0
+}

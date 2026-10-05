@@ -1,0 +1,53 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+repository = "https://github.com/nickderobertis/onebudgetspec"
+authors = ["Nick DeRobertis"]
+
+[workspace.dependencies]
+# The CLI and the SDK release in lock step at one version; the exact requirement keeps a
+# consumer from resolving the binary against a different SDK patch. `just set-version`
+# rewrites it and `just versions` refuses any other.
+onebudgetspec-core = { path = "crates/onebudgetspec-core", version = "=0.1.0" }
+
+chrono = { version = "0.4.45", default-features = false, features = ["std", "serde", "clock"] }
+clap = { version = "4.6.7", features = ["derive"] }
+# .gitignore-aware directory walking for `--recursive` discovery.
+ignore = "0.4.33"
+# getloadavg(3) for the host's 1-minute load, and process-group signalling on timeout.
+libc = "0.2"
+regex = "1.13.1"
+schemars = { version = "1.2.2", features = ["chrono04"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+# A maintained fork of serde_yaml, which was archived.
+serde_norway = "0.9.42"
+serde_path_to_error = "0.1.20"
+tempfile = "3.27.0"
+
+jsonschema = { version = "0.58.5", default-features = false }
+sha2 = "0.11.0"
+
+# One lint policy for every crate and every build of it (check, test, build, clippy): a
+# compiler warning is an error, and clippy's pedantic group is denied.
+[workspace.lints.rust]
+warnings = "deny"
+missing_docs = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+
+[profile.release]
+strip = true
+
+# Test and dev builds dominate the gate's wall clock; a little optimisation on the
+# dependency graph costs nothing after the first build.
+[profile.dev.package."*"]
+opt-level = 1

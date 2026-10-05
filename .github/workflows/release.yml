@@ -1,0 +1,209 @@
+# Build and publish what a GitHub Release names. Builds only, never re-gates: the merge to
+# main already ran the gate over this commit. Every artifact is built by
+# scripts/build-dist.sh, the script the packaging journeys install from, so what they prove
+# is what this publishes. Each registry publishes only when its `*_PUBLISH` repository
+# variable is `true` AND its token is provisioned; otherwise its job is skipped, not failed.
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+# llmlint: ignore-block[changed_behavior_has_e2e] what this workflow adds over scripts/build-dist.sh (which the packaging journeys drive) is moving artifacts between hosted jobs and uploading them to registries, which only a published GitHub Release can run; tools/tests/test_release.py reconciles each publish job with its target, and test_workflows.py drives every guard.
+jobs:
+  native:
+    name: native (${{ matrix.target }})
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: macos-latest, target: x86_64-apple-darwin }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      # rust-toolchain.toml pins the toolchain and every release target.
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: astral-sh/setup-uv@v7
+      - name: Build the wheel and the npm carrier
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          bash scripts/build-dist.sh cli-wheel dist/wheels "$TARGET"
+          bash scripts/build-dist.sh npm-carrier dist/carriers "$TARGET"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.target }}
+          path: dist/wheels/*.whl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carrier-${{ matrix.target }}
+          path: dist/carriers/*.tgz
+
+  distributions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: astral-sh/setup-uv@v7
+      - name: Build the launcher and both SDKs
+        run: |
+          bash scripts/build-dist.sh npm-launcher dist/npm
+          bash scripts/build-dist.sh sdk-python dist/sdk-pypi
+          bash scripts/build-dist.sh sdk-typescript dist/sdk-npm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: |
+            dist/npm/*.tgz
+            dist/sdk-pypi/*.whl
+            dist/sdk-npm/*.tgz
+
+  # Which registry tokens are provisioned. A job-level `if:` cannot read a secret, so each
+  # publish job reads this job's outputs instead.
+  guard:
+    runs-on: ubuntu-latest
+    outputs:
+      cargo: ${{ steps.cargo.outputs.enabled }}
+      pypi: ${{ steps.pypi.outputs.enabled }}
+      npm: ${{ steps.npm.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: cargo
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: bash scripts/ci-guard.sh CARGO_REGISTRY_TOKEN
+      - id: pypi
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: bash scripts/ci-guard.sh PYPI_TOKEN
+      - id: npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: bash scripts/ci-guard.sh NPM_TOKEN
+
+  # Target `crate`: onebudgetspec-core, then the onebudgetspec binary crate.
+  publish-crates:
+    needs: [guard, native]
+    if: needs.guard.outputs.cargo == 'true' && vars.CARGO_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: bash scripts/release/publish.sh crate
+
+  # Target `pypi`: the onebudgetspec-cli wheels.
+  publish-pypi:
+    needs: [guard, native]
+    if: needs.guard.outputs.pypi == 'true' && vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist/wheels
+          merge-multiple: true
+      - env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: bash scripts/release/publish.sh pypi dist/wheels
+
+  # Target `sdk-pypi`: the onebudgetspec-sdk wheel.
+  publish-sdk-pypi:
+    needs: [guard, distributions]
+    if: needs.guard.outputs.pypi == 'true' && vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+      - env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: bash scripts/release/publish.sh sdk-pypi dist/sdk-pypi
+
+  # Target `npm`: every platform carrier, then the launcher that pins them.
+  publish-npm:
+    needs: [guard, native, distributions]
+    if: needs.guard.outputs.npm == 'true' && vars.NPM_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: carrier-*
+          path: dist/carriers
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+      - env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: bash scripts/release/publish.sh npm dist/carriers dist/npm
+
+  # Target `sdk-npm`: the @onebudgetspec/sdk package.
+  publish-sdk-npm:
+    needs: [guard, distributions]
+    if: needs.guard.outputs.npm == 'true' && vars.NPM_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist
+      - env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: bash scripts/release/publish.sh sdk-npm dist/sdk-npm
+
+  # The install path the README documents, run with the README's own commands once the
+  # registries serve this release. It runs whenever the release did, and fails when any
+  # registry did not publish, rather than skipping quietly.
+  install-path:
+    name: install path (${{ matrix.os }})
+    needs: [publish-crates, publish-pypi, publish-npm]
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Every registry published this release
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "::error::a publish job finished '$result'; set CARGO_PUBLISH, PYPI_PUBLISH and NPM_PUBLISH to true with their tokens provisioned, then re-run this release" >&2
+              exit 1
+            fi
+          done
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install with each documented command and run what it installed
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          expected="onebudgetspec ${TAG#v}"
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install onebudgetspec-cli
+          [ "$("$RUNNER_TEMP/venv/bin/onebudgetspec" --version)" = "$expected" ]
+          mkdir "$RUNNER_TEMP/project" && cd "$RUNNER_TEMP/project" && npm init -y >/dev/null
+          npm install --save-dev @onebudgetspec/cli
+          [ "$(npx onebudgetspec --version)" = "$expected" ]
+          cargo install onebudgetspec
+          [ "$(onebudgetspec --version)" = "$expected" ]
+# llmlint: ignore-end[changed_behavior_has_e2e]

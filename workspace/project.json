@@ -1,0 +1,63 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "workspace",
+  "projectType": "library",
+  "tags": ["type:workspace"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "rust", "js", "python"]
+  },
+  "//": "Cross-cutting targets: bootstrap, the supply chain, workspace-wide formatting, and clearing the coverage data every instrumented test run depends on, so one invocation's report covers exactly that invocation's runs.",
+  "targets": {
+    "bootstrap": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/bootstrap.sh"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format nx.json biome.json package.json .claude workspace crates sdks tools npm"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format --write nx.json biome.json package.json .claude workspace crates sdks tools npm"
+      }
+    },
+    "deny": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": ["cargo deny check", "cargo machete"],
+        "parallel": false
+      },
+      "cache": false
+    },
+    "coverage-clear": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bash scripts/rust-coverage.sh --clear",
+          "bash scripts/python-coverage.sh --clear"
+        ],
+        "parallel": false
+      },
+      "cache": false
+    },
+    "upgrade": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "cargo update --quiet",
+          "uv lock --upgrade --quiet",
+          "uv sync --quiet --frozen --all-packages",
+          "bun update --latest --silent",
+          "bun install --silent"
+        ],
+        "parallel": false
+      },
+      "cache": false
+    }
+  }
+}

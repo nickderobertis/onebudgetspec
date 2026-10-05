@@ -1,0 +1,27 @@
+# Posts one sticky comment on each pull request listing the lint and type-check
+# suppressions it adds, with their reasons, so a high-level review sees every rule the
+# change switched off. A review artifact, deliberately not a required check: it skips fork
+# pull requests, whose read-only token cannot comment.
+name: notignored
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: notignored-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suppressions:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The scan diffs against the base branch, which a shallow checkout omits.
+          fetch-depth: 0
+      - uses: nickderobertis/notignored@v0

@@ -1,0 +1,6 @@
+{
+  "description": "An elapsed command exiting non-zero is an error, never a measurement.",
+  "args": ["check", "--json"],
+  "exit": 3,
+  "error_contains": { "fails": "status 4" }
+}

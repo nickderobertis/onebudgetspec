@@ -1,0 +1,5 @@
+# Coverage for the release-script tests: the probe runs as a subprocess, which coverage
+# follows into, and that file is what these tests measure.
+[tool.coverage.run]
+patch = ["subprocess"]
+include = ["*/scripts/release/release-probe.py"]

@@ -1,0 +1,54 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "sdk-python",
+  "projectType": "library",
+  "tags": ["lang:python", "type:sdk"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet .",
+        "cwd": "sdks/python"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check .",
+        "cwd": "sdks/python"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff check --quiet .",
+        "cwd": "sdks/python"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning",
+        "cwd": "sdks/python"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/python-coverage.sh sdks/python --cov=onebudgetspec_sdk"
+      },
+      "outputs": ["{workspaceRoot}/target/python-coverage"],
+      "cache": false,
+      "dependsOn": ["workspace:coverage-clear"]
+    },
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/build-dist.sh sdk-python dist/sdk-python"
+      }
+    }
+  }
+}

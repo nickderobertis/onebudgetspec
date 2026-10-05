@@ -1,0 +1,18 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "conformance",
+  "projectType": "library",
+  "tags": ["type:contract"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
+  "//": "The data-only conformance cases: a case is a budgets file, its scripts and the report it must produce, referencing no implementation. onebudgetspec-conformance runs them against the binary, so a change here selects it, and any other runner can take them unchanged.",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync shellcheck conformance/cases/*/*.sh"
+      }
+    }
+  }
+}
