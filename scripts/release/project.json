@@ -12,7 +12,7 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "shellcheck scripts/release/publish.sh",
+          "uv run --frozen --no-sync shellcheck scripts/release/publish.sh",
           "uv run --frozen --no-sync ruff check --quiet --config scripts/release/ruff.toml scripts/release/release-probe.py"
         ],
         "parallel": false

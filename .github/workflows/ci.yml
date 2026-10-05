@@ -45,8 +45,8 @@ jobs:
           enable-cache: true
       # Reads rust-toolchain.toml, so CI and local builds use the same rustc, clippy and rustfmt.
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-      # actionlint is not among install-action's tools; it is pinned in tools/ and synced by
-      # `just bootstrap`, so CI and local runs use the same version.
+      # actionlint and shellcheck are pinned in tools/ and synced by `just bootstrap`, so CI
+      # and local runs use the same version on every runner.
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov,cargo-nextest

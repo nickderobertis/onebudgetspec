@@ -24,7 +24,9 @@ usage() {
   exit 64
 }
 
-[ $# -ge 2 ] && [ $# -le 3 ] || usage "takes an artifact, an output directory and an optional Rust target"
+if [ $# -lt 2 ] || [ $# -gt 3 ]; then
+  usage "takes an artifact, an output directory and an optional Rust target"
+fi
 readonly ARTIFACT="$1"
 TARGET="${3:-}"
 mkdir -p "$2"

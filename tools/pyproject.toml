@@ -21,6 +21,7 @@ dev = [
     "pytest>=9.0",
     "pytest-cov>=7.1",
     "ruff>=0.16.4",
+    "shellcheck-py>=0.11.0.1",
     "ty>=0.0.74",
     "types-pyyaml>=6.0.12",
 ]

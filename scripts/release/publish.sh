@@ -122,7 +122,9 @@ case "$target" in
     done
     ;;
   pypi | sdk-pypi)
-    [ $# -eq 1 ] && [ -d "$1" ] || usage "$target takes the directory holding its wheels"
+    if [ $# -ne 1 ] || [ ! -d "$1" ]; then
+      usage "$target takes the directory holding its wheels"
+    fi
     need PYPI_TOKEN
     name="$(target_packages "$target")" || exit 1
     for wheel in "$1"/*.whl; do
