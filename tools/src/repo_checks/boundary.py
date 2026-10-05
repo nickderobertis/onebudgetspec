@@ -52,8 +52,27 @@ _TOPICS = re.compile(
 _CREDIT = re.compile(r"onetaskgraph.*\bmodel|\bmodel.*onetaskgraph", re.IGNORECASE)
 #: An inline suppression directive the repository's judged lint reads. It is development
 #: tooling in a comment, like a clippy allow, so its own keyword is the one occurrence of
-#: that name the library may hold; its reason is scanned like any other text.
-_DIRECTIVE = re.compile(r"llmlint: ignore(?:-block|-end|-file)?\[")
+#: that name the library may hold, and only where it is truly a directive: a whole-line
+#: comment in the comment form of the file's language, opening with the directive, and
+#: stating a reason (an `ignore-end` marker closes a block and carries none). Its reason
+#: is scanned like any other text, and directive-shaped text anywhere else, a string or
+#: prose, is scanned as a mention.
+_RULES = r"\[[a-z0-9_]+(?:, ?[a-z0-9_]+)*\]"
+_DIRECTIVE_BODY = (
+    rf"(?P<keyword>llmlint): (?:(?:ignore|ignore-block|ignore-file){_RULES}[ \t]+\S"
+    rf"|ignore-end{_RULES}[ \t]*$)"
+)
+#: The comment forms a directive may take, by file suffix. Markdown has none: README prose
+#: is never a directive.
+_COMMENT_DIRECTIVES = {
+    suffix: re.compile(pattern)
+    for suffixes, pattern in (
+        ((".rs", ".js", ".ts"), rf"^[ \t]*//[ \t]?{_DIRECTIVE_BODY}"),
+        ((".toml", ".py", ".sh", ".yml", ".yaml"), rf"^[ \t]*#[ \t]?{_DIRECTIVE_BODY}"),
+        ((".json",), rf'^[ \t]*"//"[ \t]*:[ \t]*"{_DIRECTIVE_BODY}'),
+    )
+    for suffix in suffixes
+}
 
 
 def files(root: Path = ROOT) -> Iterator[Path]:
@@ -69,14 +88,19 @@ def files(root: Path = ROOT) -> Iterator[Path]:
 
 
 def scan_text(where: str, text: str) -> list[str]:
-    """One finding per line of ``text`` that names the stack or mentions its topics."""
+    """One finding per line of ``text`` that names the stack or mentions its topics.
+
+    ``where`` is the file's path; its suffix decides which comment form a directive takes.
+    """
     findings = []
+    directive = _COMMENT_DIRECTIVES.get(Path(where).suffix)
     for number, line in enumerate(text.splitlines(), 1):
-        directives = {found.start() for found in _DIRECTIVE.finditer(line)}
+        found = directive.match(line) if directive else None
+        keyword = found.start("keyword") if found else None
         for match in _NAMES.finditer(line):
             if match.group(0).lower() == "onetaskgraph" and _CREDIT.search(line):
                 continue
-            if match.start() in directives:
+            if match.start() == keyword:
                 continue
             findings.append(f"{where}:{number}: names {match.group(0)}")
         findings.extend(f"{where}:{number}: mentions {m.group(0)}" for m in _TOPICS.finditer(line))

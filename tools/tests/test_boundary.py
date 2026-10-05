@@ -109,24 +109,90 @@ def test_the_schema_is_scanned() -> None:
     ]
 
 
-def test_a_suppression_directive_is_exempt_and_nothing_else_is() -> None:
-    # Assembled at run time, so the judged lint does not read these samples as directives.
-    tool = "llm" + "lint"
-    for directive in (
-        f"// {tool}: ignore[rule_name] the reason",
-        f"// {tool}: ignore-block[rule_name] the reason",
-        f"// {tool}: ignore-end[rule_name]",
-        f"# {tool}: ignore-file[a, b] the reason",
-    ):
-        assert boundary.scan_text("x", directive) == [], directive
-    assert boundary.scan_text("x", f"// {tool}: ignore[r] because {tool} says so") == [
-        f"x:1: names {tool}"
+# Assembled at run time, so the judged lint does not read these samples as directives.
+TOOL = "llm" + "lint"
+
+
+@pytest.mark.parametrize(
+    ("where", "line"),
+    [
+        ("crates/onebudgetspec-core/src/model.rs", f"// {TOOL}: ignore[rule_name] the reason"),
+        ("crates/onebudgetspec-core/src/model.rs", f"    // {TOOL}: ignore-block[a, b] the reason"),
+        ("crates/onebudgetspec-core/src/model.rs", f"// {TOOL}: ignore-end[rule_name]"),
+        ("npm/cli/lib/launcher.js", f"  // {TOOL}: ignore[rule_name] the reason"),
+        ("sdks/python/pyproject.toml", f"# {TOOL}: ignore[rule_name] the reason"),
+        ("sdks/typescript/package.json", f'  "//": "{TOOL}: ignore-file[rule_name] the reason",'),
+    ],
+)
+def test_a_reasoned_directive_in_its_file_s_comment_form_is_exempt(where: str, line: str) -> None:
+    assert boundary.scan_text(where, line) == []
+
+
+@pytest.mark.parametrize(
+    ("where", "line"),
+    [
+        # Ordinary source strings shaped like a directive.
+        ("crates/onebudgetspec-core/src/lib.rs", f'let s = "{TOOL}: ignore[r] the reason";'),
+        ("crates/onebudgetspec-core/src/lib.rs", f'let s = "// {TOOL}: ignore[r] the reason";'),
+        ("npm/cli/lib/launcher.js", f'const s = "{TOOL}: ignore[r] the reason";'),
+        # Manifest values that are not the JSON comment key.
+        ("npm/cli/package.json", f'  "description": "{TOOL}: ignore[r] the reason",'),
+        ("pyproject.toml", f'description = "{TOOL}: ignore[r] the reason"'),
+        # README prose, a README heading, and a code sample in it.
+        ("README.md", f"See the {TOOL}: ignore[r] the reason syntax."),
+        ("README.md", f"# {TOOL}: ignore[r] the reason"),
+        ("README.md", f"// {TOOL}: ignore[r] the reason"),
+        # A comment form the file's language does not use.
+        ("crates/onebudgetspec-core/src/lib.rs", f"# {TOOL}: ignore[r] the reason"),
+        # A directive with no reason, and a comment that only mentions the syntax.
+        ("crates/onebudgetspec-core/src/lib.rs", f"// {TOOL}: ignore[rule_name]"),
+        ("crates/onebudgetspec-core/src/lib.rs", f"// see {TOOL}: ignore[rule_name] the reason"),
+    ],
+)
+def test_directive_shaped_text_outside_a_reasoned_comment_fails(where: str, line: str) -> None:
+    assert boundary.scan_text(where, line) == [f"{where}:1: names {TOOL}"]
+
+
+def test_a_directive_s_reason_is_scanned_like_any_other_text() -> None:
+    rust = "crates/onebudgetspec-core/src/lib.rs"
+    assert boundary.scan_text(rust, f"// {TOOL}: ignore[r] because {TOOL} says so") == [
+        f"{rust}:1: names {TOOL}"
     ]
-    assert boundary.scan_text("x", f"// {tool}: ignore[r] onevcs needs it") == ["x:1: names onevcs"]
-    assert boundary.scan_text("x", f"// {tool}: ignore[r] pending approval") == [
-        "x:1: mentions approval"
+    assert boundary.scan_text(rust, f"// {TOOL}: ignore[r] onevcs needs it") == [
+        f"{rust}:1: names onevcs"
     ]
-    assert boundary.scan_text("x", f"// {tool} ignore[r] reason") == [f"x:1: names {tool}"]
+    assert boundary.scan_text(rust, f"// {TOOL}: ignore[r] pending approval") == [
+        f"{rust}:1: mentions approval"
+    ]
+    assert boundary.scan_text(rust, f"// {TOOL} ignore[r] reason") == [f"{rust}:1: names {TOOL}"]
+
+
+@pytest.mark.parametrize(
+    ("entry", "line"),
+    [
+        (
+            "crates/onebudgetspec-core/src/lib.rs",
+            f'pub const S: &str = "{TOOL}: ignore[r] the reason";',
+        ),
+        ("npm/cli/package.json", None),
+        ("README.md", f"Suppress with `{TOOL}: ignore[rule] reason`."),
+    ],
+)
+def test_directive_shaped_text_planted_in_a_shipped_file_fails_the_scan(
+    tmp_path: Path, entry: str, line: str | None
+) -> None:
+    root = copy_tree(tmp_path, *LIBRARY)
+    path = root / entry
+    if line is None:
+        document = json.loads(path.read_text())
+        document["description"] = f"{TOOL}: ignore[r] the reason"
+        path.write_text(json.dumps(document, indent=2))
+    else:
+        path.write_text(path.read_text() + f"\n{line}\n")
+    findings = boundary.scan(root)
+    assert any(f.startswith(f"{entry}:") and f.endswith(f"names {TOOL}") for f in findings), (
+        findings
+    )
 
 
 def test_crediting_the_model_layout_is_the_one_exception() -> None:
