@@ -17,12 +17,16 @@ bootstrap:
     @./scripts/nx run workspace:bootstrap
 
 # The full gate over the affected projects: formatting, lint, types, tests (unit, journeys,
-# conformance, packaging journeys) and the coverage floors. Fails on any issue.
-check: format-check lint typecheck test coverage
+# conformance, packaging journeys) and the coverage floors over the tests it ran. Fails on
+# any issue.
+check: format-check lint typecheck coverage-clear test coverage
 
-# The broader tier: the same gate over every project. CI runs it on each merge to main.
+# The broader tier: the same gate over every project. CI runs it on the release pull request.
 check-all:
-    @./scripts/nx run-many -t format-check lint typecheck test coverage --all
+    @./scripts/nx run-many -t format-check lint typecheck --all
+    @./scripts/nx run workspace:coverage-clear
+    @./scripts/nx run-many -t test --all
+    @./scripts/nx run workspace:coverage
 
 # Tests only, for the affected projects: unit tests, journeys and packaging journeys.
 test:
@@ -32,10 +36,15 @@ test:
 test-e2e:
     @./scripts/nx run-many -t test -p onebudgetspec-e2e onebudgetspec-packaging-e2e
 
-# Coverage for the affected projects: 95% lines for the Rust workspace, each Python
-# project and the TypeScript SDK.
+# The coverage floors (95% lines for Rust and for Python, combined over every project's
+# instrumented test run since the last coverage-clear; each TypeScript project's own test
+# holds its own 95%).
 coverage:
-    @./scripts/nx affected -t coverage
+    @./scripts/nx run workspace:coverage
+
+# Empty the coverage data, so the next report covers only the tests that follow.
+coverage-clear:
+    @./scripts/nx run workspace:coverage-clear
 
 # Lint for the affected projects (clippy -D warnings, ruff, biome, actionlint).
 lint:
@@ -62,7 +71,7 @@ upgrade:
     @cargo update --quiet
     @uv lock --upgrade --quiet && uv sync --quiet --frozen --all-packages
     @bun update --latest --silent
-    @./scripts/nx run-many -t format-check lint typecheck test coverage --all
+    @just check-all
 
 # Print the JSON Schema bundle the contract is emitted as.
 # llmlint: ignore[tool_output_is_signal] stdout is the schema bundle itself, consumed by generators.

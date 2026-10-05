@@ -38,13 +38,6 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "bun test",
-        "cwd": "sdks/typescript"
-      }
-    },
-    "coverage": {
-      "executor": "nx:run-commands",
-      "options": {
         "command": "bun test --coverage",
         "cwd": "sdks/typescript"
       }

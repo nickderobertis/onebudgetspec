@@ -3,8 +3,17 @@
   "name": "onebudgetspec-packaging-e2e",
   "projectType": "library",
   "tags": ["lang:rust", "type:e2e"],
-  "//": "The packaging journeys: every distribution built by scripts/build-dist.sh, installed with no registry, and driven. The most expensive suite, so it sits behind its own edge to the packages it installs.",
-  "implicitDependencies": ["onebudgetspec", "npm-cli", "sdk-python", "sdk-typescript"],
+  "//": "The packaging journeys: every distribution built by scripts/build-dist.sh, installed with no registry, and driven. The most expensive suite, so it sits behind its own edge to the packages it installs. It has no coverage target: it builds release artifacts, which carry no instrumentation; the code it drives is measured by the other suites.",
+  "implicitDependencies": [
+    "onebudgetspec",
+    "npm-cli",
+    "npm-cli-linux-x64",
+    "npm-cli-linux-arm64",
+    "npm-cli-darwin-x64",
+    "npm-cli-darwin-arm64",
+    "sdk-python",
+    "sdk-typescript"
+  ],
   "targets": {
     "format": {
       "executor": "nx:run-commands",

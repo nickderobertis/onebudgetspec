@@ -14,6 +14,23 @@ fn cases_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../conformance/cases")
 }
 
+/// The `onebudgetspec` cargo built beside this test executable; Nx's
+/// onebudgetspec-conformance:test depends on that build.
+fn built_binary() -> String {
+    let exe = std::env::current_exe().expect("the test executable has a path");
+    let mut dir = exe.parent().expect("the test executable has a directory");
+    if dir.ends_with("deps") {
+        dir = dir.parent().expect("deps has a parent");
+    }
+    let binary = dir.join(format!("onebudgetspec{}", std::env::consts::EXE_SUFFIX));
+    assert!(
+        binary.is_file(),
+        "{} is missing; build it first with `cargo build -p onebudgetspec`",
+        binary.display()
+    );
+    binary.to_string_lossy().into_owned()
+}
+
 /// The argv prefix of the command under test.
 fn command_under_test() -> Vec<String> {
     match std::env::var("ONEBUDGETSPEC_CONFORMANCE_COMMAND") {
@@ -26,7 +43,7 @@ fn command_under_test() -> Vec<String> {
             );
             argv
         }
-        Err(_) => vec![env!("CARGO_BIN_EXE_onebudgetspec").to_owned()],
+        Err(_) => vec![built_binary()],
     }
 }
 

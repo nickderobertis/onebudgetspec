@@ -3,8 +3,7 @@
   "name": "workspace",
   "projectType": "library",
   "tags": ["type:workspace"],
-  "//": "The Rust line-coverage floor, enforced once over every crate's run (the journeys spawn the instrumented binary, so the floor counts what they cover), and the supply chain. Depends on every crate so a change to any of them selects it.",
-  "implicitDependencies": ["onebudgetspec-core", "onebudgetspec", "onebudgetspec-e2e"],
+  "//": "The line-coverage floors, each enforced once over the union of the instrumented test runs of one invocation: Rust over every crate's (the journeys spawn the instrumented binary), Python over every Python project's. It depends on no test target, so only the suites a change selected run; `just check` clears the data, runs the affected tests and then reports. Also the supply chain and bootstrap.",
   "targets": {
     "bootstrap": {
       "executor": "nx:run-commands",
@@ -27,13 +26,29 @@
     "coverage": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "bash scripts/rust-coverage.sh"
-      }
+        "commands": [
+          "bash scripts/rust-coverage.sh --report",
+          "bash scripts/python-coverage.sh --report"
+        ],
+        "parallel": false
+      },
+      "cache": false
     },
     "deny": {
       "executor": "nx:run-commands",
       "options": {
         "commands": ["cargo deny check", "cargo machete"],
+        "parallel": false
+      },
+      "cache": false
+    },
+    "coverage-clear": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bash scripts/rust-coverage.sh --clear",
+          "bash scripts/python-coverage.sh --clear"
+        ],
         "parallel": false
       },
       "cache": false

@@ -9,7 +9,7 @@ import json
 import re
 import tomllib
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import NamedTuple, NotRequired, TypedDict
 
 import yaml
 
@@ -45,6 +45,14 @@ def _manifest_name(root: Path, manifest: str) -> str:
             return tomllib.loads(path.read_text())["project"]["name"]
         case _:
             return json.loads(path.read_text())["name"]
+
+
+class CarrierIdentity(NamedTuple):
+    """What a carrier's manifest says it is: its package name and npm's os and cpu fields."""
+
+    name: object
+    os: object
+    cpu: object
 
 
 def carrier_platforms(root: Path = ROOT) -> set[str]:
@@ -105,8 +113,8 @@ def target_problems(root: Path = ROOT) -> list[str]:
 def platform_problems(root: Path = ROOT) -> list[str]:
     """Every place the shipped platforms are listed that disagrees with the carriers."""
     carriers = sorted(carrier_platforms(root))
-    launcher = (root / "npm/cli/bin/onebudgetspec.js").read_text()
-    listed = re.search(r"const carriers = \[([^\]]*)\]", launcher)
+    launcher = (root / "npm/cli/lib/launcher.js").read_text()
+    listed = re.search(r"const CARRIERS = \[([^\]]*)\]", launcher)
     in_launcher = sorted(re.findall(r'"([^"]+)"', listed.group(1))) if listed else []
     manifest = json.loads((root / "npm/cli/package.json").read_text())
     in_manifest = sorted(
@@ -122,8 +130,18 @@ def platform_problems(root: Path = ROOT) -> list[str]:
     matrix = release["jobs"]["native"]["strategy"]["matrix"]["include"]
     in_release = sorted(mapping.get(row["target"], f"unmapped {row['target']}") for row in matrix)
     problems = []
+    for platform in carriers:
+        carrier = json.loads((root / f"npm/platforms/{platform}/package.json").read_text())
+        system, _, cpu = platform.partition("-")
+        declared = CarrierIdentity(carrier.get("name"), carrier.get("os"), carrier.get("cpu"))
+        expected = CarrierIdentity(f"@onebudgetspec/cli-{platform}", [system], [cpu])
+        if declared != expected:
+            problems.append(
+                f"npm/platforms/{platform}/package.json declares {tuple(declared)}, "
+                f"not {tuple(expected)}"
+            )
     for where, found in (
-        ("npm/cli/bin/onebudgetspec.js", in_launcher),
+        ("npm/cli/lib/launcher.js", in_launcher),
         ("npm/cli/package.json", in_manifest),
         ("scripts/build-dist.sh", in_build),
         (".github/workflows/release.yml", in_release),

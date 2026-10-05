@@ -318,7 +318,14 @@ def test_publish_refuses_when_crates_io_cannot_say(registry: str) -> None:
     assert "crates.io could not be reached" in unreachable.stderr
 
 
-def npm_target(tmp_path: Path) -> tuple[Path, Path]:
+class NpmTarget(NamedTuple):
+    """The directories release.yml passes publish.sh for the npm target."""
+
+    carriers: Path
+    launcher: Path
+
+
+def npm_target(tmp_path: Path) -> NpmTarget:
     """Two packed carriers and the packed launcher, in the directories release.yml passes."""
     carriers = tmp_path / "carriers"
     for platform in ("linux-x64", "darwin-arm64"):
@@ -326,13 +333,13 @@ def npm_target(tmp_path: Path) -> tuple[Path, Path]:
         carriers.mkdir(exist_ok=True)
         for tarball in packed.iterdir():
             tarball.rename(carriers / tarball.name)
-    return carriers, pack(tmp_path / "launcher", "@onebudgetspec/cli", "0.1.0")
+    return NpmTarget(carriers, pack(tmp_path / "launcher", "@onebudgetspec/cli", "0.1.0"))
 
 
 def test_publish_uploads_the_carriers_before_the_launcher(registry: str, tmp_path: Path) -> None:
-    carriers, launcher = npm_target(tmp_path)
+    target = npm_target(tmp_path)
     env = npm_registry_env(registry, tmp_path)
-    done = publish("npm", str(carriers), str(launcher), **env)
+    done = publish("npm", str(target.carriers), str(target.launcher), **env)
     assert done.returncode == 0, done.stderr
     assert UPLOADS == [
         "/@onebudgetspec/cli-darwin-arm64",
@@ -342,11 +349,13 @@ def test_publish_uploads_the_carriers_before_the_launcher(registry: str, tmp_pat
 
 
 def test_publish_resumes_a_partly_published_release(registry: str, tmp_path: Path) -> None:
-    carriers, launcher = npm_target(tmp_path)
+    target = npm_target(tmp_path)
     for platform in ("linux-x64", "darwin-arm64"):
         name = f"@onebudgetspec/cli-{platform}"
         ANSWERS[f"/{name}"] = packument("0.1.0", name)
-    done = publish("npm", str(carriers), str(launcher), **npm_registry_env(registry, tmp_path))
+    done = publish(
+        "npm", str(target.carriers), str(target.launcher), **npm_registry_env(registry, tmp_path)
+    )
     assert done.returncode == 0, done.stderr
     assert UPLOADS == ["/@onebudgetspec/cli"]
     assert "skipped: @onebudgetspec/cli-darwin-arm64 @onebudgetspec/cli-linux-x64" in done.stdout
@@ -388,3 +397,21 @@ def test_publish_refuses_a_wheel_of_another_target_or_version(
     refused = publish(target, str(tmp_path), PYPI_TOKEN="token")
     assert refused.returncode == 1
     assert reason in refused.stderr
+
+
+def test_publish_refuses_an_unexpected_answer_from_npm(registry: str, tmp_path: Path) -> None:
+    # The registry lists 0.1.0 but describes it as another version.
+    manifest = {"name": "@onebudgetspec/sdk", "version": "0.1.0-other", "dist": {"tarball": "x"}}
+    ANSWERS["/@onebudgetspec/sdk"] = Answer(
+        200,
+        {
+            "name": "@onebudgetspec/sdk",
+            "dist-tags": {"latest": "0.1.0"},
+            "versions": {"0.1.0": manifest},
+        },
+    )
+    packed = pack(tmp_path, "@onebudgetspec/sdk", "0.1.0")
+    refused = publish("sdk-npm", str(packed), **npm_registry_env(registry, tmp_path))
+    assert refused.returncode == 1
+    assert "npm answered '0.1.0-other' when asked for @onebudgetspec/sdk@0.1.0" in refused.stderr
+    assert UPLOADS == []

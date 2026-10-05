@@ -13,7 +13,13 @@
     "sdk-python",
     "sdk-typescript",
     "scripts",
-    "conformance"
+    "conformance",
+    "npm-cli-linux-x64",
+    "npm-cli-linux-arm64",
+    "npm-cli-darwin-x64",
+    "npm-cli-darwin-arm64",
+    "onebudgetspec-conformance",
+    "scripts-integration"
   ],
   "targets": {
     "format": {
@@ -58,32 +64,11 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync pytest -q --no-cov",
-        "cwd": "tools"
+        "command": "bash scripts/python-coverage.sh tools --cov=repo_checks"
       },
       "dependsOn": ["onebudgetspec:build"],
-      "inputs": [
-        "default",
-        "^default",
-        "{workspaceRoot}/.github/**/*",
-        "{workspaceRoot}/scripts/**/*",
-        "{workspaceRoot}/AGENTS.md",
-        "{workspaceRoot}/README.md",
-        "{workspaceRoot}/release-targets.toml",
-        "{workspaceRoot}/Cargo.toml",
-        "{workspaceRoot}/Cargo.lock",
-        "{workspaceRoot}/uv.lock",
-        "{workspaceRoot}/bun.lock",
-        "{workspaceRoot}/pyproject.toml"
-      ]
-    },
-    "coverage": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "uv run --frozen --no-sync pytest -q",
-        "cwd": "tools"
-      },
-      "dependsOn": ["onebudgetspec:build"]
+      "outputs": ["{workspaceRoot}/target/python-coverage"],
+      "cache": false
     }
   }
 }

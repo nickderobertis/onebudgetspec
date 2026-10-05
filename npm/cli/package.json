@@ -12,7 +12,8 @@
     "onebudgetspec": "bin/onebudgetspec.js"
   },
   "files": [
-    "bin"
+    "bin",
+    "lib"
   ],
   "optionalDependencies": {
     "@onebudgetspec/cli-linux-x64": "0.1.0",

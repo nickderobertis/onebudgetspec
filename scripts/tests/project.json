@@ -1,0 +1,48 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "scripts-integration",
+  "projectType": "library",
+  "tags": ["lang:python", "type:integration"],
+  "//": "The release scripts driven against local registries: the probe over HTTP and publish.sh against a local npm registry. Slow, so behind its own edge to the scripts it drives.",
+  "implicitDependencies": ["scripts"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --config scripts/ruff.toml scripts/tests"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check --config scripts/ruff.toml scripts/tests"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff check --quiet --config scripts/ruff.toml scripts/tests"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 scripts/tests"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/python-coverage.sh scripts/tests --cov --cov-config=coverage.toml"
+      },
+      "outputs": ["{workspaceRoot}/target/python-coverage"],
+      "cache": false,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/release-targets.toml",
+        "{workspaceRoot}/Cargo.toml"
+      ]
+    }
+  }
+}

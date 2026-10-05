@@ -33,5 +33,4 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "D"]
 convention = "google"
 
 [tool.pytest.ini_options]
-addopts = "--cov=onebudgetspec_sdk --cov-report=term-missing:skip-covered --cov-fail-under=95"
 testpaths = ["tests"]

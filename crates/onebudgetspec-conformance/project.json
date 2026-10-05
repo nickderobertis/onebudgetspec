@@ -1,39 +1,39 @@
 {
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "name": "onebudgetspec-e2e",
+  "name": "onebudgetspec-conformance",
   "projectType": "library",
   "tags": ["lang:rust", "type:e2e"],
-  "//": "The journeys: the built binary driven over real budgets files. Behind its own edge, so only a change that can reach the binary runs them.",
-  "implicitDependencies": ["onebudgetspec"],
+  "//": "Runs the conformance cases against the built binary, behind its own edge so a change that cannot reach the binary or the cases never spawns it.",
+  "implicitDependencies": ["onebudgetspec", "conformance"],
   "targets": {
     "format": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "cargo fmt -p onebudgetspec-e2e"
+        "command": "cargo fmt -p onebudgetspec-conformance"
       }
     },
     "format-check": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "cargo fmt -p onebudgetspec-e2e -- --check"
+        "command": "cargo fmt -p onebudgetspec-conformance -- --check"
       }
     },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "cargo clippy --quiet -p onebudgetspec-e2e --all-targets --locked -- -D warnings"
+        "command": "cargo clippy --quiet -p onebudgetspec-conformance --all-targets --locked -- -D warnings"
       }
     },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "cargo check --quiet -p onebudgetspec-e2e --all-targets --locked"
+        "command": "cargo check --quiet -p onebudgetspec-conformance --all-targets --locked"
       }
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "bash scripts/rust-coverage.sh onebudgetspec-e2e"
+        "command": "bash scripts/rust-coverage.sh onebudgetspec-conformance"
       },
       "outputs": ["{workspaceRoot}/target/llvm-cov-target"],
       "cache": false

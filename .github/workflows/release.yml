@@ -168,4 +168,43 @@ jobs:
       - env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: bash scripts/publish.sh sdk-npm dist/sdk-npm
+
+  # The install path the README documents, run with the README's own commands once the
+  # registries serve this release. It runs whenever the release did, and fails when any
+  # registry did not publish, rather than skipping quietly.
+  install-path:
+    name: install path (${{ matrix.os }})
+    needs: [publish-crates, publish-pypi, publish-npm]
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Every registry published this release
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "::error::a publish job finished '$result'; set CARGO_PUBLISH, PYPI_PUBLISH and NPM_PUBLISH to true with their tokens provisioned, then re-run this release" >&2
+              exit 1
+            fi
+          done
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Install with each documented command and run what it installed
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          expected="onebudgetspec ${TAG#v}"
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install onebudgetspec-cli
+          [ "$("$RUNNER_TEMP/venv/bin/onebudgetspec" --version)" = "$expected" ]
+          mkdir "$RUNNER_TEMP/project" && cd "$RUNNER_TEMP/project" && npm init -y >/dev/null
+          npm install --save-dev @onebudgetspec/cli
+          [ "$(npx onebudgetspec --version)" = "$expected" ]
+          cargo install onebudgetspec
+          [ "$(onebudgetspec --version)" = "$expected" ]
 # llmlint: ignore-end[changed_behavior_has_e2e]

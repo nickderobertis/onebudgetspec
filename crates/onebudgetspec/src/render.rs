@@ -8,7 +8,7 @@ use serde::Serialize;
 
 /// One JSON document, then a newline.
 pub fn json(out: &mut impl Write, value: &impl Serialize) -> io::Result<()> {
-    let text = serde_json::to_string_pretty(value).expect("reports serialise to JSON");
+    let text = serde_json::to_string_pretty(value).map_err(io::Error::other)?;
     writeln!(out, "{text}")
 }
 

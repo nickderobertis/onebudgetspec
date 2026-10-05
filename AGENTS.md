@@ -78,8 +78,9 @@ enforces it. A judged-lint suppression directive is the one exempt occurrence.
   publishing is provisioned; until then there is no harness credential and its job is
   skipped. Provisioning re-runs `just governance` with `llmlint` added and
   `--allow-missing-llmlint` dropped.
-- **Tiers:** pull requests run `just check` (affected); each merge to main runs
-  `just check-all` once; the release workflows only build and publish.
+- **Tiers:** pull requests and merges run `just check` (affected); the release pull
+  request release-plz opens runs `just check-all` once, since merging it releases; the
+  release workflows only build, publish and then install what they published.
 - **Releases:** Conventional Commits drive release-plz (pre-1.0: `feat` bumps minor,
   `fix`/`perf` patch). Merging its release PR tags and cuts the GitHub Release that
   publishes. The five target names in `release-targets.toml` are a contract with other

@@ -16,6 +16,9 @@ Repository = "https://github.com/nickderobertis/onebudgetspec"
 requires = ["maturin>=1.9,<2"]
 build-backend = "maturin"
 
+# The wheel's command is the compiled binary itself: maturin's `bin` bindings install
+# `onebudgetspec` as the wheel's script, so there is no Python function for a
+# `[project.scripts]` entry point to name.
 [tool.maturin]
 bindings = "bin"
 manifest-path = "crates/onebudgetspec/Cargo.toml"

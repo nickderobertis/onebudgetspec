@@ -69,3 +69,21 @@ fn a_listed_budget_carries_every_budget_field_and_its_file() {
     expected.sort();
     assert_eq!(properties("list-report", "ListedBudget"), expected);
 }
+
+/// The condition names a file may not use are exactly the host values every result
+/// records, so adding or renaming a host value cannot leave the refusal stale.
+#[test]
+fn the_reserved_condition_names_are_the_sampled_host_values() {
+    let bundle = schema_bundle();
+    let mut sampled: Vec<String> = bundle["roots"]["check-report"]["$defs"]["Host"]["properties"]
+        .as_object()
+        .expect("the check report defines Host")
+        .keys()
+        .filter(|name| name.as_str() != "conditions")
+        .cloned()
+        .collect();
+    sampled.sort();
+    let mut reserved = onebudgetspec_core::model::RESERVED_CONDITION_NAMES.map(str::to_owned);
+    reserved.sort();
+    assert_eq!(sampled, reserved);
+}

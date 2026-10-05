@@ -35,15 +35,15 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync pytest -q --no-cov",
-        "cwd": "sdks/python"
-      }
+        "command": "bash scripts/python-coverage.sh sdks/python --cov=onebudgetspec_sdk"
+      },
+      "outputs": ["{workspaceRoot}/target/python-coverage"],
+      "cache": false
     },
-    "coverage": {
+    "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync pytest -q",
-        "cwd": "sdks/python"
+        "command": "bash scripts/build-dist.sh sdk-python dist/sdk-python"
       }
     }
   }

@@ -60,7 +60,7 @@ def test_an_unpublished_target_and_a_stale_cover_are_named(tmp_path: Path) -> No
 
 def test_a_platform_missing_anywhere_is_named(tmp_path: Path) -> None:
     root = copy_tree(tmp_path, *FILES)
-    launcher = root / "npm/cli/bin/onebudgetspec.js"
+    launcher = root / "npm/cli/lib/launcher.js"
     launcher.write_text(launcher.read_text().replace(', "darwin-x64"', ""))
     manifest = root / "npm/cli/package.json"
     document = json.loads(manifest.read_text())
@@ -72,3 +72,16 @@ def test_a_platform_missing_anywhere_is_named(tmp_path: Path) -> None:
     )
     problems = release.platform_problems(root)
     assert len(problems) == 4, problems
+
+
+def test_a_carrier_whose_manifest_names_another_platform_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    manifest = root / "npm/platforms/darwin-arm64/package.json"
+    document = json.loads(manifest.read_text())
+    document["cpu"] = ["x64"]
+    manifest.write_text(json.dumps(document))
+    assert release.platform_problems(root) == [
+        "npm/platforms/darwin-arm64/package.json declares "
+        "('@onebudgetspec/cli-darwin-arm64', ['darwin'], ['x64']), "
+        "not ('@onebudgetspec/cli-darwin-arm64', ['darwin'], ['arm64'])"
+    ]

@@ -1,7 +1,7 @@
 # Conformance suite
 
 Cases any implementation of the `onebudgetspec` command line must pass, run against the
-binary by `crates/onebudgetspec/tests/conformance.rs` and runnable unchanged by any other
+binary by `crates/onebudgetspec-conformance/tests/conformance.rs` and runnable unchanged by any other
 runner. The cases are data and POSIX shell scripts only.
 
 ## A case

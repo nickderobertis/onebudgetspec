@@ -1,7 +1,8 @@
-# Prove the workspace from a clean checkout: `just bootstrap` then the same `just check` a
-# contributor runs, over the projects a pull request's diff can reach, and every project on a merge to main.
-# `check` is the one required gate job; it aggregates the platform lanes and the supply
-# chain so the required-check set names one stable context.
+# Prove the workspace from a clean checkout: `just bootstrap`, then the gate a contributor
+# runs. Pull requests and merges run the affected tier (`just check`); the release pull
+# request release-plz opens runs the broader tier (`just check-all`) once, because merging
+# it is what releases. `check` is the one required gate job: it aggregates the lanes and
+# the supply chain so the required-check set names one stable context.
 name: ci
 
 on:
@@ -25,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Both platforms gate a pull request; the sweep of a merged commit runs once.
+        # Both platforms gate a pull request; a merged commit, already gated, runs once.
         os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@v7
@@ -48,29 +49,24 @@ jobs:
       - name: Bootstrap
         run: just bootstrap
 
-      # Affected selection against the pull request's merge base, derived explicitly: an
-      # implicit base is how selection quietly compares against the wrong commit.
       - name: Derive the comparison base
         id: base
-        if: github.event_name == 'pull_request'
-        shell: bash
         env:
           BASE_REF: ${{ github.base_ref }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          git fetch --no-tags origin "$BASE_REF"
-          echo "base=$(git merge-base "$BASE_SHA" HEAD)" >> "$GITHUB_OUTPUT"
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash scripts/ci-base.sh
 
       - name: Check the affected projects
-        if: github.event_name == 'pull_request'
+        if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
         env:
           NX_BASE: ${{ steps.base.outputs.base }}
           NX_HEAD: HEAD
         run: just check
 
-      # The broader tier, once per merged commit: every project, whatever the diff.
-      - name: Check every project
-        if: github.event_name != 'pull_request'
+      # The broader tier, once, on the pull request whose merge releases.
+      - name: Check every project before a release
+        if: ${{ startsWith(github.head_ref, 'release-plz-') }}
         run: just check-all
 
   # Supply chain, Linux-only: the dependency graph is the same on every platform.

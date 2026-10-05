@@ -32,5 +32,4 @@ convention = "google"
 "tests/**" = ["D103"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=repo_checks --cov-report=term-missing:skip-covered --cov-fail-under=95"
 testpaths = ["tests"]

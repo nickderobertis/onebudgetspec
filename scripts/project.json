@@ -3,14 +3,14 @@
   "name": "scripts",
   "projectType": "library",
   "tags": ["lang:bash", "type:tooling"],
-  "//": "The repository's scripts: the build every release artifact comes from, the publication, the CI guard, the registry probe and the gate's helpers. scripts/tests drives the probe and publish.sh against local registries, behind this project's own edge; onebudgetspec-packaging-e2e builds every artifact through build-dist.sh, and repo-checks drives the CI guard.",
+  "//": "The repository's scripts: the build every release artifact comes from, the publication, the CI guard, the registry probe and the gate's helpers. scripts-integration drives the probe and publish.sh against local registries; onebudgetspec-packaging-e2e builds every artifact through build-dist.sh; repo-checks drives the CI guard.",
   "targets": {
     "lint": {
       "executor": "nx:run-commands",
       "options": {
         "commands": [
           "shellcheck scripts/*.sh scripts/nx",
-          "uv run --frozen --no-sync ruff check --quiet --config scripts/ruff.toml scripts/release-probe.py scripts/tests"
+          "uv run --frozen --no-sync ruff check --quiet --config scripts/ruff.toml scripts/release-probe.py"
         ],
         "parallel": false
       }
@@ -18,27 +18,20 @@
     "format-check": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync ruff format --quiet --check --config scripts/ruff.toml scripts/release-probe.py scripts/tests"
+        "command": "uv run --frozen --no-sync ruff format --quiet --check --config scripts/ruff.toml scripts/release-probe.py"
       }
     },
     "format": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync ruff format --quiet --config scripts/ruff.toml scripts/release-probe.py scripts/tests"
+        "command": "uv run --frozen --no-sync ruff format --quiet --config scripts/ruff.toml scripts/release-probe.py"
       }
     },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 scripts/release-probe.py scripts/tests"
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 scripts/release-probe.py"
       }
-    },
-    "test": {
-      "executor": "nx:run-commands",
-      "options": {
-        "command": "uv run --frozen --no-sync pytest -q --no-cov -p no:cacheprovider scripts/tests"
-      },
-      "inputs": ["default", "{workspaceRoot}/release-targets.toml", "{workspaceRoot}/Cargo.toml"]
     }
   }
 }

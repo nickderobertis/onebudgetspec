@@ -1,0 +1,19 @@
+[package]
+name = "onebudgetspec-conformance"
+description = "Runs the data-only conformance cases under conformance/ against a command."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dev-dependencies]
+jsonschema.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+pedantic = { level = "deny", priority = -1 }
