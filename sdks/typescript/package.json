@@ -1,5 +1,6 @@
 {
   "name": "@onebudgetspec/sdk",
+  "//": "llmlint: ignore-file[names_match_behavior] the package name is fixed by the release contract other repositories install against, and this package's interface is the release version until its API lands on it. JSON has no comment to scope this to the name.",
   "version": "0.1.0",
   "description": "The onebudgetspec TypeScript SDK package, versioned with the onebudgetspec command line; it exposes the release version.",
   "license": "MIT",

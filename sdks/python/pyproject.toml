@@ -1,4 +1,5 @@
 [project]
+# llmlint: ignore[names_match_behavior] the package name is fixed by the release contract other repositories install against, and this package's interface is the release version until its API lands on it.
 name = "onebudgetspec-sdk"
 version = "0.1.0"
 description = "The onebudgetspec Python SDK package, versioned with the onebudgetspec command line; it exposes the release version."

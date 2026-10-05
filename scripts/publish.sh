@@ -3,8 +3,8 @@
 # the registry already serves at this version so a re-run after a partial failure resumes
 # rather than fails. Called by .github/workflows/release.yml, whose guards decide whether
 # it runs at all; here a missing token is an error, because reaching this means publication
-# was switched on. Every artifact is checked against the target it is published under and
-# the workspace version before anything is uploaded.
+# was switched on. Each artifact is checked against the target it is published under and
+# the workspace version before it is uploaded.
 #
 # Usage: scripts/publish.sh crate
 #        scripts/publish.sh pypi|sdk-pypi <wheel-dir>

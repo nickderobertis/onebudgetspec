@@ -360,9 +360,9 @@ fn caller_built_discoveries_are_read_once_and_held_to_unique_ids() {
 
     // The same file twice, by two spellings, is one file.
     let alias = dir.path().join("one/../one/budgets.yaml");
-    let once = load_discovered(vec![record(&one, "a"), record(&alias, "b")]).unwrap();
-    assert_eq!(once.files().len(), 1);
-    assert_eq!(once.budget_count(), 2);
+    let deduplicated = load_discovered(vec![record(&one, "a"), record(&alias, "b")]).unwrap();
+    assert_eq!(deduplicated.files().len(), 1);
+    assert_eq!(deduplicated.budget_count(), 2);
 
     // Two files sharing a displayed name still may not share an id.
     let Err(Error::Invalid { problems }) = load_discovered(vec![
