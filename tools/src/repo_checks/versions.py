@@ -133,5 +133,5 @@ def main(argv: list[str], root: Path = ROOT) -> int:
             return 64
 
 
-if __name__ == "__main__":  # pragma: no cover - the entry point; tests call main() itself
+if __name__ == "__main__":  # pragma: no cover - run as a subprocess by the tests, outside coverage
     sys.exit(main(sys.argv[1:]))

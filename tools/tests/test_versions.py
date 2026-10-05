@@ -1,5 +1,7 @@
 """Every manifest and SDK releases at the workspace version, and drift is named."""
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -103,3 +105,22 @@ def test_the_probe_and_this_check_share_one_version_grammar() -> None:
     )
     for good in ("0.1.0", "1.2.3-rc.1", "1.2.3+build.5", "10.20.30-alpha.beta"):
         assert versions.VERSION.fullmatch(good), good
+
+
+def test_the_module_runs_as_a_command() -> None:
+    def command(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "repo_checks.versions", *args],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    assert command("check").returncode == 0
+    refused = command("set", "not-a-version")
+    assert refused.returncode == 64
+    assert "is not a version such as 1.2.3" in refused.stderr
+    usage = command()
+    assert usage.returncode == 64
+    assert "usage: python -m repo_checks.versions" in usage.stderr

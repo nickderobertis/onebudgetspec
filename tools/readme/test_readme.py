@@ -3,9 +3,9 @@
 import subprocess
 from pathlib import Path
 
+import examples as readme
 import pytest
-from repo_checks import readme
-from repo_checks.paths import ROOT
+from examples import ROOT
 
 
 @pytest.fixture(scope="session")

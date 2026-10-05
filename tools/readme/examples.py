@@ -7,7 +7,7 @@ An example is a fenced block whose info string names its path,
 import re
 from pathlib import Path
 
-from repo_checks.paths import ROOT
+ROOT = Path(__file__).resolve().parents[2]
 
 _BLOCK = re.compile(r'^```[a-z]+ title="([^"]+)"\n(.*?)^```$', re.MULTILINE | re.DOTALL)
 

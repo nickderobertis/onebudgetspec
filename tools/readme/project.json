@@ -6,8 +6,8 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "python"]
   },
-  "//": "The README's example budgets files, laid out as it describes and validated by the built binary. Behind its own edge: only the README, the binary or the extraction it uses select it.",
-  "implicitDependencies": ["onebudgetspec", "repo-checks"],
+  "//": "The README's example budgets files, extracted by examples.py, laid out as the README describes and validated by the built binary. Behind its own edge: only the README, the binary or this project select it.",
+  "implicitDependencies": ["onebudgetspec"],
   "targets": {
     "format": {
       "executor": "nx:run-commands",
