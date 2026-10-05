@@ -46,3 +46,21 @@ def test_an_unknown_artifact_is_refused_with_the_usage(tmp_path: Path) -> None:
     assert refused.returncode == 64
     assert "unknown artifact 'wheelbarrow'" in refused.stderr
     assert "usage: scripts/build-dist.sh" in refused.stderr
+
+
+def test_a_wheel_target_the_release_does_not_ship_is_refused(tmp_path: Path) -> None:
+    refused = subprocess.run(
+        [
+            "bash",
+            str(ROOT / "scripts/build-dist.sh"),
+            "cli-wheel",
+            str(tmp_path),
+            "x86_64-pc-windows-msvc",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refused.returncode == 64
+    assert "x86_64-pc-windows-msvc is not a Rust target the release ships" in refused.stderr
+    assert list(tmp_path.iterdir()) == []

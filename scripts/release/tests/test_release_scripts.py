@@ -427,3 +427,55 @@ def test_an_unusable_registry_url_is_refused_with_its_fix() -> None:
     )
     assert answered.returncode == 2
     assert "correct ONEBUDGETSPEC_PROBE_PYPI_URL" in answered.stderr
+
+
+def probe_against(
+    declaration: Path, identifier: str = "pypi:onebudgetspec-cli"
+) -> subprocess.CompletedProcess[str]:
+    """The real probe, reading ``declaration`` as its release-targets.toml."""
+    return subprocess.run(
+        [sys.executable, str(ROOT / "scripts/release/release-probe.py"), identifier],
+        env={**os.environ, "ONEBUDGETSPEC_RELEASE_TARGETS": str(declaration)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        'target = "not a table"\n',
+        '[[target]]\nname = "pypi"\n',
+        "[[target]]\nid = 7\n",
+        '[[target]]\nid = "pypi onebudgetspec-cli"\n',
+        "schema_version = 2\n",
+    ],
+)
+def test_a_malformed_release_declaration_is_refused(tmp_path: Path, declaration: str) -> None:
+    path = tmp_path / "release-targets.toml"
+    path.write_text(declaration)
+    answered = probe_against(path)
+    assert answered.returncode == 1, answered.stderr
+    assert answered.stdout == ""
+    assert f"{path} is not a list of targets each with a <registry>:<name> id" in answered.stderr
+    assert "next: restore release-targets.toml" in answered.stderr
+
+
+@pytest.mark.parametrize("contents", [None, "[[target]\nid = "])
+def test_an_unreadable_release_declaration_is_refused(tmp_path: Path, contents: str | None) -> None:
+    path = tmp_path / "release-targets.toml"
+    if contents is not None:
+        path.write_text(contents)
+    answered = probe_against(path)
+    assert answered.returncode == 1
+    assert f"{path} cannot be read" in answered.stderr
+    assert "next: restore release-targets.toml" in answered.stderr
+
+
+def test_a_target_on_a_registry_the_probe_does_not_read_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "release-targets.toml"
+    path.write_text('[[target]]\nid = "maven:onebudgetspec"\n')
+    answered = probe_against(path, "maven:onebudgetspec")
+    assert answered.returncode == 1
+    assert "names maven:onebudgetspec on no registry this probe reads" in answered.stderr

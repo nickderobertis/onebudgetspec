@@ -12,7 +12,8 @@ Three answers, kept apart on purpose:
 A lookup that failed is never reported as "nothing published". It answers only for the
 ``[[target]]`` ids of release-targets.toml. Standard library only, so it runs on any host
 with Python 3.11; one request, no retry. ONEBUDGETSPEC_PROBE_<REGISTRY>_URL points a
-registry's base URL elsewhere, which is how the tests drive it against a local server.
+registry's base URL elsewhere, and ONEBUDGETSPEC_RELEASE_TARGETS the declaration, which is
+how the tests drive it against a local server and malformed declarations.
 """
 
 import json
@@ -24,7 +25,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Literal, NewType, NoReturn, TypedDict
+from typing import Literal, NewType, NoReturn
 
 ROOT = Path(__file__).resolve().parents[2]
 Registry = Literal["crate", "pypi", "npm"]
@@ -50,16 +51,29 @@ LATER = "re-ask later; a registry that did not answer is not one with no release
 TargetId = NewType("TargetId", str)
 
 
-class Target(TypedDict):
-    """The part of a release-targets.toml ``[[target]]`` the probe reads."""
-
-    id: TargetId
+_TARGET_ID = re.compile(r"^[a-z]+:\S+$")
 
 
 def target_ids() -> list[TargetId]:
-    """The ids release-targets.toml declares, sorted."""
-    declared: list[Target] = tomllib.loads((ROOT / "release-targets.toml").read_text())["target"]
-    return sorted(target["id"] for target in declared)
+    """The ids release-targets.toml declares, sorted, refusing a declaration of any other shape."""
+    path = Path(os.environ.get("ONEBUDGETSPEC_RELEASE_TARGETS", ROOT / "release-targets.toml"))
+    try:
+        declared = tomllib.loads(path.read_text()).get("target")
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        refuse(f"{path} cannot be read ({error})", "restore release-targets.toml from git")
+    match declared:
+        case [*records] if records and all(
+            isinstance(record, dict)
+            and isinstance(record.get("id"), str)
+            and _TARGET_ID.match(record["id"])
+            for record in records
+        ):
+            return sorted(TargetId(record["id"]) for record in records)
+        case _:
+            refuse(
+                f"{path} is not a list of targets each with a <registry>:<name> id",
+                "restore release-targets.toml from git",
+            )
 
 
 def refuse(reason: str, next_step: str, status: int = 1) -> NoReturn:

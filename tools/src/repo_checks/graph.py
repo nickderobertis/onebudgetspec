@@ -96,7 +96,6 @@ def projects(root: Path = ROOT) -> dict[ProjectName, Project]:
     return found
 
 
-#: Each type by its tag text, so a tag reads back as its type.
 _BY_TAG: dict[str, ProjectType] = {kind: kind for kind in ALLOWED}
 
 

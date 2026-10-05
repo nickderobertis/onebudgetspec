@@ -14,7 +14,7 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, cast
 
 import yaml
 
@@ -121,25 +121,75 @@ class Job:
         return list(self.body.get("steps", []))
 
 
+class InvalidWorkflow(ValueError):
+    """A workflow file is not the shape the guard checks read."""
+
+
+def _document(path: Path) -> dict:
+    document = yaml.safe_load(path.read_text())
+    if not isinstance(document, dict):
+        raise InvalidWorkflow(f"{path.name} is not a mapping")
+    return document
+
+
+def _job(workflow: str, name: object, body: object) -> JobBody:
+    """``body``, checked for the fields this module reads."""
+    if not isinstance(body, dict):
+        raise InvalidWorkflow(f"{workflow}: job {name} is not a mapping")
+    if not isinstance(body.get("if", ""), (str, bool)):
+        raise InvalidWorkflow(f"{workflow}: job {name}'s `if` is not a string")
+    needs = body.get("needs", [])
+    if not (
+        isinstance(needs, str)
+        or (isinstance(needs, list) and all(isinstance(n, str) for n in needs))
+    ):
+        raise InvalidWorkflow(f"{workflow}: job {name}'s `needs` is not a job id or a list of them")
+    steps = body.get("steps", [])
+    if not isinstance(steps, list) or not all(isinstance(step, dict) for step in steps):
+        raise InvalidWorkflow(f"{workflow}: job {name}'s `steps` is not a list of mappings")
+    for field in ("outputs", "env"):
+        if not isinstance(body.get(field, {}), dict):
+            raise InvalidWorkflow(f"{workflow}: job {name}'s `{field}` is not a mapping")
+    # Every field read here was checked above.
+    return cast(JobBody, body)
+
+
 def load(root: Path = ROOT) -> list[Job]:
-    """Every job of every workflow under ``root/.github/workflows``."""
+    """Every job of every workflow under ``root/.github/workflows``.
+
+    Raises:
+        InvalidWorkflow: a workflow, its jobs or a job is not the shape read here.
+    """
     jobs: list[Job] = []
     for path in sorted((root / ".github" / "workflows").glob("*.yml")):
-        document = yaml.safe_load(path.read_text())
-        workflow_jobs = document.get("jobs", {})
-        for name, body in workflow_jobs.items():
-            jobs.append(Job(path.name, name, body, workflow_jobs))
+        raw_jobs = _document(path).get("jobs", {})
+        if not isinstance(raw_jobs, dict):
+            raise InvalidWorkflow(f"{path.name}: `jobs` is not a mapping of job ids")
+        workflow_jobs = {str(name): _job(path.name, name, body) for name, body in raw_jobs.items()}
+        jobs.extend(
+            Job(path.name, name, body, workflow_jobs) for name, body in workflow_jobs.items()
+        )
     return jobs
 
 
 def triggers(root: Path, workflow: str) -> set[str]:
-    """The events ``workflow`` runs on."""
-    document = yaml.safe_load((root / ".github" / "workflows" / workflow).read_text())
+    """The events ``workflow`` runs on.
+
+    Raises:
+        InvalidWorkflow: `on` is not an event name, a list of them, or a mapping keyed by them.
+    """
+    document = _document(root / ".github" / "workflows" / workflow)
     # YAML 1.1 reads the bare key `on` as the boolean true.
     on = document.get("on", document.get(True))
-    if isinstance(on, str):
-        return {on}
-    return set(on)
+    match on:
+        case str():
+            return {on}
+        case list() | dict() if on and all(isinstance(event, str) for event in on):
+            return set(on)
+        case _:
+            raise InvalidWorkflow(
+                f"{workflow}: `on` is not an event name, a list or a mapping of them"
+            )
 
 
 def credentialed(jobs: list[Job]) -> list[Job]:

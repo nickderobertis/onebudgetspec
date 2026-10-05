@@ -9,7 +9,7 @@ import json
 import re
 import tomllib
 from pathlib import Path
-from typing import NamedTuple, NewType, NotRequired, TypedDict
+from typing import NamedTuple, NewType, NotRequired, TypedDict, cast
 
 import yaml
 
@@ -32,9 +32,36 @@ class Target(TypedDict):
     covers: NotRequired[list[TargetId]]
 
 
+class InvalidDeclaration(ValueError):
+    """release-targets.toml is not the shape the release reads."""
+
+
+_TARGET_FIELDS = ("id", "name", "what", "published_by", "manifest")
+
+
 def targets(root: Path = ROOT) -> list[Target]:
-    """The targets release-targets.toml declares."""
-    return tomllib.loads((root / "release-targets.toml").read_text())["target"]
+    """The targets release-targets.toml declares, each checked for the fields it must carry.
+
+    Raises:
+        InvalidDeclaration: the declaration has no list of targets, or one lacks a field.
+    """
+    declared = tomllib.loads((root / "release-targets.toml").read_text()).get("target")
+    if not isinstance(declared, list) or not all(isinstance(r, dict) for r in declared):
+        raise InvalidDeclaration("release-targets.toml: `target` is not a list of tables")
+    checked: list[Target] = []
+    for number, record in enumerate(declared, 1):
+        for field in _TARGET_FIELDS:
+            if not isinstance(record.get(field), str):
+                raise InvalidDeclaration(
+                    f"release-targets.toml: target {number} lacks a string `{field}`"
+                )
+        covers = record.get("covers", [])
+        if not isinstance(covers, list) or not all(isinstance(c, str) for c in covers):
+            raise InvalidDeclaration(
+                f"release-targets.toml: target {number}'s `covers` is not a list of strings"
+            )
+        checked.append(cast(Target, record))  # its fields were checked above
+    return checked
 
 
 #: The target names other repositories wait on; they never change.

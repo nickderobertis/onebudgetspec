@@ -31,7 +31,7 @@ mkdir -p "$2"
 OUT="$(cd "$2" && pwd)"
 readonly OUT
 
-# Run a build step quietly; on failure replay its output and name the step.
+# Build output is noise unless a step fails, which is when all of it matters.
 quietly() {
   local log
   if ! log="$("$@" 2>&1)"; then
@@ -74,6 +74,7 @@ sleep 1
 case "$ARTIFACT" in
   cli-wheel)
     [ -n "$TARGET" ] || TARGET="$(host_target)"
+    npm_platform "$TARGET" >/dev/null # refuses a target the release does not ship
     quietly uvx --from 'maturin>=1.9,<2' maturin build --release --locked \
       --manifest-path "$ROOT/crates/onebudgetspec/Cargo.toml" --target "$TARGET" --out "$OUT"
     written_since_start "$OUT" '*.whl'

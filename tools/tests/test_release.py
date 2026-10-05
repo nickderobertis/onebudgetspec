@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from conftest import copy_tree
 
 from repo_checks import release
@@ -113,3 +114,29 @@ def test_a_carrier_whose_manifest_names_another_platform_is_named(tmp_path: Path
         "('@onebudgetspec/cli-darwin-arm64', ['darwin'], ['x64']), "
         "not ('@onebudgetspec/cli-darwin-arm64', ['darwin'], ['arm64'])"
     ]
+
+
+@pytest.mark.parametrize(
+    ("declaration", "reason"),
+    [
+        ('target = "x"\n', "`target` is not a list of tables"),
+        ("schema_version = 2\n", "`target` is not a list of tables"),
+        ('[[target]]\nid = "crate:x"\n', "target 1 lacks a string `name`"),
+        (
+            '[[target]]\nid = "crate:x"\nname = "crate"\nwhat = "w"\npublished_by = "p"\n'
+            "manifest = 3\n",
+            "target 1 lacks a string `manifest`",
+        ),
+        (
+            '[[target]]\nid = "crate:x"\nname = "crate"\nwhat = "w"\npublished_by = "p"\n'
+            'manifest = "m"\ncovers = "crate:y"\n',
+            "target 1's `covers` is not a list of strings",
+        ),
+    ],
+)
+def test_a_malformed_release_declaration_is_named(
+    tmp_path: Path, declaration: str, reason: str
+) -> None:
+    (tmp_path / "release-targets.toml").write_text(declaration)
+    with pytest.raises(release.InvalidDeclaration, match=reason):
+        release.targets(tmp_path)

@@ -219,3 +219,33 @@ def test_the_guard_script_refuses_a_name_that_is_not_a_variable(tmp_path: Path) 
     assert completed.returncode == 64
     assert "is not an environment variable name" in completed.stderr
     assert not (tmp_path / "o").exists()
+
+
+@pytest.mark.parametrize(
+    ("text", "reason"),
+    [
+        ("- just\n- a list\n", "is not a mapping"),
+        ("on: push\njobs: [build]\n", "`jobs` is not a mapping of job ids"),
+        ("on: push\njobs:\n  build: run it\n", "job build is not a mapping"),
+        (
+            "on: push\njobs:\n  build:\n    steps: run it\n",
+            "job build's `steps` is not a list of mappings",
+        ),
+        ("on: push\njobs:\n  build:\n    if: [1]\n", "job build's `if` is not a string"),
+    ],
+)
+def test_a_malformed_workflow_is_named(tmp_path: Path, text: str, reason: str) -> None:
+    directory = tmp_path / ".github/workflows"
+    directory.mkdir(parents=True)
+    (directory / "bad.yml").write_text(text)
+    with pytest.raises(workflows.InvalidWorkflow, match=reason):
+        workflows.load(tmp_path)
+
+
+@pytest.mark.parametrize("on", ["5", "[push, 7]", "{push: {}, 7: {}}", "null"])
+def test_malformed_triggers_are_named(tmp_path: Path, on: str) -> None:
+    directory = tmp_path / ".github/workflows"
+    directory.mkdir(parents=True)
+    (directory / "bad.yml").write_text(f"on: {on}\njobs: {{}}\n")
+    with pytest.raises(workflows.InvalidWorkflow, match="`on` is not an event name"):
+        workflows.triggers(tmp_path, "bad.yml")
