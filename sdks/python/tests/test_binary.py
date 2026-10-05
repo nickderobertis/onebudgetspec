@@ -382,3 +382,39 @@ def test_a_measurement_and_threshold_past_integer_range_come_back_as_doubles(
     assert '"actual": 1e+20' in run_cli(built_binary, ["check", "--json"], tmp_path).stdout
     [result] = check(cwd=tmp_path, binary=built_binary).results
     assert (result.verdict, result.actual, result.threshold) == ("within", 1e20, 1e300)
+
+
+def _bundle_without(built_binary: Path, tmp_path: Path, change: str) -> str:
+    """The real bundle the binary prints, with one ``change`` applied to its shape."""
+    bundle = json.loads(run_cli(built_binary, ["schema"], tmp_path).stdout)
+    match change:
+        case "empty":
+            return "{}"
+        case "boolean version":
+            bundle["version"] = True
+        case "roots array":
+            bundle["roots"] = list(bundle["roots"].values())
+        case "missing root":
+            del bundle["roots"]["list-report"]
+        case "root not an object":
+            bundle["roots"]["check-report"] = "a schema"
+    return json.dumps(bundle)
+
+
+@pytest.mark.parametrize(
+    "change", ["empty", "boolean version", "roots array", "missing root", "root not an object"]
+)
+def test_a_bundle_of_another_shape_raises_naming_what_to_do(
+    built_binary: Path, tmp_path: Path, change: str
+) -> None:
+    """A bundle without an integer version and the three roots is never returned."""
+    printed = _bundle_without(built_binary, tmp_path, change)
+    program = recording(
+        tmp_path / "bin", "bundle", tmp_path / "ran.log", f"cat <<'EOF'\n{printed}\nEOF"
+    )
+    with pytest.raises(OnebudgetspecError) as refused:
+        schema(binary=program)
+    message = str(refused.value)
+    assert "is not a schema bundle" in message
+    assert "budgets-file" in message and "list-report" in message
+    assert "reinstall onebudgetspec-cli" in message

@@ -16,6 +16,8 @@ import { reportSchemas } from "./generated/schemas.ts";
 export const BINARY_ENV = "ONEBUDGETSPEC_BIN";
 /** The package whose launcher runs the binary for the host it is installed on. */
 export const CLI_PACKAGE = "@onebudgetspec/cli";
+/** The roots every schema bundle carries, as `onebudgetspec schema` emits them. */
+export const BUNDLE_ROOTS: readonly string[] = ["budgets-file", "check-report", "list-report"];
 /** The statuses whose stdout is a report: within, over and error. A verdict is in the
  * report, so none of them rejects. */
 const REPORTED = new Set([0, 1, 3]);
@@ -318,6 +320,20 @@ export async function schema(options: SchemaOptions = {}): Promise<Record<string
   }
   if (!isObject(bundle)) {
     throw new OnebudgetspecError("onebudgetspec: the schema is not a JSON object", null);
+  }
+  const { version, roots } = bundle;
+  if (
+    typeof version !== "number" ||
+    !Number.isInteger(version) ||
+    !isObject(roots) ||
+    !BUNDLE_ROOTS.every((root) => isObject(roots[root]))
+  ) {
+    throw new OnebudgetspecError(
+      "onebudgetspec: the binary's output is not a schema bundle: it needs an integer " +
+        `\`version\` and the \`roots\` ${JSON.stringify(BUNDLE_ROOTS)}, each an object; point ` +
+        `${BINARY_ENV} at an onebudgetspec binary, or reinstall ${CLI_PACKAGE}`,
+      null,
+    );
   }
   return bundle;
 }

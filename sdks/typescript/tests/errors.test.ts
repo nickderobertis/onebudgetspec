@@ -285,3 +285,40 @@ test("without source text, an integer past 2^53 is refused as uncheckable", () =
   expect(ran.status).toBe(0);
   expect(ran.stdout).toContain("this runtime cannot check exactly");
 });
+
+/** The real bundle the binary prints, with one `change` applied to its shape. */
+function bundleWith(change: string): string {
+  const bundle = JSON.parse(runCli(["schema"], scratch()).stdout);
+  switch (change) {
+    case "empty":
+      return "{}";
+    case "boolean version":
+      bundle.version = true;
+      break;
+    case "roots array":
+      bundle.roots = Object.values(bundle.roots);
+      break;
+    case "missing root":
+      delete bundle.roots["list-report"];
+      break;
+    case "root not an object":
+      bundle.roots["check-report"] = "a schema";
+      break;
+  }
+  return JSON.stringify(bundle);
+}
+
+test.each(["empty", "boolean version", "roots array", "missing root", "root not an object"])(
+  "a bundle (%s) of another shape rejects naming what to do",
+  async (change) => {
+    const dir = scratch();
+    const program = join(dir, "onebudgetspec");
+    writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${bundleWith(change)}\nEOF\n`);
+    chmodSync(program, 0o755);
+    const refused = await rejection(schema({ binary: program }), OnebudgetspecError);
+    expect(refused.message).toContain("is not a schema bundle");
+    expect(refused.message).toContain("budgets-file");
+    expect(refused.message).toContain("list-report");
+    expect(refused.message).toContain("reinstall @onebudgetspec/cli");
+  },
+);

@@ -27,6 +27,8 @@ from ._generated.schemas import REPORT_SCHEMAS
 BINARY_ENV = "ONEBUDGETSPEC_BIN"
 #: The distribution whose wheel carries the binary.
 CLI_DISTRIBUTION = "onebudgetspec-cli"
+#: The roots every schema bundle carries, as `onebudgetspec schema` emits them.
+BUNDLE_ROOTS = ("budgets-file", "check-report", "list-report")
 _EXECUTABLE = "onebudgetspec"
 #: The statuses whose stdout is a report: within, over and error. A verdict is in the
 #: report, so none of them is an exception.
@@ -332,7 +334,7 @@ def schema(*, binary: StrPath | None = None) -> dict[str, JsonValue]:
     """The JSON Schema bundle the binary prints: ``onebudgetspec schema``.
 
     Raises:
-        OnebudgetspecError: the binary could not run or printed no JSON object.
+        OnebudgetspecError: the binary could not run, or printed no schema bundle.
     """
     stdout = _run(binary, ["schema"], None)
     try:
@@ -343,4 +345,17 @@ def schema(*, binary: StrPath | None = None) -> dict[str, JsonValue]:
         ) from error
     if not isinstance(bundle, dict):
         raise OnebudgetspecError("onebudgetspec: the schema is not a JSON object", exit_code=None)
+    version, roots = bundle.get("version"), bundle.get("roots")
+    if (
+        isinstance(version, bool)
+        or not isinstance(version, int)
+        or not isinstance(roots, dict)
+        or not all(isinstance(roots.get(root), dict) for root in BUNDLE_ROOTS)
+    ):
+        raise OnebudgetspecError(
+            "onebudgetspec: the binary's output is not a schema bundle: it needs an integer "
+            f"`version` and the `roots` {list(BUNDLE_ROOTS)}, each an object; point "
+            f"{BINARY_ENV} at an onebudgetspec binary, or reinstall {CLI_DISTRIBUTION}",
+            exit_code=None,
+        )
     return bundle
