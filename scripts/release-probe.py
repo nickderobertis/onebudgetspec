@@ -96,9 +96,9 @@ def main(argv: list[str]) -> None:
         )
     request = urllib.request.Request(url(registry, name), headers={"User-Agent": AGENT})
     try:
-        # llmlint: ignore[async_typed_clients_at_boundaries] one blocking stdlib request
-        # is this short-lived command's whole job, keeping it runnable on any host with no
-        # install; the answer is checked by pattern below.
+        # One blocking standard-library request is this short-lived command's whole job, which
+        # keeps it runnable on any host with no install; the answer is checked below.
+        # llmlint: ignore[async_typed_clients_at_boundaries] the reason is the two lines above
         with urllib.request.urlopen(request, timeout=25) as response:
             document = json.load(response)
     except urllib.error.HTTPError as error:

@@ -14,7 +14,7 @@ run() {
 
 for tool in cargo uv bun; do
   command -v "$tool" >/dev/null 2>&1 || {
-    echo "bootstrap: $tool is not installed; see AGENTS.md (Toolchain), then re-run 'just bootstrap'." >&2
+    echo "bootstrap: $tool is not installed; install it (cargo: https://rustup.rs, uv: https://docs.astral.sh/uv/, bun: https://bun.sh), then re-run 'just bootstrap'." >&2
     exit 1
   }
 done

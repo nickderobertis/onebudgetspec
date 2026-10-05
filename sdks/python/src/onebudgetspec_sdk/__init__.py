@@ -1,9 +1,4 @@
-"""The onebudgetspec Python SDK.
-
-A scaffold today: it carries the release version so the package builds, installs and
-releases under the same gate as the command line, and the typed API over the
-``onebudgetspec`` binary lands on top of it.
-"""
+"""The onebudgetspec Python SDK, released at the same version as the command line."""
 
 __all__ = ["__version__"]
 

@@ -7,6 +7,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
+trap 'echo "sync-release-pr: \"$BASH_COMMAND\" failed; the release PR is unchanged. Fix the cause above, then re-run the release-plz workflow." >&2' ERR
 
 branch="$(gh pr list --json headRefName --jq 'map(select(.headRefName | startswith("release-plz-"))) | .[0].headRefName // empty')"
 [ -n "$branch" ] || exit 0

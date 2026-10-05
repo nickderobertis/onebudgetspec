@@ -46,6 +46,8 @@ def test_without_a_status_function_failed_needs_skip_the_job() -> None:
     assert evaluate("!cancelled()", {}) is True
     assert uses_status_function("${{ always() }}")
     assert not uses_status_function("a == 'b'")
+    assert not uses_status_function("success == 'yes'")
+    assert evaluate("success == 'yes'", {"success": "yes"}, Status(success=False)) is False
 
 
 @pytest.mark.parametrize(

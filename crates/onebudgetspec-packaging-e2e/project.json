@@ -4,7 +4,7 @@
   "projectType": "library",
   "tags": ["lang:rust", "type:e2e"],
   "//": "The packaging journeys: every distribution built by scripts/build-dist.sh, installed with no registry, and driven. The most expensive suite, so it sits behind its own edge to the packages it installs.",
-  "implicitDependencies": ["onebudgetspec", "npm-cli", "sdk-python", "sdk-typescript", "scripts"],
+  "implicitDependencies": ["onebudgetspec", "npm-cli", "sdk-python", "sdk-typescript"],
   "targets": {
     "format": {
       "executor": "nx:run-commands",

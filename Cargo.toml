@@ -12,8 +12,8 @@ authors = ["Nick DeRobertis"]
 
 [workspace.dependencies]
 # The CLI and the SDK release in lock step at one version; the exact requirement keeps a
-# consumer from resolving the binary against a different SDK patch. scripts/set-version.sh
-# rewrites it and `--check` refuses any other spelling.
+# consumer from resolving the binary against a different SDK patch. `just set-version`
+# rewrites it and `just versions` refuses any other.
 onebudgetspec-core = { path = "crates/onebudgetspec-core", version = "=0.1.0" }
 
 chrono = { version = "0.4.45", default-features = false, features = ["std", "serde", "clock"] }

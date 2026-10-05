@@ -62,3 +62,37 @@ fn a_directory_without_recursive_is_refused_with_status_two() {
     run.expect_status(2);
     assert!(run.stderr.contains("--recursive"), "{}", run.stderr);
 }
+
+#[test]
+fn a_file_named_twice_or_by_two_spellings_is_measured_once() {
+    let fixture = Fixture::new();
+    fixture.counted(
+        "measure.sh",
+        "ran.log",
+        "measured",
+        "printf '{\"value\": 1}' > \"$ONEBUDGETSPEC_RESULT\"",
+    );
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[serde_json::json!({
+            "id": "once",
+            "measure": "reported",
+            "command": ["./measure.sh"],
+            "unit": "runs",
+            "direction": "max",
+            "threshold": 2,
+        })]),
+    );
+    let report = fixture
+        .run([
+            "check",
+            "--json",
+            "budgets.yaml",
+            "./budgets.yaml",
+            "budgets.yaml",
+        ])
+        .expect_status(0)
+        .check_report();
+    assert_eq!(ids(&report, "results"), ["once"]);
+    assert_eq!(fixture.log("ran.log"), ["measured"]);
+}

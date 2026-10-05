@@ -93,6 +93,7 @@ fn run_condition(dir: &Path, argv: &[String]) -> Result<String, String> {
 struct Measured {
     value: f64,
     detail: Option<String>,
+    // llmlint: ignore[invalid_states_unrepresentable] private to this module and built only by returned_conditions, which has just held every name to the pattern and the reserved names; it becomes the report's plain string map.
     returned: BTreeMap<String, String>,
 }
 

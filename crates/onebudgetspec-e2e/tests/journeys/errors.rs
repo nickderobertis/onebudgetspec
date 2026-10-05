@@ -34,6 +34,21 @@ fn every_kind_of_failed_measurement_is_an_error() {
         (budget("empty", &json!(["true"])), "empty"),
         (budget("not-json", &writes("value: 3")), "not valid JSON"),
         (
+            budget("not-an-object", &writes("[3]")),
+            "an array rather than a JSON object",
+        ),
+        (
+            budget("bad-detail", &writes(r#"{"value": 3, "detail": 7}"#)),
+            "\"detail\" is a number rather than a string",
+        ),
+        (
+            budget(
+                "removed-result",
+                &json!(["sh", "-c", "rm \"$ONEBUDGETSPEC_RESULT\""]),
+            ),
+            "cannot read the result file",
+        ),
+        (
             budget("no-value", &writes(r#"{"detail": "x"}"#)),
             "no \"value\"",
         ),
@@ -121,4 +136,30 @@ fn a_timeout_ends_the_command_promptly() {
     let ended_at = chrono::DateTime::parse_from_rfc3339(errored["ended_at"].as_str().unwrap());
     let took = ended_at.unwrap() - started_at.unwrap();
     assert!(took.num_milliseconds() >= 1000, "{errored:#}");
+}
+
+#[test]
+fn a_result_file_that_cannot_be_created_is_an_error() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget("needs-a-file", &writes(r#"{"value": 1}"#))]),
+    );
+    let missing = fixture.path().join("no-such-temporary-directory");
+    let run = crate::common::run_in(
+        fixture.path(),
+        ["check", "--json"],
+        &[("TMPDIR", missing.to_str().unwrap())],
+    );
+    let report = run.expect_status(3).check_report();
+    let errored = result(&report, "needs-a-file");
+    assert_eq!(errored["verdict"], "error");
+    assert!(
+        errored["error"]
+            .as_str()
+            .unwrap()
+            .contains("cannot create the result file"),
+        "{errored:#}"
+    );
+    assert!(errored["actual"].is_null());
 }

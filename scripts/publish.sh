@@ -33,12 +33,15 @@ readonly VERSION
 
 skipped=()
 
-# The packages an npm target may publish, so a stray tarball is refused, not uploaded.
-npm_expected() {
-  case "$1" in
-    npm) echo "@onebudgetspec/cli-linux-x64 @onebudgetspec/cli-linux-arm64 @onebudgetspec/cli-darwin-x64 @onebudgetspec/cli-darwin-arm64 @onebudgetspec/cli" ;;
-    sdk-npm) echo "@onebudgetspec/sdk" ;;
-  esac
+# The packages a target publishes, read from release-targets.toml (its id and what it
+# covers), so a stray artifact is refused rather than uploaded.
+target_packages() {
+  python3 - "$ROOT/release-targets.toml" "$1" <<'PY'
+import sys, tomllib
+for target in tomllib.load(open(sys.argv[1], "rb"))["target"]:
+    if target["name"] == sys.argv[2]:
+        print(" ".join(i.partition(":")[2] for i in [target["id"], *target.get("covers", [])]))
+PY
 }
 
 npm_publish() {
@@ -47,14 +50,20 @@ npm_publish() {
     || fail "$tarball holds no readable package/package.json" "rebuild it with scripts/build-dist.sh"
   name="${identity% *}"
   version="${identity#* }"
-  case " $(npm_expected "$target") " in
+  case " $(target_packages "$target") " in
     *" $name "*) ;;
     *) fail "$tarball is $name, which target $target does not publish" "publish only what scripts/build-dist.sh built for $target" ;;
   esac
   [ "$version" = "$VERSION" ] || fail "$tarball is $name@$version, not the workspace's $VERSION" "rebuild it from this commit with scripts/build-dist.sh"
-  if [ -n "$(npm view "$name@$VERSION" version 2>/dev/null)" ]; then
-    skipped+=("$name")
-    return
+  local answer
+  if answer="$(npm view "$name@$VERSION" version 2>&1)"; then
+    if [ -n "$answer" ]; then
+      skipped+=("$name")
+      return
+    fi
+  elif ! printf '%s' "$answer" | grep -q E404; then
+    printf '%s\n' "$answer" >&2
+    fail "npm could not say whether $name@$VERSION is published" "re-run the release workflow once npm answers"
   fi
   npm publish "$tarball" --access public --userconfig "$NPMRC"
 }
@@ -66,13 +75,17 @@ case "$target" in
   crate)
     [ $# -eq 0 ] || usage "crate takes no directory"
     need CARGO_REGISTRY_TOKEN
-    for crate in onebudgetspec-core onebudgetspec; do
-      if curl -fsS -o /dev/null -A "onebudgetspec-release (+https://github.com/nickderobertis/onebudgetspec)" \
-        "https://crates.io/api/v1/crates/$crate/$VERSION" 2>/dev/null; then
-        skipped+=("$crate")
-      else
-        cargo publish --locked -p "$crate" --manifest-path "$ROOT/Cargo.toml"
-      fi
+    # The SDK before the binary crate that depends on it, as release-targets.toml covers it.
+    for crate in $(target_packages crate | awk '{for (i = NF; i > 0; i--) print $i}'); do
+      status="$(curl -sS -o /dev/null -w '%{http_code}' \
+        -A "onebudgetspec-release (+https://github.com/nickderobertis/onebudgetspec)" \
+        "https://crates.io/api/v1/crates/$crate/$VERSION")" \
+        || fail "crates.io could not be reached to ask about $crate $VERSION" "re-run the release workflow once crates.io answers"
+      case "$status" in
+        200) skipped+=("$crate") ;;
+        404) cargo publish --locked -p "$crate" --manifest-path "$ROOT/Cargo.toml" ;;
+        *) fail "crates.io answered HTTP $status for $crate $VERSION" "re-run the release workflow once crates.io answers" ;;
+      esac
     done
     ;;
   pypi | sdk-pypi)

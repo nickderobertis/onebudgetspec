@@ -4,6 +4,8 @@
 # clone that has none, so every recipe works from a clean clone.
 
 set shell := ["bash", "-uc"]
+# Recipe arguments reach the shell as "$1", "$@", never spliced into its source.
+set positional-arguments
 
 
 # List available recipes.
@@ -72,19 +74,19 @@ versions:
     @uv run --quiet --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions check
 
 set-version version:
-    @uv run --quiet --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions set {{version}}
-
-# create-repo's governance script (dero-skills), from the user-scope skill install.
-governance_script := env("CREATE_REPO_SKILL_DIR", home_directory() / ".claude/skills/create-repo") / "scripts/setup_github_governance.py"
+    @uv run --quiet --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions set "$1"
 
 # Branch protection on main requiring exactly `check` and `pr-title`, with the squash-only
 # merge model. llmlint joins the required set when publishing is provisioned (AGENTS.md).
 # Extra flags pass through: `--verify` reads the live state back; `--dry-run --repo
 # nickderobertis/onebudgetspec --branch main` prints what it would apply, offline.
 # llmlint: ignore[tool_output_is_signal] the governance script's report is the answer the caller asked for.
+# The script is create-repo's (dero-skills), read from the user-scope skill install or
+# CREATE_REPO_SKILL_DIR.
 governance *flags:
-    @test -f "{{governance_script}}" || { echo "governance: {{governance_script}} not found; install the create-repo skill or set CREATE_REPO_SKILL_DIR" >&2; exit 1; }
-    @uv run --quiet --script "{{governance_script}}" check pr-title --allow-missing-llmlint {{flags}}
+    @script="${CREATE_REPO_SKILL_DIR:-$HOME/.claude/skills/create-repo}/scripts/setup_github_governance.py"; \
+        test -f "$script" || { echo "governance: $script not found; install the create-repo skill or set CREATE_REPO_SKILL_DIR" >&2; exit 1; }; \
+        uv run --quiet --script "$script" check pr-title --allow-missing-llmlint "$@"
 
 # Show the project graph Nx selects against.
 graph:
@@ -104,15 +106,15 @@ setup-llmlint:
 
 # LLM-judge lint over the configured set (or the paths given).
 lint-llm *paths:
-    @command -v llmlint >/dev/null 2>&1 || { echo "llmlint not installed — run 'just setup-llmlint'"; exit 1; }
-    @llmlint {{paths}}
+    @command -v llmlint >/dev/null 2>&1 || { echo "llmlint not installed — run 'just setup-llmlint'" >&2; exit 1; }
+    @llmlint "$@"
 
 # Model-free llmlint gate (config, suppressions, versions). CI runs it before the judged lint.
 lint-llm-validate *args:
-    @command -v llmlint >/dev/null 2>&1 || { echo "llmlint not installed — run 'just setup-llmlint'"; exit 1; }
-    @llmlint validate {{args}}
+    @command -v llmlint >/dev/null 2>&1 || { echo "llmlint not installed — run 'just setup-llmlint'" >&2; exit 1; }
+    @llmlint validate "$@"
 
 # The judged lint over what this branch changed since it forked from the base.
 lint-llm-diff base="origin/main" *args:
-    @command -v llmlint >/dev/null 2>&1 || { echo "llmlint not installed — run 'just setup-llmlint'"; exit 1; }
-    @llmlint --diff --diff-base "{{base}}" {{args}}
+    @command -v llmlint >/dev/null 2>&1 || { echo "llmlint not installed — run 'just setup-llmlint'" >&2; exit 1; }
+    @llmlint --diff --diff-base "$1" "${@:2}"

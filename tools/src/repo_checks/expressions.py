@@ -163,8 +163,13 @@ class _Parser:
 
 def uses_status_function(expression: str) -> bool:
     """Whether ``expression`` calls a status function, replacing the implicit ``success()``."""
-    names = [token.text for token in _tokens(expression) if token.kind == "name"]
-    return any(name in ("always", "cancelled", "success", "failure") for name in names)
+    tokens = _tokens(expression)
+    return any(
+        token.kind == "name"
+        and token.text in ("always", "cancelled", "success", "failure")
+        and following.text == "("
+        for token, following in zip(tokens, tokens[1:], strict=False)
+    )
 
 
 def evaluate(expression: str, context: Mapping[str, Value], status: Status | None = None) -> bool:

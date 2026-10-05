@@ -19,6 +19,14 @@ fn detail_is_carried_when_written_and_null_when_not() {
                 "threshold": 10,
             }),
             json!({
+                "id": "null-detail",
+                "measure": "reported",
+                "command": reports(r#"{"value": 4, "detail": null}"#),
+                "unit": "calls",
+                "direction": "max",
+                "threshold": 10,
+            }),
+            json!({
                 "id": "without-detail",
                 "measure": "reported",
                 "command": reports(r#"{"value": 4}"#),
@@ -37,4 +45,6 @@ fn detail_is_carried_when_written_and_null_when_not() {
         "4 of 10 calls hit the cache"
     );
     assert!(result(&report, "without-detail")["detail"].is_null());
+    assert!(result(&report, "null-detail")["detail"].is_null());
+    assert_eq!(result(&report, "null-detail")["verdict"], "within");
 }
