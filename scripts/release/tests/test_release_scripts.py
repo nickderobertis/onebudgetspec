@@ -449,6 +449,7 @@ def probe_against(
         '[[target]]\nname = "pypi"\n',
         "[[target]]\nid = 7\n",
         '[[target]]\nid = "pypi onebudgetspec-cli"\n',
+        '[[target]]\nid = "pypi:onebudgetspec-cli\\n"\n',
         "schema_version = 2\n",
     ],
 )

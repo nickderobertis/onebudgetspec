@@ -38,15 +38,30 @@ class Place:
         return match.group(2) if match else None
 
     def write(self, root: Path, version: str) -> None:
-        """Write ``version`` here."""
+        """Write ``version`` here.
+
+        Raises:
+            MissingVersionError: the pattern finds no version here, so nothing was written.
+        """
         path = root / self.path
 
         def replace(match: re.Match[str]) -> str:
             return f"{match.group(1)}{version}{match.group(3)}"
 
-        path.write_text(
-            re.sub(self.pattern, replace, path.read_text(), count=1, flags=re.MULTILINE)
+        written, count = re.subn(
+            self.pattern, replace, path.read_text(), count=1, flags=re.MULTILINE
         )
+        if count != 1:
+            raise MissingVersionError(self.path)
+        path.write_text(written)
+
+
+class MissingVersionError(Exception):
+    """A place holds no version field to write, so ``set`` cannot bring it to the version."""
+
+    def __init__(self, path: str) -> None:
+        """Name the place, ``path``, that holds no version field."""
+        super().__init__(f"{path}: no version found to write")
 
 
 #: `[workspace.package] version`, the first `version =` line of the root Cargo.toml.
@@ -72,13 +87,26 @@ def places() -> list[Place]:
 
 
 def workspace_version(root: Path = ROOT) -> str:
-    """The ``[workspace.package] version`` every crate inherits."""
-    return tomllib.loads((root / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+    """The ``[workspace.package] version`` every crate inherits.
+
+    Raises:
+        ValueError: it is absent or not a release version.
+    """
+    workspace = tomllib.loads((root / "Cargo.toml").read_text()).get("workspace", {})
+    version = workspace.get("package", {}).get("version")
+    if not isinstance(version, str) or not VERSION.fullmatch(version):
+        raise ValueError(
+            f"Cargo.toml: workspace version {version!r} is not a version such as 1.2.3"
+        )
+    return version
 
 
 def disagreements(root: Path = ROOT) -> list[str]:
     """One line per place whose version is not the workspace's; empty when all agree."""
-    version = workspace_version(root)
+    try:
+        version = workspace_version(root)
+    except ValueError as error:
+        return [str(error)]
     problems = []
     for place in places():
         found = place.read(root)
@@ -102,12 +130,19 @@ def disagreements(root: Path = ROOT) -> list[str]:
 def set_version(version: str, root: Path = ROOT) -> None:
     """Write ``version`` as the workspace's and everywhere :func:`places` reads.
 
+    Every place is read first, so a place missing its version field leaves every file as it was.
+
     Raises:
         ValueError: ``version`` is not a release version.
+        MissingVersionError: a place holds no version field to write.
     """
     if not VERSION.fullmatch(version):
         raise ValueError(f"{version!r} is not a version such as 1.2.3")
-    for place in [WORKSPACE, *places()]:
+    targets = [WORKSPACE, *places()]
+    for place in targets:
+        if place.read(root) is None:
+            raise MissingVersionError(place.path)
+    for place in targets:
         place.write(root, version)
 
 
@@ -127,6 +162,13 @@ def main(argv: list[str], root: Path = ROOT) -> int:
             except ValueError as error:
                 print(f"versions: {error}; next: pass MAJOR.MINOR.PATCH", file=sys.stderr)
                 return 64
+            except MissingVersionError as error:
+                print(
+                    f"versions: {error}; nothing was written; next: restore its version field "
+                    "from git, then re-run",
+                    file=sys.stderr,
+                )
+                return 1
             return 0
         case _:
             print("usage: python -m repo_checks.versions check | set <version>", file=sys.stderr)

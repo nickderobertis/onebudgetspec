@@ -89,6 +89,36 @@ def test_a_missing_version_and_a_missing_carrier_are_named(tmp_path: Path) -> No
     assert any("carriers" in problem for problem in problems)
 
 
+def test_set_refuses_a_place_with_no_version_field_and_writes_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    (root / "sdks/typescript/src/index.ts").write_text("export const NOTHING = 1;\n")
+    assert versions.main(["set", "0.2.0"], root) == 1
+    err = capsys.readouterr().err
+    assert "sdks/typescript/src/index.ts: no version found to write; nothing was written" in err
+    assert versions.workspace_version(root) == "0.1.0"
+    assert all(
+        place.read(root) == "0.1.0"
+        for place in versions.places()
+        if place.path != "sdks/typescript/src/index.ts"
+    )
+
+
+@pytest.mark.parametrize("line", ['version = "banana"', "version = 7", ""])
+def test_a_workspace_version_that_is_not_a_version_is_named(
+    tmp_path: Path, line: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    cargo = root / "Cargo.toml"
+    cargo.write_text(cargo.read_text().replace('version = "0.1.0"\n', f"{line}\n", 1))
+    [problem] = versions.disagreements(root)
+    assert problem.startswith("Cargo.toml: workspace version ")
+    assert problem.endswith("is not a version such as 1.2.3")
+    assert versions.main(["check"], root) == 1
+    assert "Cargo.toml: workspace version" in capsys.readouterr().err
+
+
 def test_usage(capsys: pytest.CaptureFixture[str]) -> None:
     assert versions.main([]) == 64
     assert "usage" in capsys.readouterr().err

@@ -51,7 +51,7 @@ LATER = "re-ask later; a registry that did not answer is not one with no release
 TargetId = NewType("TargetId", str)
 
 
-_TARGET_ID = re.compile(r"^[a-z]+:\S+$")
+_TARGET_ID = re.compile(r"[a-z]+:\S+")
 
 
 def target_ids() -> list[TargetId]:
@@ -65,7 +65,7 @@ def target_ids() -> list[TargetId]:
         case [*records] if records and all(
             isinstance(record, dict)
             and isinstance(record.get("id"), str)
-            and _TARGET_ID.match(record["id"])
+            and _TARGET_ID.fullmatch(record["id"])
             for record in records
         ):
             return sorted(TargetId(record["id"]) for record in records)
