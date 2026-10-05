@@ -1,0 +1,5 @@
+{
+  "description": "Conditions a reported command returns sit beside the declared ones, in its own result only.",
+  "args": ["check", "--json"],
+  "exit": 0
+}

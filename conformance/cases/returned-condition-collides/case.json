@@ -1,0 +1,6 @@
+{
+  "description": "A returned condition named like a declared one or a host value is refused, never merged: that measurement is an error carrying only the declared conditions.",
+  "args": ["check", "--json"],
+  "exit": 3,
+  "error_contains": {"collides": "dispatches", "host-value": "load1"}
+}

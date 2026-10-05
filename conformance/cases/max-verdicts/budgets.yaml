@@ -1,0 +1,21 @@
+schema_version: 1
+budgets:
+  - id: within
+    labels: [api]
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 1395}']
+    unit: seconds
+    direction: max
+    threshold: 1800
+  - id: equal
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 1800}']
+    unit: seconds
+    direction: max
+    threshold: 1800
+  - id: over
+    measure: reported
+    command: ["sh", "report.sh", '{"value": 2000, "detail": "two retries"}']
+    unit: seconds
+    direction: max
+    threshold: 1800

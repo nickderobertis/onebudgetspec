@@ -1,0 +1,5 @@
+{
+  "description": "Under min: above the threshold and equal to it are within, below it is over; a zero threshold has no percentage.",
+  "args": ["check", "--json"],
+  "exit": 1
+}

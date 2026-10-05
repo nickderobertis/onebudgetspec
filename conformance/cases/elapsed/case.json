@@ -1,0 +1,6 @@
+{
+  "description": "An elapsed budget times the command's wall clock.",
+  "args": ["check", "--json"],
+  "exit": 0,
+  "timed": ["nap"]
+}

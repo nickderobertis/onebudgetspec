@@ -729,9 +729,11 @@ name = "onebudgetspec"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "jsonschema",
  "onebudgetspec-core",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

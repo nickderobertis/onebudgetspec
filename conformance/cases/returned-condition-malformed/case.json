@@ -1,0 +1,6 @@
+{
+  "description": "A malformed returned condition name, a non-string value, or a conditions that is not an object is an invalid result.",
+  "args": ["check", "--json"],
+  "exit": 3,
+  "error_contains": {"bad-name": "Gate-Load", "not-a-string": "gate_runs", "not-an-object": "conditions"}
+}
