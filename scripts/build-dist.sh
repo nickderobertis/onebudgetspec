@@ -91,7 +91,9 @@ case "$ARTIFACT" in
     written_since_start "$OUT" '*.tgz'
     ;;
   npm-launcher)
-    quietly npm pack "$ROOT/npm/cli" --silent --pack-destination "$OUT"
+    # bun's pack, because it writes the carriers' `workspace:*` as the release version.
+    quietly bun install --frozen-lockfile --cwd "$ROOT"
+    (cd "$ROOT/npm/cli" && quietly bun pm pack --quiet --destination "$OUT")
     written_since_start "$OUT" '*.tgz'
     ;;
   sdk-python)

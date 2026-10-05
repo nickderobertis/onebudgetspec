@@ -68,9 +68,6 @@ def places() -> list[Place]:
         found.append(
             Place(f"npm/platforms/{platform}/package.json", r'^(  "version": ")([^"]+)(")')
         )
-        found.append(
-            Place("npm/cli/package.json", rf'^(    "@onebudgetspec/cli-{platform}": ")([^"]+)(")')
-        )
     return found
 
 
@@ -88,10 +85,13 @@ def disagreements(root: Path = ROOT) -> list[str]:
         if found != version:
             problems.append(f"{place.path}: {found or 'no version found'} (workspace is {version})")
     launcher = json.loads((root / "npm/cli/package.json").read_text())
-    carriers = sorted(launcher.get("optionalDependencies", {}))
-    expected = sorted(f"@onebudgetspec/cli-{platform}" for platform in PLATFORMS)
+    carriers = launcher.get("optionalDependencies", {})
+    expected = {f"@onebudgetspec/cli-{platform}": "workspace:*" for platform in PLATFORMS}
     if carriers != expected:
-        problems.append(f"npm/cli/package.json: carriers {carriers}, expected {expected}")
+        problems.append(
+            f"npm/cli/package.json: carriers {carriers}, expected {expected}, which packing "
+            "writes as the release version"
+        )
     rust = tomllib.loads((root / "Cargo.toml").read_text())["workspace"]["package"]["rust-version"]
     msrv = tomllib.loads((root / "clippy.toml").read_text()).get("msrv")
     if msrv != rust:

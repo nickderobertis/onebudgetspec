@@ -209,7 +209,7 @@ def test_publish_refuses_a_package_at_another_version(tmp_path: Path) -> None:
     assert "@onebudgetspec/sdk@9.9.9, not the workspace's 0.1.0" in refused.stderr
 
 
-def test_publish_refuses_a_wheel_of_another_package(tmp_path: Path) -> None:
+def test_publish_refuses_an_unreadable_wheel(tmp_path: Path) -> None:
     (tmp_path / "onebudgetspec_sdk-0.1.0-py3-none-any.whl").write_text("")
     refused = publish("pypi", str(tmp_path), PYPI_TOKEN="token")
     assert refused.returncode == 1

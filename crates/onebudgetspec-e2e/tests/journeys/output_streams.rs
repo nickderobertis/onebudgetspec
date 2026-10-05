@@ -57,7 +57,7 @@ fn json_stdout_is_exactly_one_report_and_command_output_is_on_stderr() {
 }
 
 #[test]
-fn text_stdout_holds_none_of_the_command_output() {
+fn text_stdout_holds_none_of_the_command_output_beyond_recorded_conditions() {
     let fixture = Fixture::new();
     noisy(&fixture);
     let run = fixture.run(["check"]);

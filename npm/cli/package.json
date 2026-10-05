@@ -16,10 +16,10 @@
     "lib"
   ],
   "optionalDependencies": {
-    "@onebudgetspec/cli-linux-x64": "0.1.0",
-    "@onebudgetspec/cli-linux-arm64": "0.1.0",
-    "@onebudgetspec/cli-darwin-x64": "0.1.0",
-    "@onebudgetspec/cli-darwin-arm64": "0.1.0"
+    "@onebudgetspec/cli-linux-x64": "workspace:*",
+    "@onebudgetspec/cli-linux-arm64": "workspace:*",
+    "@onebudgetspec/cli-darwin-x64": "workspace:*",
+    "@onebudgetspec/cli-darwin-arm64": "workspace:*"
   },
   "publishConfig": {
     "access": "public"
