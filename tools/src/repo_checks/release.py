@@ -9,10 +9,28 @@ import json
 import re
 import tomllib
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
 import yaml
 
 from repo_checks.paths import ROOT
+
+
+class Target(TypedDict):
+    """One ``[[target]]`` of release-targets.toml."""
+
+    id: str
+    name: str
+    what: str
+    published_by: str
+    manifest: str
+    covers: NotRequired[list[str]]
+
+
+def targets(root: Path = ROOT) -> list[Target]:
+    """The targets release-targets.toml declares."""
+    return tomllib.loads((root / "release-targets.toml").read_text())["target"]
+
 
 #: The target names other repositories wait on; they never change.
 TARGET_NAMES = ("crate", "pypi", "npm", "sdk-pypi", "sdk-npm")
@@ -37,9 +55,9 @@ def carrier_platforms(root: Path = ROOT) -> set[str]:
 def target_problems(root: Path = ROOT) -> list[str]:
     """Every way release-targets.toml and the release workflow disagree."""
     document = tomllib.loads((root / "release-targets.toml").read_text())
-    targets = document["target"]
+    declared = targets(root)
     problems: list[str] = []
-    names = [target["name"] for target in targets]
+    names = [target["name"] for target in declared]
     if sorted(names) != sorted(TARGET_NAMES):
         problems.append(f"release-targets.toml names {names}, not exactly {list(TARGET_NAMES)}")
     if not (root / document["probe"]).is_file():
@@ -57,12 +75,12 @@ def target_problems(root: Path = ROOT) -> list[str]:
         for path in (root / "crates").glob("*/Cargo.toml")
         if tomllib.loads(path.read_text())["package"].get("publish", True)
     )
-    for target in targets:
+    for target in declared:
         registry, _, name = target["id"].partition(":")
-        declared = _manifest_name(root, target["manifest"])
-        if declared != name:
+        manifest_name = _manifest_name(root, target["manifest"])
+        if manifest_name != name:
             problems.append(
-                f"{target['name']}: id names {name}, {target['manifest']} declares {declared}"
+                f"{target['name']}: id names {name}, {target['manifest']} declares {manifest_name}"
             )
         job = published.get(target["name"])
         if job is None or f"the {job} job" not in target["published_by"]:

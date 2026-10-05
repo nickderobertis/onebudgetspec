@@ -24,7 +24,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Literal, NoReturn
+from typing import Literal, NoReturn, TypedDict
 
 ROOT = Path(__file__).resolve().parents[1]
 Registry = Literal["crate", "pypi", "npm"]
@@ -44,6 +44,18 @@ VERSION = re.compile(
     r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
 )
 LATER = "re-ask later; a registry that did not answer is not one with no release"
+
+
+class Target(TypedDict):
+    """The part of a release-targets.toml ``[[target]]`` the probe reads."""
+
+    id: str
+
+
+def target_ids() -> list[str]:
+    """The ids release-targets.toml declares, sorted."""
+    declared: list[Target] = tomllib.loads((ROOT / "release-targets.toml").read_text())["target"]
+    return sorted(target["id"] for target in declared)
 
 
 def refuse(reason: str, next_step: str, status: int = 1) -> NoReturn:
@@ -89,8 +101,7 @@ def main(argv: list[str]) -> None:
                 "run 'scripts/release-probe.py pypi:onebudgetspec-cli'",
                 2,
             )
-    targets = tomllib.loads((ROOT / "release-targets.toml").read_text())["target"]
-    ids = sorted(target["id"] for target in targets)
+    ids = target_ids()
     if identifier not in ids:
         refuse(
             f"{identifier} is not a target id of release-targets.toml", f"ask for one of {ids}", 2

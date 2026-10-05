@@ -155,6 +155,9 @@ fn measure(selected: Selected<'_>, declared: &BTreeMap<String, String>) -> Check
 /// Headroom is `threshold - actual` under `max` and `actual - threshold` under `min`, so
 /// it is negative exactly when the budget is over; an actual equal to the threshold is
 /// within. The percentage is `headroom / threshold * 100`, and `None` at a threshold of 0.
+///
+/// The inputs are the contract's: a threshold [`load`](crate::load) has held finite and
+/// non-negative, and a finite measured value. Other values give their IEEE 754 results.
 #[must_use]
 pub fn judge(direction: Direction, threshold: f64, actual: f64) -> (Verdict, f64, Option<f64>) {
     let headroom = match direction {

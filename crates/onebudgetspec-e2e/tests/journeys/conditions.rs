@@ -89,6 +89,8 @@ fn a_failing_condition_is_recorded_as_unknown() {
             "conditions": [
                 { "name": "broken", "command": ["sh", "-c", "echo partial; exit 1"] },
                 { "name": "missing", "command": ["./no-such-program"] },
+                { "name": "empty_program", "command": [""] },
+                { "name": "nul_argument", "command": ["echo", "a\u{0}b"] },
                 { "name": "fine", "command": ["echo", "ok"] },
             ],
             "budgets": [reported("only", 1.0, "max", 2.0)],
@@ -98,7 +100,13 @@ fn a_failing_condition_is_recorded_as_unknown() {
     let report = run.expect_status(0).check_report();
     assert_eq!(
         result(&report, "only")["host"]["conditions"],
-        json!({ "broken": "unknown", "missing": "unknown", "fine": "ok" })
+        json!({
+            "broken": "unknown",
+            "missing": "unknown",
+            "empty_program": "unknown",
+            "nul_argument": "unknown",
+            "fine": "ok",
+        })
     );
     assert!(run.stderr.contains("broken"), "{}", run.stderr);
 }

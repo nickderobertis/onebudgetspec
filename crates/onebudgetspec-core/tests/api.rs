@@ -5,7 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use onebudgetspec_core::{
-    Direction, Error, Measure, Selection, Verdict, discover, exit, load, schema_bundle,
+    Direction, Discovered, Error, Measure, Selection, Verdict, discover, exit, load,
+    load_discovered, schema_bundle,
 };
 
 fn write(path: &Path, text: &str) {
@@ -345,4 +346,35 @@ fn the_schema_bundle_has_the_three_roots() {
     let roots = bundle["roots"].as_object().unwrap();
     let names: Vec<_> = roots.keys().map(String::as_str).collect();
     assert_eq!(names, ["budgets-file", "check-report", "list-report"]);
+}
+
+#[test]
+fn caller_built_discoveries_are_read_once_and_held_to_unique_ids() {
+    let dir = tempfile::tempdir().unwrap();
+    let one = two_budgets(&dir.path().join("one"));
+    let other = two_budgets(&dir.path().join("other"));
+    let record = |path: &Path, display: &str| Discovered {
+        path: path.to_path_buf(),
+        display: display.to_owned(),
+    };
+
+    // The same file twice, by two spellings, is one file.
+    let alias = dir.path().join("one/../one/budgets.yaml");
+    let once = load_discovered(vec![record(&one, "a"), record(&alias, "b")]).unwrap();
+    assert_eq!(once.files().len(), 1);
+    assert_eq!(once.budget_count(), 2);
+
+    // Two files sharing a displayed name still may not share an id.
+    let Err(Error::Invalid { problems }) = load_discovered(vec![
+        record(&one, "budgets.yaml"),
+        record(&other, "budgets.yaml"),
+    ]) else {
+        panic!("two files registering the same ids must be refused");
+    };
+    assert!(
+        problems
+            .iter()
+            .any(|problem| problem.contains("\"gate-time\" is already registered")),
+        "{problems:?}"
+    );
 }

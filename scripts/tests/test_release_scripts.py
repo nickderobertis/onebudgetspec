@@ -350,3 +350,41 @@ def test_publish_resumes_a_partly_published_release(registry: str, tmp_path: Pat
     assert done.returncode == 0, done.stderr
     assert UPLOADS == ["/@onebudgetspec/cli"]
     assert "skipped: @onebudgetspec/cli-darwin-arm64 @onebudgetspec/cli-linux-x64" in done.stdout
+
+
+def wheel_of(directory: Path, file_name: str, name: str, version: str) -> Path:
+    """A wheel file called ``file_name`` whose metadata declares ``name`` at ``version``."""
+    directory.mkdir(parents=True, exist_ok=True)
+    wheel = directory / file_name
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr(
+            f"{name.replace('-', '_')}-{version}.dist-info/METADATA",
+            f"Metadata-Version: 2.4\nName: {name}\nVersion: {version}\n",
+        )
+    return wheel
+
+
+@pytest.mark.parametrize(
+    ("target", "name", "reason"),
+    [
+        (
+            "sdk-pypi",
+            "onebudgetspec-cli",
+            "is onebudgetspec-cli 0.1.0, not onebudgetspec-sdk 0.1.0",
+        ),
+        (
+            "sdk-pypi",
+            "onebudgetspec-sdk",
+            "is onebudgetspec-sdk 0.2.0, not onebudgetspec-sdk 0.1.0",
+        ),
+        ("pypi", "onebudgetspec-cli", "is onebudgetspec-cli 0.2.0, not onebudgetspec-cli 0.1.0"),
+    ],
+)
+def test_publish_refuses_a_wheel_of_another_target_or_version(
+    tmp_path: Path, target: str, name: str, reason: str
+) -> None:
+    version = "0.1.0" if name == "onebudgetspec-cli" and target == "sdk-pypi" else "0.2.0"
+    wheel_of(tmp_path, f"{name.replace('-', '_')}-0.1.0-py3-none-any.whl", name, version)
+    refused = publish(target, str(tmp_path), PYPI_TOKEN="token")
+    assert refused.returncode == 1
+    assert reason in refused.stderr

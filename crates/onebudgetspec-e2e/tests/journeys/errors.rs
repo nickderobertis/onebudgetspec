@@ -80,6 +80,11 @@ fn every_kind_of_failed_measurement_is_an_error() {
             budget("missing-program", &json!(["./no-such-program"])),
             "cannot run ./no-such-program",
         ),
+        (budget("empty-program", &json!([""])), "cannot run"),
+        (
+            budget("nul-argument", &json!(["echo", "a\u{0}b"])),
+            "cannot run echo",
+        ),
         // Over budget AND failing: the error wins.
         (
             budget(

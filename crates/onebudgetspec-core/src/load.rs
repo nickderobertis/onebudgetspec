@@ -172,12 +172,17 @@ pub fn load(paths: &[PathBuf], recursive: bool) -> Result<Budgets, Error> {
     load_discovered(discover(paths, recursive)?)
 }
 
-/// Read and validate files already found.
+/// Read and validate files already found. A file given twice, by any spelling of its
+/// path, is read once.
 ///
 /// # Errors
 ///
-/// [`Error::Invalid`] naming the file and the key of every problem found.
-pub fn load_discovered(discovered: Vec<Discovered>) -> Result<Budgets, Error> {
+/// [`Error::Invalid`] naming the file and the key of every problem found, including an id
+/// two files share, whatever the files are called.
+pub fn load_discovered(mut discovered: Vec<Discovered>) -> Result<Budgets, Error> {
+    let mut seen = HashSet::new();
+    discovered
+        .retain(|file| seen.insert(std::fs::canonicalize(&file.path).unwrap_or(file.path.clone())));
     let mut problems = Vec::new();
     let mut files = Vec::new();
     for found in discovered {
@@ -189,18 +194,19 @@ pub fn load_discovered(discovered: Vec<Discovered>) -> Result<Budgets, Error> {
 
     // An id is unique across every file one invocation reads, so that `--id` names
     // exactly one budget whichever files a discovery finds.
-    let mut owners: BTreeMap<&str, &str> = BTreeMap::new();
-    for file in &files {
+    // Owners are files by position, not by name: two files may share a displayed path.
+    let mut owners: BTreeMap<&str, usize> = BTreeMap::new();
+    for (position, file) in files.iter().enumerate() {
         for (index, budget) in file.contents.budgets.iter().enumerate() {
-            if let Some(owner) = owners.get(budget.id.as_str()) {
-                if *owner != file.display {
+            if let Some(&owner) = owners.get(budget.id.as_str()) {
+                if owner != position {
                     problems.push(format!(
-                        "{}: budgets[{index}].id: \"{}\" is already registered by {owner}; ids are unique across every file one discovery finds",
-                        file.display, budget.id
+                        "{}: budgets[{index}].id: \"{}\" is already registered by {}; ids are unique across every file one discovery finds",
+                        file.display, budget.id, files[owner].display
                     ));
                 }
             } else {
-                owners.insert(&budget.id, &file.display);
+                owners.insert(&budget.id, position);
             }
         }
     }
