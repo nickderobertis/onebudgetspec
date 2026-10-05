@@ -6,7 +6,7 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "python"]
   },
-  "//": "The checks the repository holds itself to: workflow guards, the library boundary, version agreement, the AGENTS.md journey list and the README examples. It reads every other project, so it depends on all of them, and its inputs name the root files it reads.",
+  "//": "The checks the repository holds itself to: workflow guards, the library boundary, version and platform agreement, the release declaration, the project graph and the AGENTS.md journey list, plus the extraction and guard logic other projects use. It reads every other project, so it depends on all of them, and its test inputs name the root files it reads.",
   "implicitDependencies": [
     "onebudgetspec-core",
     "onebudgetspec",
@@ -72,7 +72,24 @@
       },
       "dependsOn": ["onebudgetspec:build", "workspace:coverage-clear"],
       "outputs": ["{workspaceRoot}/target/python-coverage"],
-      "cache": false
+      "cache": false,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/.github/**/*",
+        "{workspaceRoot}/scripts/**/*",
+        "{workspaceRoot}/AGENTS.md",
+        "{workspaceRoot}/README.md",
+        "{workspaceRoot}/release-targets.toml",
+        "{workspaceRoot}/rust-toolchain.toml",
+        "{workspaceRoot}/clippy.toml",
+        "{workspaceRoot}/Cargo.toml",
+        "{workspaceRoot}/Cargo.lock",
+        "{workspaceRoot}/uv.lock",
+        "{workspaceRoot}/bun.lock",
+        "{workspaceRoot}/pyproject.toml",
+        "{workspaceRoot}/nx.json"
+      ]
     }
   }
 }

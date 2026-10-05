@@ -125,3 +125,50 @@ fn a_directory_recursive_discovery_cannot_read_is_refused() {
     run.expect_status(2);
     assert!(run.stderr.contains("cannot search"), "{}", run.stderr);
 }
+
+/// Discovery reads `.gitignore` alone: a budgets file in a hidden directory is found, and
+/// neither an `.ignore` file nor the user's global git excludes can hide one, while the
+/// repository's own `.git` directory is never searched.
+#[test]
+fn only_gitignore_hides_a_budgets_file_and_git_internals_are_never_searched() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        ".config/budgets.yaml",
+        &file(&[reported("hidden-dir", 1.0, "max", 2.0)]),
+    );
+    fixture.budgets(
+        "listed-in-ignore/budgets.yaml",
+        &file(&[reported("dot-ignore", 1.0, "max", 2.0)]),
+    );
+    fixture.write(".ignore", "listed-in-ignore/\n");
+    fixture.budgets(
+        "globally-excluded/budgets.yaml",
+        &file(&[reported("global-exclude", 1.0, "max", 2.0)]),
+    );
+    let home = fixture.path().join("home");
+    fixture.write("home/.config/git/ignore", "globally-excluded/\n");
+    fixture.write(
+        "home/.gitconfig",
+        "[core]\n\texcludesFile = ~/.config/git/ignore\n",
+    );
+    fixture.budgets(
+        ".git/budgets.yaml",
+        &file(&[reported("inside-git", 1.0, "max", 2.0)]),
+    );
+
+    let home = home.to_str().unwrap();
+    let report = crate::common::run_in(
+        fixture.path(),
+        ["check", "--json", "--recursive"],
+        &[
+            ("HOME", home),
+            ("XDG_CONFIG_HOME", &format!("{home}/.config")),
+        ],
+    )
+    .expect_status(0)
+    .check_report();
+    assert_eq!(
+        ids(&report, "results"),
+        ["hidden-dir", "global-exclude", "dot-ignore"]
+    );
+}

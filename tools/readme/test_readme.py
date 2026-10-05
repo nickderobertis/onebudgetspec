@@ -4,9 +4,23 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import copy_tree
-
 from repo_checks import readme
+from repo_checks.paths import ROOT
+
+
+@pytest.fixture(scope="session")
+def binary() -> Path:
+    """The cargo-built onebudgetspec; Nx's readme-examples:test depends on that build."""
+    path = ROOT / "target" / "debug" / "onebudgetspec"
+    assert path.is_file(), f"{path} is missing; build it with `cargo build -p onebudgetspec`"
+    return path
+
+
+def copy_tree(into: Path, entry: str) -> Path:
+    """Copy one file of the repository into ``into``."""
+    (into / entry).parent.mkdir(parents=True, exist_ok=True)
+    (into / entry).write_text((ROOT / entry).read_text())
+    return into
 
 
 def test_the_nested_examples_validate(binary: Path, tmp_path: Path) -> None:

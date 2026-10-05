@@ -1,0 +1,45 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "ci-scripts-integration",
+  "projectType": "library",
+  "tags": ["lang:python", "type:integration"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
+  "//": "scripts/ci-base.sh driven over real git histories. Behind its own edge to the scripts it drives.",
+  "implicitDependencies": ["scripts"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --config scripts/ci-tests/ruff.toml scripts/ci-tests"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check --config scripts/ci-tests/ruff.toml scripts/ci-tests"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff check --quiet --config scripts/ci-tests/ruff.toml scripts/ci-tests"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 scripts/ci-tests"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider",
+        "cwd": "scripts/ci-tests"
+      },
+      "inputs": ["default", "^default"]
+    }
+  }
+}

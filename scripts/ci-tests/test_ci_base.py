@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from repo_checks.paths import ROOT
 
 SCRIPT = ROOT / "scripts/ci-base.sh"

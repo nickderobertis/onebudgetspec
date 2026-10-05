@@ -35,7 +35,7 @@ ALLOWED: dict[ProjectType, set[ProjectType]] = {
     "distribution": set(),
     "binary": {"contract"},
     "e2e": {"binary", "contract", "distribution", "sdk"},
-    "integration": {"tooling"},
+    "integration": {"binary", "tooling"},
     "tooling": _EVERYTHING_BELOW_TOOLING,
     "workspace": _EVERYTHING_BELOW_TOOLING,
 }

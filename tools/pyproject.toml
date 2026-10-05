@@ -20,6 +20,8 @@ dev = ["pytest>=9.0", "pytest-cov>=7.1", "ruff>=0.16.4", "ty>=0.0.74", "types-py
 
 [tool.ruff]
 line-length = 100
+# readme/ is a project of its own (readme-examples), linted with its own settings.
+extend-exclude = ["readme"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "D"]
