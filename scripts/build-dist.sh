@@ -61,7 +61,8 @@ npm_platform() {
   esac
 }
 
-# The file a step wrote into a directory, so the caller gets its path.
+# The output directory may hold earlier builds, so the artifact is the file newer than
+# this run's start stamp.
 written_since_start() {
   find "$1" -maxdepth 1 -type f -name "$2" -newer "$STAMP" | head -n 1
 }

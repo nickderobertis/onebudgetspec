@@ -7,7 +7,7 @@
     "default": ["{projectRoot}/**/*", "rust"]
   },
   "//": "The Rust line floor: one report over every crate's instrumented test run, held to 95%. It depends on those test targets, and on nothing else, so only a change that reaches a crate runs them.",
-  "// suppression": "llmlint: ignore-file[expensive_tests_stay_behind_their_own_edge] this project is the coverage aggregate, and create-repo's coverage_combined_across_crates and coverage_combined_across_projects require it to depend on its language's test targets, which is the edge this rule objects to; the two rules contradict each other, and a follow-up asks create-repo to reconcile them. JSON has no comment to scope this to the one target.",
+  "// suppression": "llmlint: ignore-file[expensive_tests_stay_behind_their_own_edge] this coverage aggregate must depend on its language's test targets, which create-repo's coverage_combined rules require and this rule refuses; reconciling the two is a create-repo follow-up.",
   "implicitDependencies": [
     "onebudgetspec-core",
     "onebudgetspec",

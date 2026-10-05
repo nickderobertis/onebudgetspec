@@ -102,7 +102,6 @@ case "$target" in
   pypi | sdk-pypi)
     [ $# -eq 1 ] && [ -d "$1" ] || usage "$target takes the directory holding its wheels"
     need PYPI_TOKEN
-    # The project release-targets.toml publishes under this target.
     name="$(target_packages "$target")"
     for wheel in "$1"/*.whl; do
       # The identity the wheel's own metadata declares, not its file name.

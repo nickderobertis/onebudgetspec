@@ -1,7 +1,8 @@
 # Conventional Commits on main drive the release: release-plz tags and cuts the GitHub
 # Release for a merged release pull request, and opens or updates the next one. The tag's
-# GitHub Release fires release.yml, which builds and publishes. `workflow_dispatch` lets a
-# maintainer cut the first release by hand once the release token exists.
+# GitHub Release fires release.yml, which builds and publishes. `workflow_dispatch` re-runs
+# this bot once the release token exists, so it opens the first release pull request
+# without waiting for a push; releasing is still only ever merging that pull request.
 name: release-plz
 
 on:
