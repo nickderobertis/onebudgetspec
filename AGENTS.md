@@ -22,9 +22,11 @@ and npm, with Python and TypeScript SDKs, all released at one version.
 - **Product shape:** cli, built on a library published as the Rust SDK.
 - **Language(s):** rust, python, typescript.
 - **References composed:** base.md, project-graph.md, shapes/cli.md, languages/rust.md,
-  languages/python.md, languages/typescript.md, intersections/rust-cli.md,
-  intersections/python-cli.md, ci.md, llmlint.md, releasing.md.
-- **Excluded, and why:** asdf/direnv (CI pins tools through setup actions and
+  languages/python.md, languages/typescript.md, intersections/rust-cli.md, ci.md,
+  llmlint.md, releasing.md.
+- **Excluded, and why:** the python-cli intersection (the CLI is Rust; its PyPI
+  distribution is the compiled binary in a maturin `bin` wheel, with no Python console
+  entry point, and the `cli_wheel.rs` journey installs and drives it); asdf/direnv (CI pins tools through setup actions and
   `rust-toolchain.toml`); Windows (journeys and measurement are POSIX, so the release
   ships Linux and macOS); GitHub Release archives (every install surface is a registry).
 - **Modelled on onetaskgraph:** the crate split, the maturin `bin` wheel, the npm launcher

@@ -21,7 +21,8 @@ fn compile(pattern: &str) -> Regex {
     Regex::new(pattern).expect("the contract's patterns are valid regular expressions")
 }
 
-/// Whether `name` is a valid condition name: the pattern, and none of the host values.
+/// Whether `name` matches the condition-name pattern. The reserved host names are refused
+/// separately, by each caller.
 pub(crate) fn matches_condition_name_pattern(name: &str) -> bool {
     CONDITION_NAME.is_match(name)
 }

@@ -35,7 +35,8 @@
         "command": "bash scripts/rust-coverage.sh onebudgetspec-core"
       },
       "outputs": ["{workspaceRoot}/target/llvm-cov-target"],
-      "cache": false
+      "cache": false,
+      "dependsOn": ["workspace:coverage-clear"]
     },
     "build": {
       "executor": "nx:run-commands",

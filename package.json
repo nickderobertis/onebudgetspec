@@ -4,7 +4,9 @@
   "type": "module",
   "packageManager": "bun@1.3.14",
   "workspaces": [
-    "sdks/typescript"
+    "sdks/typescript",
+    "npm/cli",
+    "npm/platforms/*"
   ],
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

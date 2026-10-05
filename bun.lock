@@ -5,11 +5,40 @@
     "": {
       "name": "onebudgetspec-workspace",
       "devDependencies": {
-        "@biomejs/biome": "latest",
-        "@types/bun": "latest",
-        "nx": "latest",
-        "typescript": "latest",
+        "@biomejs/biome": "2.5.15",
+        "@types/bun": "1.4.2",
+        "nx": "23.2.1",
+        "typescript": "7.0.2",
       },
+    },
+    "npm/cli": {
+      "name": "@onebudgetspec/cli",
+      "version": "0.1.0",
+      "bin": {
+        "onebudgetspec": "bin/onebudgetspec.js",
+      },
+      "optionalDependencies": {
+        "@onebudgetspec/cli-darwin-arm64": "0.1.0",
+        "@onebudgetspec/cli-darwin-x64": "0.1.0",
+        "@onebudgetspec/cli-linux-arm64": "0.1.0",
+        "@onebudgetspec/cli-linux-x64": "0.1.0",
+      },
+    },
+    "npm/platforms/darwin-arm64": {
+      "name": "@onebudgetspec/cli-darwin-arm64",
+      "version": "0.1.0",
+    },
+    "npm/platforms/darwin-x64": {
+      "name": "@onebudgetspec/cli-darwin-x64",
+      "version": "0.1.0",
+    },
+    "npm/platforms/linux-arm64": {
+      "name": "@onebudgetspec/cli-linux-arm64",
+      "version": "0.1.0",
+    },
+    "npm/platforms/linux-x64": {
+      "name": "@onebudgetspec/cli-linux-x64",
+      "version": "0.1.0",
     },
     "sdks/typescript": {
       "name": "@onebudgetspec/sdk",
@@ -68,6 +97,16 @@
     "@nx/nx-win32-arm64-msvc": ["@nx/nx-win32-arm64-msvc@23.2.1", "", { "os": "win32", "cpu": "arm64" }, "sha512-XWYG+6P368xOZXU1z3QH4jXlaajQDxlXVGzYXogp+i09twEAhE7LV6fmv8gQptBta67EZy610KcKu38IVn6x7Q=="],
 
     "@nx/nx-win32-x64-msvc": ["@nx/nx-win32-x64-msvc@23.2.1", "", { "os": "win32", "cpu": "x64" }, "sha512-qZQBNB4L/yljM81Fm5M/LoyCMoGJc7yc//KePQ5xiyhzZjJENooHsFkB8ps/pSv4cfHKfYJbvgBAMPOLXeHqqA=="],
+
+    "@onebudgetspec/cli": ["@onebudgetspec/cli@workspace:npm/cli"],
+
+    "@onebudgetspec/cli-darwin-arm64": ["@onebudgetspec/cli-darwin-arm64@workspace:npm/platforms/darwin-arm64"],
+
+    "@onebudgetspec/cli-darwin-x64": ["@onebudgetspec/cli-darwin-x64@workspace:npm/platforms/darwin-x64"],
+
+    "@onebudgetspec/cli-linux-arm64": ["@onebudgetspec/cli-linux-arm64@workspace:npm/platforms/linux-arm64"],
+
+    "@onebudgetspec/cli-linux-x64": ["@onebudgetspec/cli-linux-x64@workspace:npm/platforms/linux-x64"],
 
     "@onebudgetspec/sdk": ["@onebudgetspec/sdk@workspace:sdks/typescript"],
 

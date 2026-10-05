@@ -11,8 +11,14 @@ set -euo pipefail
 
 if [ -n "${BASE_SHA:-}" ]; then
   [ -n "${BASE_REF:-}" ] || { echo "ci-base: BASE_SHA is set without BASE_REF; set both for a pull request" >&2; exit 64; }
-  git fetch --quiet --no-tags origin "$BASE_REF"
-  base="$(git merge-base "$BASE_SHA" HEAD)"
+  git fetch --quiet --no-tags origin "$BASE_REF" || {
+    echo "ci-base: could not fetch $BASE_REF from origin (above); check that it is the pull request's base branch and that the checkout can reach origin, then re-run" >&2
+    exit 1
+  }
+  base="$(git merge-base "$BASE_SHA" HEAD)" || {
+    echo "ci-base: $BASE_SHA has no common ancestor with HEAD here; check out with fetch-depth: 0 so the history holds both, then re-run" >&2
+    exit 1
+  }
 elif [ -n "${BEFORE_SHA:-}" ] && git rev-parse --verify --quiet "${BEFORE_SHA}^{commit}" >/dev/null; then
   base="$BEFORE_SHA"
 elif base="$(git rev-parse --verify --quiet 'HEAD~1^{commit}')"; then

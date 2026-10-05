@@ -19,14 +19,12 @@ bootstrap:
 # The full gate over the affected projects: formatting, lint, types, tests (unit, journeys,
 # conformance, packaging journeys) and the coverage floors over the tests it ran. Fails on
 # any issue.
-check: format-check lint typecheck coverage-clear test coverage
+check: format-check lint typecheck coverage
 
 # The broader tier: the same gate over every project. CI runs it on the release pull request.
 check-all:
     @./scripts/nx run-many -t format-check lint typecheck --all
-    @./scripts/nx run workspace:coverage-clear
-    @./scripts/nx run-many -t test --all
-    @./scripts/nx run workspace:coverage
+    @./scripts/nx run-many -t test coverage --all
 
 # Tests only, for the affected projects: unit tests, journeys and packaging journeys.
 test:
@@ -36,15 +34,12 @@ test:
 test-e2e:
     @./scripts/nx run-many -t test -p onebudgetspec-e2e onebudgetspec-packaging-e2e
 
-# The coverage floors (95% lines for Rust and for Python, combined over every project's
-# instrumented test run since the last coverage-clear; each TypeScript project's own test
-# holds its own 95%).
+# Tests and the coverage floors for the affected projects, in one run: every instrumented
+# test runs once, after the coverage data is cleared, and each floor (95% lines for Rust and
+# for Python, over the union of those runs) reports after its tests. Each TypeScript
+# project's test holds its own 95%.
 coverage:
-    @./scripts/nx run workspace:coverage
-
-# Empty the coverage data, so the next report covers only the tests that follow.
-coverage-clear:
-    @./scripts/nx run workspace:coverage-clear
+    @./scripts/nx affected -t test coverage
 
 # Lint for the affected projects (clippy -D warnings, ruff, biome, actionlint).
 lint:

@@ -3,7 +3,7 @@
   "name": "conformance",
   "projectType": "library",
   "tags": ["type:contract"],
-  "//": "The data-only conformance cases. onebudgetspec runs them against the binary, so a change here selects it; the SDKs run the same cases unchanged.",
+  "//": "The data-only conformance cases: a case is a budgets file, its scripts and the report it must produce, referencing no implementation. onebudgetspec-conformance runs them against the binary, so a change here selects it, and any other runner can take them unchanged.",
   "targets": {
     "lint": {
       "executor": "nx:run-commands",

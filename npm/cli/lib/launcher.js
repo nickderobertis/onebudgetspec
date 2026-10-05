@@ -29,10 +29,11 @@ function locate(platform, arch, resolve) {
     if (!binary.startsWith(root + sep)) throw new Error("its binary is outside the package");
     return { binary, carrier };
   } catch (error) {
-    const reason = /** @type {NodeJS.ErrnoException} */ (error);
+    const code = error instanceof Error && "code" in error ? error.code : undefined;
+    const reason = code || (error instanceof Error ? error.message : String(error));
     return {
       status: 69,
-      message: `onebudgetspec: ${carrier} is not installed (${reason.code || reason.message}); reinstall @onebudgetspec/cli`,
+      message: `onebudgetspec: ${carrier} is not installed (${reason}); reinstall @onebudgetspec/cli`,
     };
   }
 }

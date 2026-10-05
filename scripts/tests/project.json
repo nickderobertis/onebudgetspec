@@ -3,7 +3,7 @@
   "name": "scripts-integration",
   "projectType": "library",
   "tags": ["lang:python", "type:integration"],
-  "//": "The release scripts driven against local registries: the probe over HTTP and publish.sh against a local npm registry. Slow, so behind its own edge to the scripts it drives.",
+  "//": "The release scripts driven against local registries: the probe over HTTP and publish.sh against a local npm registry. Slow, so behind its own edge to the scripts it drives, and it holds its own 95% line floor over the probe (measured through its subprocess runs) rather than joining python-coverage, which would run it for every Python change.",
   "implicitDependencies": ["scripts"],
   "targets": {
     "format": {
@@ -33,9 +33,9 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "bash scripts/python-coverage.sh scripts/tests --cov --cov-config=coverage.toml"
+        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider --cov --cov-config=coverage.toml --cov-report=term-missing:skip-covered --cov-fail-under=95",
+        "cwd": "scripts/tests"
       },
-      "outputs": ["{workspaceRoot}/target/python-coverage"],
       "cache": false,
       "inputs": [
         "default",

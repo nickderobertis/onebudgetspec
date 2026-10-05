@@ -1,8 +1,8 @@
 //! The conformance suite under `conformance/cases`, run against a command.
 //!
 //! The command under test is a parameter: `ONEBUDGETSPEC_CONFORMANCE_COMMAND` names it as a
-//! JSON array of argv (a launcher and its arguments, say), and without it this crate's own
-//! binary is run. `conformance/README.md` is the format every runner follows.
+//! JSON array of argv (a launcher and its arguments, say), and without it the `onebudgetspec`
+//! binary the onebudgetspec crate builds is run. `conformance/README.md` is the format every runner follows.
 
 use std::fs;
 use std::path::{Path, PathBuf};

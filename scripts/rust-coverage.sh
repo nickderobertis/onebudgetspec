@@ -5,8 +5,8 @@
 #   rust-coverage.sh <crate>     that crate's tests, instrumented, profiles kept
 #   rust-coverage.sh --report    one report over every crate's run, held to 95% lines
 #
-# Each crate's Nx `test` target is its instrumented run, so the report covers exactly the
-# suites the invocation selected; `just check` clears, tests, then reports.
+# Each crate's Nx `test` target is its instrumented run and depends on the clear, so one
+# invocation's report (rust-coverage:coverage) covers exactly the suites it ran.
 #
 # The journey and conformance crates spawn the binary, so their runs build the instrumented
 # onebudgetspec beside them and what they cover counts. Quiet on success; on failure the

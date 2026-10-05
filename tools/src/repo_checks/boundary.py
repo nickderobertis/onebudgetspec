@@ -41,7 +41,7 @@ SKIPPED = {"node_modules", "dist", ".venv", "__pycache__", ".pytest_cache", ".ru
 #: The packages whose resolved dependencies ship, per lockfile.
 CARGO_ROOTS = ("onebudgetspec", "onebudgetspec-core")
 UV_ROOTS = ("onebudgetspec-cli", "onebudgetspec-sdk")
-BUN_WORKSPACES = ("sdks/typescript",)
+BUN_WORKSPACES = ("sdks/typescript", "npm/cli")
 
 _NAMES = re.compile("|".join(STACK), re.IGNORECASE)
 _TOPICS = re.compile(

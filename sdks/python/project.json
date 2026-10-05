@@ -38,7 +38,8 @@
         "command": "bash scripts/python-coverage.sh sdks/python --cov=onebudgetspec_sdk"
       },
       "outputs": ["{workspaceRoot}/target/python-coverage"],
-      "cache": false
+      "cache": false,
+      "dependsOn": ["workspace:coverage-clear"]
     },
     "build": {
       "executor": "nx:run-commands",
