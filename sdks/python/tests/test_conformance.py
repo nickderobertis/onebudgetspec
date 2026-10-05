@@ -54,8 +54,11 @@ class Invocation:
 
 
 def parse(args: list[str]) -> Invocation:
-    """Read ``args`` with the grammar the cases use; anything else fails, so a case using a
-    flag this runner cannot pass to the SDK is never silently dropped."""
+    """Read ``args`` with the grammar the cases use.
+
+    Anything else fails, so a case using a flag this runner cannot pass to the SDK is never
+    silently dropped.
+    """
     verb, *rest = args
     invocation = Invocation(verb)
     words = iter(rest)
@@ -121,6 +124,7 @@ def ids(path: Path) -> str:
 def test_check_returns_the_report_the_case_expects(
     case: tuple[str, dict, Path], built_binary: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """``check`` returns the case's expected report, or raises as the CLI refuses it."""
     name, spec, work = case
     monkeypatch.setenv(BINARY_ENV, str(built_binary))
     invocation = parse(spec["args"])
@@ -157,6 +161,7 @@ def test_check_returns_the_report_the_case_expects(
 def test_list_and_validate_answer_as_the_binary_does(
     case: tuple[str, dict, Path], built_binary: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """``list_budgets`` and ``validate`` answer, or refuse, exactly as the binary does."""
     name, spec, work = case
     monkeypatch.setenv(BINARY_ENV, str(built_binary))
     invocation = parse(spec["args"])
@@ -215,6 +220,7 @@ def _case_report(name: str, built_binary: Path, tmp_path: Path) -> CheckReport:
 def test_returned_conditions_are_read_beside_the_declared_ones(
     built_binary: Path, tmp_path: Path
 ) -> None:
+    """A reported result's returned conditions sit in ``host.conditions`` beside the declared."""
     gate, plain = _case_report("returned-conditions", built_binary, tmp_path).results
     assert gate.verdict == "within"
     assert gate.host.conditions == {"dispatches": "3", "dispatches_max": "6", "gate_load": "2.1"}
@@ -224,6 +230,7 @@ def test_returned_conditions_are_read_beside_the_declared_ones(
 def test_colliding_and_malformed_returned_conditions_are_error_results(
     built_binary: Path, tmp_path: Path
 ) -> None:
+    """Colliding and malformed returned conditions come back as ``error`` results."""
     collides, host_value, fine = _case_report(
         "returned-condition-collides", built_binary, tmp_path
     ).results
@@ -240,6 +247,7 @@ def test_colliding_and_malformed_returned_conditions_are_error_results(
 
 
 def test_schema_is_the_bundle_the_binary_prints(built_binary: Path, tmp_path: Path) -> None:
+    """``schema()`` equals the JSON ``onebudgetspec schema`` prints."""
     printed = run_cli(built_binary, ["schema"], tmp_path)
     assert printed.returncode == 0
     assert schema(binary=built_binary) == json.loads(printed.stdout)

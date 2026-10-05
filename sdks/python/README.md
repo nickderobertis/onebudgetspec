@@ -14,7 +14,9 @@ model generated from `onebudgetspec schema`:
 ```python
 from onebudgetspec_sdk import check, list_budgets, schema, validate
 
-report = check(paths=None, ids=None, labels=["api"], exclude_labels=["slow"], recursive=False, cwd=".")
+report = check(
+    paths=None, ids=None, labels=["api"], exclude_labels=["slow"], recursive=False, cwd="."
+)
 for result in report.results:
     print(result.id, result.verdict, result.actual, result.threshold, result.headroom)
     print(result.host.conditions)  # declared conditions, and any the command returned

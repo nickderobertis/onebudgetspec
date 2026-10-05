@@ -63,9 +63,7 @@ def install_wheel_layout(environment: Path, body: str, log: Path) -> Path:
 
 
 @pytest.fixture
-def candidates(
-    tmp_path: Path, built_binary: Path, monkeypatch: pytest.MonkeyPatch
-) -> Candidates:
+def candidates(tmp_path: Path, built_binary: Path, monkeypatch: pytest.MonkeyPatch) -> Candidates:
     """Every candidate present: an explicit one, the variable's, the wheel's and PATH's."""
     log = tmp_path / "ran.log"
     body = f'exec "{built_binary}" "$@"'
@@ -85,12 +83,14 @@ def candidates(
 def test_an_explicit_binary_wins_over_the_variable_the_wheel_and_path(
     candidates: Candidates, built_binary: Path, tmp_path: Path
 ) -> None:
+    """``binary=`` runs that binary, though the variable, the wheel and PATH each name one."""
     bundle = schema(binary=candidates.explicit)
     assert candidates.ran() == ["explicit"]
     assert bundle == json.loads(run_cli(built_binary, ["schema"], tmp_path).stdout)
 
 
 def test_the_variable_wins_over_the_wheel_and_path(candidates: Candidates) -> None:
+    """``ONEBUDGETSPEC_BIN`` runs over the wheel's binary and PATH's."""
     assert resolve_binary() == candidates.variable
     schema()
     assert candidates.ran() == ["variable"]
@@ -99,6 +99,7 @@ def test_the_variable_wins_over_the_wheel_and_path(candidates: Candidates) -> No
 def test_the_wheel_s_binary_wins_over_path(
     candidates: Candidates, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """With no explicit binary and no variable, the cli wheel's binary runs over PATH's."""
     monkeypatch.delenv(BINARY_ENV)
     assert resolve_binary() == candidates.wheel
     schema()
@@ -108,6 +109,7 @@ def test_the_wheel_s_binary_wins_over_path(
 def test_an_empty_variable_is_not_a_binary(
     candidates: Candidates, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """An empty ``ONEBUDGETSPEC_BIN`` is passed over, as if unset."""
     monkeypatch.setenv(BINARY_ENV, "")
     schema()
     assert candidates.ran() == ["wheel"]
@@ -116,6 +118,7 @@ def test_an_empty_variable_is_not_a_binary(
 def test_path_is_used_when_nothing_else_names_a_binary(
     tmp_path: Path, built_binary: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """With no explicit binary, no variable and no wheel, PATH's ``onebudgetspec`` checks."""
     log = tmp_path / "ran.log"
     on_path = recording(tmp_path / "path", "path", log, f'exec "{built_binary}" "$@"')
     monkeypatch.setenv("PATH", str(on_path.parent))
@@ -133,6 +136,7 @@ def test_path_is_used_when_nothing_else_names_a_binary(
 def test_a_wheel_whose_script_is_gone_falls_through_to_path(
     candidates: Candidates, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A wheel whose recorded script is missing is passed over for PATH."""
     monkeypatch.delenv(BINARY_ENV)
     candidates.wheel.unlink()
     assert resolve_binary() == candidates.on_path
@@ -141,6 +145,7 @@ def test_a_wheel_whose_script_is_gone_falls_through_to_path(
 def test_no_binary_anywhere_is_an_error_naming_the_ways_to_provide_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Nothing to run raises, naming every way to provide a binary."""
     monkeypatch.setenv("PATH", str(tmp_path))
     with pytest.raises(OnebudgetspecError) as missing:
         schema()
@@ -150,6 +155,7 @@ def test_no_binary_anywhere_is_an_error_naming_the_ways_to_provide_one(
 
 
 def test_a_binary_that_cannot_run_is_an_error(tmp_path: Path) -> None:
+    """A binary that cannot be executed raises with no exit status."""
     with pytest.raises(OnebudgetspecError, match="cannot run") as failed:
         check(binary=tmp_path / "absent", cwd=tmp_path)
     assert failed.value.exit_code is None
@@ -158,6 +164,7 @@ def test_a_binary_that_cannot_run_is_an_error(tmp_path: Path) -> None:
 def test_an_invalid_file_raises_with_the_cli_s_own_message(
     tmp_path: Path, built_binary: Path
 ) -> None:
+    """Status 2 raises from every call with exactly the CLI's stderr."""
     (tmp_path / "budgets.yaml").write_text("schema_version: 1\nbudgets: nope\n")
     cli = run_cli(built_binary, ["validate"], tmp_path)
     assert cli.returncode == 2
@@ -170,6 +177,7 @@ def test_an_invalid_file_raises_with_the_cli_s_own_message(
 
 
 def test_a_status_that_is_no_report_raises_with_what_the_binary_said(tmp_path: Path) -> None:
+    """A status other than 0, 1 or 3 raises with the binary's stderr, or says how it ended."""
     log = tmp_path / "ran.log"
     refusing = recording(tmp_path / "a", "a", log, 'echo "launcher: no carrier" >&2; exit 69')
     with pytest.raises(OnebudgetspecError) as refused:
@@ -198,6 +206,7 @@ def test_a_status_that_is_no_report_raises_with_what_the_binary_said(tmp_path: P
 def test_stdout_that_is_not_the_report_raises(
     tmp_path: Path, printed: str, call: object, reason: str
 ) -> None:
+    """Stdout that is not the expected report raises rather than returning it."""
     program = recording(tmp_path / "bin", "liar", tmp_path / "ran.log", f"echo '{printed}'")
     assert callable(call)
     with pytest.raises(OnebudgetspecError, match=reason):
@@ -211,6 +220,7 @@ def test_stdout_that_is_not_the_report_raises(
 def test_a_lone_string_or_a_non_string_is_refused_before_anything_runs(
     tmp_path: Path, arguments: dict
 ) -> None:
+    """A bare string where a sequence belongs, or a non-string in one, is a TypeError."""
     with pytest.raises(TypeError):
         check(cwd=tmp_path, binary=tmp_path / "never-run", **arguments)
 
@@ -218,6 +228,7 @@ def test_a_lone_string_or_a_non_string_is_refused_before_anything_runs(
 def test_a_value_shaped_like_a_flag_is_passed_as_a_value(
     tmp_path: Path, built_binary: Path
 ) -> None:
+    """A label or path starting with ``-`` reaches the binary as a value, never a flag."""
     (tmp_path / "budgets.yaml").write_text(
         "schema_version: 1\nbudgets:\n  - id: quick\n    labels: [api]\n    measure: elapsed\n"
         '    command: ["/bin/sh", "-c", "exit 0"]\n    unit: seconds\n'

@@ -145,8 +145,8 @@ def test_a_malformed_release_declaration_is_named(
 def test_each_publish_job_uploads_what_its_target_names() -> None:
     assert release.artifact_problems() == []
     by_name = {target["name"]: target for target in release.targets()}
-    assert by_name["sdk-pypi"]["id"] == "pypi:onebudgetspec-sdk"
-    assert by_name["sdk-npm"]["id"] == "npm:@onebudgetspec/sdk"
+    assert by_name[release.TargetName("sdk-pypi")]["id"] == "pypi:onebudgetspec-sdk"
+    assert by_name[release.TargetName("sdk-npm")]["id"] == "npm:@onebudgetspec/sdk"
 
 
 def test_a_job_publishing_another_package_s_artifact_is_named(tmp_path: Path) -> None:
