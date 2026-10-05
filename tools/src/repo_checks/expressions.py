@@ -10,6 +10,7 @@ compare case-insensitively, and a missing value equals only the empty string.
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Literal
 
 Value = str | bool | None
 
@@ -17,6 +18,14 @@ _TOKEN = re.compile(
     r"\s*(?:(?P<string>'(?:[^']|'')*')|(?P<op>==|!=|&&|\|\||!|\(|\))"
     r"|(?P<name>[A-Za-z_][A-Za-z0-9_\-]*(?:\.[A-Za-z_*][A-Za-z0-9_\-]*)*))"
 )
+
+
+@dataclass(frozen=True)
+class Token:
+    """One lexical unit of an expression."""
+
+    kind: Literal["string", "op", "name"]
+    text: str
 
 
 class ExpressionError(ValueError):
@@ -30,11 +39,11 @@ class Status:
     success: bool = True
 
 
-def _tokens(expression: str) -> list[tuple[str, str]]:
+def _tokens(expression: str) -> list[Token]:
     text = expression.strip()
     if text.startswith("${{") and text.endswith("}}"):
         text = text[3:-2]
-    tokens: list[tuple[str, str]] = []
+    tokens: list[Token] = []
     position = 0
     while position < len(text):
         if text[position:].strip() == "":
@@ -42,9 +51,11 @@ def _tokens(expression: str) -> list[tuple[str, str]]:
         match = _TOKEN.match(text, position)
         if match is None:
             raise ExpressionError(f"cannot read {text[position:]!r} in {expression!r}")
-        kind = match.lastgroup
-        assert kind is not None
-        tokens.append((kind, match.group(kind)))
+        match match.lastgroup:
+            case "string" | "op" | "name" as kind:
+                tokens.append(Token(kind, match.group(kind)))
+            case _:  # pragma: no cover - the pattern has exactly these three groups
+                raise ExpressionError(f"cannot read {text[position:]!r} in {expression!r}")
         position = match.end()
     return tokens
 
@@ -71,14 +82,14 @@ class _Parser:
         value = self.or_()
         if self.position != len(self.tokens):
             raise ExpressionError(
-                f"unexpected {self.tokens[self.position][1]!r} in {self.expression!r}"
+                f"unexpected {self.tokens[self.position].text!r} in {self.expression!r}"
             )
         return value
 
     def peek(self) -> str | None:
-        return self.tokens[self.position][1] if self.position < len(self.tokens) else None
+        return self.tokens[self.position].text if self.position < len(self.tokens) else None
 
-    def take(self) -> tuple[str, str]:
+    def take(self) -> Token:
         if self.position >= len(self.tokens):
             raise ExpressionError(f"{self.expression!r} ends early")
         token = self.tokens[self.position]
@@ -104,7 +115,7 @@ class _Parser:
     def comparison(self) -> Value:
         value = self.unary()
         while self.peek() in ("==", "!="):
-            operator = self.take()[1]
+            operator = self.take().text
             right = self.unary()
             equal = _equal(value, right)
             value = equal if operator == "==" else not equal
@@ -117,25 +128,27 @@ class _Parser:
         return self.primary()
 
     def primary(self) -> Value:
-        kind, text = self.take()
-        if kind == "string":
-            return text[1:-1].replace("''", "'")
-        if text == "(":
-            value = self.or_()
-            if self.take()[1] != ")":
-                raise ExpressionError(f"unbalanced parentheses in {self.expression!r}")
-            return value
-        if kind == "name":
-            if self.peek() == "(":
+        token = self.take()
+        match token:
+            case Token("string", text):
+                return text[1:-1].replace("''", "'")
+            case Token("op", "("):
+                value = self.or_()
+                if self.take().text != ")":
+                    raise ExpressionError(f"unbalanced parentheses in {self.expression!r}")
+                return value
+            case Token("name", text) if self.peek() == "(":
                 return self.call(text)
-            if text in ("true", "false"):
+            case Token("name", "true" | "false" as text):
                 return text == "true"
-            return self.context.get(text)
-        raise ExpressionError(f"unexpected {text!r} in {self.expression!r}")
+            case Token("name", text):
+                return self.context.get(text)
+            case _:
+                raise ExpressionError(f"unexpected {token.text!r} in {self.expression!r}")
 
     def call(self, name: str) -> Value:
         self.take()
-        if self.take()[1] != ")":
+        if self.take().text != ")":
             raise ExpressionError(f"{name}() takes no arguments here: {self.expression!r}")
         answers = {
             "always": True,
@@ -150,7 +163,7 @@ class _Parser:
 
 def uses_status_function(expression: str) -> bool:
     """Whether ``expression`` calls a status function, replacing the implicit ``success()``."""
-    names = [text for kind, text in _tokens(expression) if kind == "name"]
+    names = [token.text for token in _tokens(expression) if token.kind == "name"]
     return any(name in ("always", "cancelled", "success", "failure") for name in names)
 
 

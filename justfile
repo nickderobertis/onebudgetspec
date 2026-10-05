@@ -69,10 +69,10 @@ schema:
 
 # Every version agrees with the workspace's; `just set-version X` writes X everywhere.
 versions:
-    @uv run --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions check
+    @uv run --quiet --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions check
 
 set-version version:
-    @uv run --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions set {{version}}
+    @uv run --quiet --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions set {{version}}
 
 # create-repo's governance script (dero-skills), from the user-scope skill install.
 governance_script := env("CREATE_REPO_SKILL_DIR", home_directory() / ".claude/skills/create-repo") / "scripts/setup_github_governance.py"

@@ -26,6 +26,7 @@ jobs:
           RELEASE_PLZ_TOKEN: ${{ secrets.RELEASE_PLZ_TOKEN }}
         run: bash scripts/ci-guard.sh RELEASE_PLZ_TOKEN
 
+  # llmlint: ignore-block[changed_behavior_has_e2e] these steps tag, cut a GitHub Release and auto-merge a pull request in the live repository with a token it is not given until releasing is provisioned; the guard that keeps them skipped until then is driven by tools/tests/test_workflows.py.
   release-plz:
     needs: [guard]
     if: needs.guard.outputs.enabled == 'true'
@@ -43,6 +44,7 @@ jobs:
           # A PAT rather than GITHUB_TOKEN, so the tag and release it pushes fire release.yml.
           token: ${{ secrets.RELEASE_PLZ_TOKEN }}
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: extractions/setup-just@v4
       - uses: astral-sh/setup-uv@v7
       - uses: oven-sh/setup-bun@v2
         with:
@@ -70,3 +72,4 @@ jobs:
         run: |
           pr=$(gh pr list --json number,headRefName --jq 'map(select(.headRefName | startswith("release-plz-"))) | .[0].number // empty')
           [ -z "$pr" ] || gh pr merge "$pr" --auto --squash --delete-branch
+  # llmlint: ignore-end[changed_behavior_has_e2e]

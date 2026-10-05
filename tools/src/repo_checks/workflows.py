@@ -14,15 +14,28 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 
 from repo_checks.expressions import Status, Value, evaluate
 from repo_checks.paths import ROOT
 
+Secret = Literal[
+    "CARGO_REGISTRY_TOKEN",
+    "PYPI_TOKEN",
+    "NPM_TOKEN",
+    "RELEASE_PLZ_TOKEN",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "OPENAI_API_KEY",
+]
+PublishVariable = Literal["CARGO_PUBLISH", "PYPI_PUBLISH", "NPM_PUBLISH"]
+#: A workflow document as YAML parses it. Its shape is GitHub's, read field by field below
+#: and checked by actionlint, so it stays an untyped mapping rather than a second model.
+Document = Mapping[str, Any]
+
 #: The secrets publishing and the judged lint need; none exists until provisioning.
-SECRETS = (
+SECRETS: tuple[Secret, ...] = (
     "CARGO_REGISTRY_TOKEN",
     "PYPI_TOKEN",
     "NPM_TOKEN",
@@ -31,7 +44,7 @@ SECRETS = (
     "OPENAI_API_KEY",
 )
 #: The repository variables that switch each registry's publication on.
-PUBLISH_VARIABLES = ("CARGO_PUBLISH", "PYPI_PUBLISH", "NPM_PUBLISH")
+PUBLISH_VARIABLES: tuple[PublishVariable, ...] = ("CARGO_PUBLISH", "PYPI_PUBLISH", "NPM_PUBLISH")
 GUARD_SCRIPT = "scripts/ci-guard.sh"
 
 _SECRET = re.compile(r"secrets\.([A-Z0-9_]+)")
@@ -49,8 +62,8 @@ class Job:
 
     workflow: str
     name: str
-    body: Mapping[str, Any]
-    siblings: Mapping[str, Mapping[str, Any]]
+    body: Document
+    siblings: Mapping[str, Document]
 
     @property
     def key(self) -> str:
@@ -84,7 +97,7 @@ class Job:
         """Whether this job is a guard: one whose steps run ``scripts/ci-guard.sh``."""
         return any(GUARD_SCRIPT in str(step.get("run", "")) for step in self.steps())
 
-    def steps(self) -> list[Mapping[str, Any]]:
+    def steps(self) -> list[Document]:
         """The job's steps."""
         return list(self.body.get("steps", []))
 

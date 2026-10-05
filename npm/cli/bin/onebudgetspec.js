@@ -7,6 +7,7 @@ const { dirname, join } = require("node:path");
 
 const platform = `${process.platform}-${process.arch}`;
 const carriers = ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"];
+// llmlint: ignore[changed_behavior_has_e2e] reaching this branch needs a host outside the four platforms the release ships (Windows, say), which no runner here provides; the other refusals are driven by the packaging journeys.
 if (!carriers.includes(platform)) {
   console.error(
     `onebudgetspec: no build for ${platform}; install it with 'cargo install onebudgetspec' instead`,

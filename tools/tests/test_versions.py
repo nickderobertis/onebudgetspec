@@ -9,6 +9,7 @@ from repo_checks import versions
 
 FILES = (
     "Cargo.toml",
+    "clippy.toml",
     "pyproject.toml",
     "sdks/python/pyproject.toml",
     "sdks/python/src/onebudgetspec_sdk/__init__.py",
@@ -37,13 +38,30 @@ def test_each_place_that_drifts_is_named(
     assert chosen.path in capsys.readouterr().err
 
 
-def test_set_brings_every_place_to_one_version(tmp_path: Path) -> None:
+def test_set_brings_every_place_and_the_workspace_to_one_version(tmp_path: Path) -> None:
     root = copy_tree(tmp_path, *FILES)
-    cargo = root / "Cargo.toml"
-    cargo.write_text(cargo.read_text().replace('version = "0.1.0"', 'version = "0.2.0"', 1))
-    assert len(versions.disagreements(root)) == len(versions.places())
     assert versions.main(["set", "0.2.0"], root) == 0
+    assert versions.workspace_version(root) == "0.2.0"
     assert versions.disagreements(root) == []
+    assert all(place.read(root) == "0.2.0" for place in versions.places())
+
+
+def test_set_refuses_what_is_not_a_version(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    for bad in ("1.2", "v1.2.3", '1.2.3"\nevil = "x', ""):
+        assert versions.main(["set", bad], root) == 64
+        assert "is not a version" in capsys.readouterr().err
+    assert versions.disagreements(root) == []
+
+
+def test_a_drifted_msrv_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    (root / "clippy.toml").write_text('msrv = "1.80"\n')
+    assert versions.disagreements(root) == [
+        "clippy.toml: msrv 1.80 (Cargo.toml's rust-version is 1.97)"
+    ]
 
 
 def test_a_missing_version_and_a_missing_carrier_are_named(tmp_path: Path) -> None:

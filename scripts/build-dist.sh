@@ -61,8 +61,8 @@ npm_platform() {
   esac
 }
 
-# The newest file a step wrote into a directory, so the caller gets one path.
-newest() {
+# The file a step wrote into a directory, so the caller gets its path.
+written_since_start() {
   find "$1" -maxdepth 1 -type f -name "$2" -newer "$STAMP" | head -n 1
 }
 
@@ -75,7 +75,7 @@ case "$ARTIFACT" in
     [ -n "$TARGET" ] || TARGET="$(host_target)"
     quietly uvx --from 'maturin>=1.9,<2' maturin build --release --locked \
       --manifest-path "$ROOT/crates/onebudgetspec/Cargo.toml" --target "$TARGET" --out "$OUT"
-    newest "$OUT" '*.whl'
+    written_since_start "$OUT" '*.whl'
     ;;
   npm-carrier)
     [ -n "$TARGET" ] || TARGET="$(host_target)"
@@ -88,20 +88,21 @@ case "$ARTIFACT" in
     cp "$ROOT/target/$TARGET/release/onebudgetspec" "$stage/bin/onebudgetspec"
     quietly npm pack "$stage" --silent --pack-destination "$OUT"
     rm -rf "$stage"
-    newest "$OUT" '*.tgz'
+    written_since_start "$OUT" '*.tgz'
     ;;
   npm-launcher)
     quietly npm pack "$ROOT/npm/cli" --silent --pack-destination "$OUT"
-    newest "$OUT" '*.tgz'
+    written_since_start "$OUT" '*.tgz'
     ;;
   sdk-python)
     quietly uv build --quiet --package onebudgetspec-sdk --wheel --out-dir "$OUT" --directory "$ROOT"
-    newest "$OUT" '*.whl'
+    written_since_start "$OUT" '*.whl'
     ;;
   sdk-typescript)
+    quietly bun install --frozen-lockfile --cwd "$ROOT"
     quietly bun run --cwd "$ROOT/sdks/typescript" build
     quietly npm pack "$ROOT/sdks/typescript" --silent --pack-destination "$OUT"
-    newest "$OUT" '*.tgz'
+    written_since_start "$OUT" '*.tgz'
     ;;
   *) usage "unknown artifact '$ARTIFACT'" ;;
 esac

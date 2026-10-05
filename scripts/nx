@@ -33,5 +33,6 @@ esac
 echo "nx: $*" >&2
 if ! output="$(NX_DAEMON=false node_modules/.bin/nx "$@" --outputStyle=static 2>&1)"; then
   printf '%s\n' "$output" >&2
+  echo "nx: 'nx $*' failed; the failing target and its output are above. Fix it, then re-run the same just recipe." >&2
   exit 1
 fi

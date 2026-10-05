@@ -1,0 +1,15 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "conformance",
+  "projectType": "library",
+  "tags": ["type:contract"],
+  "//": "The data-only conformance cases. onebudgetspec runs them against the binary, so a change here selects it; the SDKs run the same cases unchanged.",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "shellcheck conformance/cases/*/*.sh"
+      }
+    }
+  }
+}

@@ -4,7 +4,7 @@
   "projectType": "library",
   "tags": ["lang:rust", "type:binary"],
   "//": "The CLI binary over onebudgetspec-core. `build` produces target/debug/onebudgetspec, which every target that spawns it depends on; its own `test` runs the conformance suite under conformance/.",
-  "implicitDependencies": ["onebudgetspec-core"],
+  "implicitDependencies": ["onebudgetspec-core", "conformance"],
   "targets": {
     "format": {
       "executor": "nx:run-commands",

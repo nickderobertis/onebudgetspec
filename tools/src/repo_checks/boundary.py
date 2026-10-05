@@ -50,6 +50,10 @@ _TOPICS = re.compile(
 )
 #: The one permitted mention: crediting onetaskgraph as the model the layout follows.
 _CREDIT = re.compile(r"onetaskgraph.*\bmodel|\bmodel.*onetaskgraph", re.IGNORECASE)
+#: An inline suppression directive the repository's judged lint reads. It is development
+#: tooling in a comment, like a clippy allow, so its own keyword is the one occurrence of
+#: that name the library may hold; its reason is scanned like any other text.
+_DIRECTIVE = re.compile(r"llmlint: ignore(?:-block|-end|-file)?\[")
 
 
 def files(root: Path = ROOT) -> Iterator[Path]:
@@ -68,8 +72,11 @@ def scan_text(where: str, text: str) -> list[str]:
     """One finding per line of ``text`` that names the stack or mentions its topics."""
     findings = []
     for number, line in enumerate(text.splitlines(), 1):
+        directives = {found.start() for found in _DIRECTIVE.finditer(line)}
         for match in _NAMES.finditer(line):
             if match.group(0).lower() == "onetaskgraph" and _CREDIT.search(line):
+                continue
+            if match.start() in directives:
                 continue
             findings.append(f"{where}:{number}: names {match.group(0)}")
         findings.extend(f"{where}:{number}: mentions {m.group(0)}" for m in _TOPICS.finditer(line))

@@ -2,6 +2,7 @@
 # On the open release-plz pull request, bring every manifest release-plz does not write
 # (the wheel, the npm launcher and carriers, both SDKs) to the version it chose, relock,
 # and push. Nothing to do when no release pull request is open or it already agrees.
+# llmlint: ignore-file[changed_behavior_has_e2e] every step here acts on the live repository's open release pull request through gh and git push, which exists only once releasing is provisioned; the version writing it delegates to is `just set-version`, which tools/tests/test_versions.py drives.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,7 +14,7 @@ branch="$(gh pr list --json headRefName --jq 'map(select(.headRefName | startswi
 git fetch --quiet origin "$branch"
 git checkout --quiet -B "$branch" "origin/$branch"
 version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
-uv run --quiet --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions set "$version"
+just set-version "$version"
 uv lock --quiet
 bun install --silent --lockfile-only
 if git diff --quiet; then

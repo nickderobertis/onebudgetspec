@@ -1,20 +1,22 @@
 """Every manifest releases at the one workspace version, or the check names which does not.
 
 ``python -m repo_checks.versions check`` reports disagreement; ``set <version>`` writes the
-version into every place this reads, which the release pull request runs.
+version into every place this reads, the workspace's included, which the release pull
+request runs. The minimum supported Rust version is held to one value the same way.
 """
 
 import json
 import re
 import sys
 import tomllib
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from repo_checks.paths import ROOT
 
 PLATFORMS = ("linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64")
+#: A release version: MAJOR.MINOR.PATCH with an optional pre-release or build suffix.
+VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
 
 
 @dataclass(frozen=True)
@@ -32,10 +34,17 @@ class Place:
     def write(self, root: Path, version: str) -> None:
         """Write ``version`` here."""
         path = root / self.path
-        replace: Callable[[re.Match[str]], str] = lambda m: f"{m.group(1)}{version}{m.group(3)}"  # noqa: E731
+
+        def replace(match: re.Match[str]) -> str:
+            return f"{match.group(1)}{version}{match.group(3)}"
+
         path.write_text(
             re.sub(self.pattern, replace, path.read_text(), count=1, flags=re.MULTILINE)
         )
+
+
+#: `[workspace.package] version`, the first `version =` line of the root Cargo.toml.
+WORKSPACE = Place("Cargo.toml", r'^(version = ")([^"]+)(")')
 
 
 def places() -> list[Place]:
@@ -51,7 +60,7 @@ def places() -> list[Place]:
     ]
     for platform in PLATFORMS:
         found.append(
-            Place("npm/platforms/" + platform + "/package.json", r'^(  "version": ")([^"]+)(")')
+            Place(f"npm/platforms/{platform}/package.json", r'^(  "version": ")([^"]+)(")')
         )
         found.append(
             Place("npm/cli/package.json", rf'^(    "@onebudgetspec/cli-{platform}": ")([^"]+)(")')
@@ -77,33 +86,46 @@ def disagreements(root: Path = ROOT) -> list[str]:
     expected = sorted(f"@onebudgetspec/cli-{platform}" for platform in PLATFORMS)
     if carriers != expected:
         problems.append(f"npm/cli/package.json: carriers {carriers}, expected {expected}")
+    rust = tomllib.loads((root / "Cargo.toml").read_text())["workspace"]["package"]["rust-version"]
+    msrv = tomllib.loads((root / "clippy.toml").read_text()).get("msrv")
+    if msrv != rust:
+        problems.append(f"clippy.toml: msrv {msrv} (Cargo.toml's rust-version is {rust})")
     return problems
 
 
 def set_version(version: str, root: Path = ROOT) -> None:
-    """Write ``version`` everywhere :func:`places` reads."""
-    for place in places():
+    """Write ``version`` as the workspace's and everywhere :func:`places` reads.
+
+    Raises:
+        ValueError: ``version`` is not a release version.
+    """
+    if not VERSION.match(version):
+        raise ValueError(f"{version!r} is not a version such as 1.2.3")
+    for place in [WORKSPACE, *places()]:
         place.write(root, version)
 
 
 def main(argv: list[str], root: Path = ROOT) -> int:
     """``check`` or ``set <version>``; returns the exit status."""
-    if argv == ["check"]:
-        problems = disagreements(root)
-        for problem in problems:
-            print(f"versions: {problem}", file=sys.stderr)
-        if problems:
-            print(
-                "versions: next: run 'python -m repo_checks.versions set <version>'",
-                file=sys.stderr,
-            )
-        return 1 if problems else 0
-    if len(argv) == 2 and argv[0] == "set":
-        set_version(argv[1], root)
-        return 0
-    print("usage: python -m repo_checks.versions check | set <version>", file=sys.stderr)
-    return 64
+    match argv:
+        case ["check"]:
+            problems = disagreements(root)
+            for problem in problems:
+                print(f"versions: {problem}", file=sys.stderr)
+            if problems:
+                print("versions: next: run 'just set-version <version>'", file=sys.stderr)
+            return 1 if problems else 0
+        case ["set", version]:
+            try:
+                set_version(version, root)
+            except ValueError as error:
+                print(f"versions: {error}; next: pass MAJOR.MINOR.PATCH", file=sys.stderr)
+                return 64
+            return 0
+        case _:
+            print("usage: python -m repo_checks.versions check | set <version>", file=sys.stderr)
+            return 64
 
 
-if __name__ == "__main__":  # pragma: no cover
+if __name__ == "__main__":  # pragma: no cover - the entry point; tests call main() itself
     sys.exit(main(sys.argv[1:]))

@@ -109,6 +109,26 @@ def test_the_schema_is_scanned() -> None:
     ]
 
 
+def test_a_suppression_directive_is_exempt_and_nothing_else_is() -> None:
+    # Assembled at run time, so the judged lint does not read these samples as directives.
+    tool = "llm" + "lint"
+    for directive in (
+        f"// {tool}: ignore[rule_name] the reason",
+        f"// {tool}: ignore-block[rule_name] the reason",
+        f"// {tool}: ignore-end[rule_name]",
+        f"# {tool}: ignore-file[a, b] the reason",
+    ):
+        assert boundary.scan_text("x", directive) == [], directive
+    assert boundary.scan_text("x", f"// {tool}: ignore[r] because {tool} says so") == [
+        f"x:1: names {tool}"
+    ]
+    assert boundary.scan_text("x", f"// {tool}: ignore[r] onevcs needs it") == ["x:1: names onevcs"]
+    assert boundary.scan_text("x", f"// {tool}: ignore[r] pending approval") == [
+        "x:1: mentions approval"
+    ]
+    assert boundary.scan_text("x", f"// {tool} ignore[r] reason") == [f"x:1: names {tool}"]
+
+
 def test_crediting_the_model_layout_is_the_one_exception() -> None:
     assert boundary.scan_text("x", "The layout is modelled on onetaskgraph.") == []
     assert boundary.scan_text("x", "Uses onetaskgraph.") == ["x:1: names onetaskgraph"]

@@ -205,3 +205,17 @@ def test_triggers_read_every_spelling(tmp_path: Path) -> None:
     assert workflows.triggers(tmp_path, "one.yml") == {"push"}
     assert workflows.triggers(tmp_path, "two.yml") == {"push", "release"}
     assert workflows.load(tmp_path) == []
+
+
+def test_the_guard_script_refuses_a_name_that_is_not_a_variable(tmp_path: Path) -> None:
+    completed = subprocess.run(
+        ["bash", "scripts/ci-guard.sh", "NPM_TOKEN", "$(id)"],
+        cwd=ROOT,
+        env={"PATH": "/usr/bin:/bin", "GITHUB_OUTPUT": str(tmp_path / "o")},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 64
+    assert "is not an environment variable name" in completed.stderr
+    assert not (tmp_path / "o").exists()

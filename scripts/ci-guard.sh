@@ -23,6 +23,13 @@ if [ -z "${GITHUB_OUTPUT:-}" ]; then
   exit 64
 fi
 
+for name in "$@"; do
+  if ! [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+    echo "ci-guard: '$name' is not an environment variable name; pass names such as NPM_TOKEN" >&2
+    exit 64
+  fi
+done
+
 present=()
 missing=()
 for name in "$@"; do

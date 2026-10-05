@@ -11,7 +11,9 @@
     "onebudgetspec-packaging-e2e",
     "npm-cli",
     "sdk-python",
-    "sdk-typescript"
+    "sdk-typescript",
+    "scripts",
+    "conformance"
   ],
   "targets": {
     "format": {
