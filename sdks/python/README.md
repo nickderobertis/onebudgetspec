@@ -8,8 +8,8 @@ and requires `onebudgetspec-cli` at that version, whose wheel installs the binar
 pip install onebudgetspec-sdk
 ```
 
-Each call runs the `onebudgetspec` binary once and returns its JSON report as a pydantic
-model generated from `onebudgetspec schema`:
+Each call runs the `onebudgetspec` binary once, validates the JSON report it prints against
+`onebudgetspec schema`, and returns it as a pydantic model generated from that schema:
 
 ```python
 from onebudgetspec_sdk import check, list_budgets, schema, validate

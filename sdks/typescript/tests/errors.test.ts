@@ -84,7 +84,7 @@ function reportWith(result: Record<string, string>, host: Record<string, string>
     detail: "null",
     error: "null",
     started_at: '"2026-10-05T10:00:00Z"',
-    ended_at: '"2026-10-05T10:00:01.5+02:00"',
+    ended_at: '"2026-10-05T10:00:01.123456789+02:00"',
     ...result,
   };
   const hostFields: Record<string, string> = {
@@ -101,18 +101,40 @@ function reportWith(result: Record<string, string>, host: Record<string, string>
   return `{"schema_version": 1, "results": [${object({ ...fields, host: object(hostFields) })}]}`;
 }
 
-test("a report whose every format holds is returned", async () => {
+test.each<[string, Record<string, string>, Record<string, string>]>([
+  ["the defaults", {}, {}],
+  ["a leap day", { started_at: '"2024-02-29T00:00:00Z"' }, {}],
+  ["a leap day of year 0", { started_at: '"0000-02-29T00:00:00Z"' }, {}],
+  ["the largest uint32", {}, { cpus: "4294967295" }],
+  ["the largest uint64", {}, { mem_available_mib: "18446744073709551615" }],
+])("a report holding %s is returned", async (_what, result, host) => {
+  const dir = scratch();
+  const program = join(dir, "onebudgetspec");
+  writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${reportWith(result, host)}\nEOF\n`);
+  chmodSync(program, 0o755);
+  const report = await check({ binary: program });
+  expect(report.results).toHaveLength(1);
+});
+
+test("a report whose every format holds is returned as printed", async () => {
   const dir = scratch();
   const program = join(dir, "onebudgetspec");
   writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${reportWith({})}\nEOF\n`);
   chmodSync(program, 0o755);
   const report = await check({ binary: program });
-  expect(report.results[0]?.ended_at).toBe("2026-10-05T10:00:01.5+02:00");
+  expect(report.results[0]?.ended_at).toBe("2026-10-05T10:00:01.123456789+02:00");
 });
 
 test.each<[string, Record<string, string>, Record<string, string>, string]>([
   ["a timestamp that is not one", { started_at: '"yesterday"' }, {}, 'format "date-time"'],
   ["a day its month lacks", { started_at: '"2026-02-30T00:00:00Z"' }, {}, 'format "date-time"'],
+  [
+    "a leap day of a common year",
+    { started_at: '"2100-02-29T00:00:00Z"' },
+    {},
+    'format "date-time"',
+  ],
+  ["a second of 60", { started_at: '"2026-10-05T10:00:60Z"' }, {}, 'format "date-time"'],
   ["an hour past 23", { ended_at: '"2026-10-05T24:00:00Z"' }, {}, 'format "date-time"'],
   [
     "an offset past 23 hours",
@@ -140,12 +162,7 @@ test.each<[string, Record<string, string>, Record<string, string>, string]>([
   ["negative CPUs", {}, { cpus: "-1" }, 'format "uint32"'],
   ["fractional memory", {}, { mem_available_mib: "1.5" }, 'format "uint64"'],
   ["negative memory", {}, { mem_available_mib: "-1" }, 'format "uint64"'],
-  [
-    "more memory than 64 bits hold",
-    {},
-    { mem_available_mib: "18446744073709551616" },
-    'format "uint64"',
-  ],
+  ["memory of 2^65", {}, { mem_available_mib: "36893488147419103232" }, 'format "uint64"'],
 ])("%s is refused", async (_what, result, host, reason) => {
   const dir = scratch();
   const program = join(dir, "onebudgetspec");

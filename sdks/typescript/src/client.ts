@@ -181,29 +181,35 @@ function run(binary: string | undefined, args: string[], cwd: string | undefined
 
 /** An RFC 3339 timestamp, as the reports' `date-time` fields carry. */
 const RFC3339 = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-](\d{2}):(\d{2}))$/i;
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 /** Whether `value` is an RFC 3339 timestamp naming a real instant: a day its month has, and
- * an hour, minute, second and offset in range (a leap second allowed). */
+ * every field in range. A second of 60 is refused: a leap second cannot be told from a
+ * nonexistent one here. */
 function isDateTime(value: string): boolean {
   const parts = RFC3339.exec(value);
   if (parts === null) return false;
   // Groups 9 and 10 are the offset's hours and minutes, absent for `Z`.
   const field = (group: number) => Number(parts[group] ?? 0);
   const [year, month, day] = [field(1), field(2), field(3)];
-  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = (DAYS_IN_MONTH[month - 1] ?? 0) + (month === 2 && leap ? 1 : 0);
   return (
-    month >= 1 &&
-    month <= 12 &&
     day >= 1 &&
-    day <= daysInMonth &&
+    day <= days &&
     field(4) <= 23 &&
     field(5) <= 59 &&
-    field(6) <= 60 &&
+    field(6) <= 59 &&
     field(9) <= 23 &&
     field(10) <= 59
   );
 }
+/** An integer that fits in `bits` unsigned bits. A JSON number past 2^53 rounds to a
+ * double, so the largest uint64 reads as 2^64 itself: past 53 bits the bound admits it, and
+ * refuses anything larger. */
 const isUnsigned = (bits: number) => (value: number) =>
-  Number.isInteger(value) && value >= 0 && value < 2 ** bits;
+  Number.isInteger(value) &&
+  value >= 0 &&
+  (value < 2 ** bits || (bits > 53 && value === 2 ** bits));
 // Every format the schema names is checked: the timestamps, and the numeric widths the
 // binary's Rust types carry.
 const ajv = new Ajv2020({

@@ -197,14 +197,14 @@ def test_a_status_that_is_no_report_raises_with_what_the_binary_said(tmp_path: P
 @pytest.mark.parametrize(
     ("printed", "call", "reason"),
     [
-        ("not json", check, "no valid CheckReport"),
-        ('{"schema_version": 1, "budgets": [], "extra": 1}', list_budgets, "no valid ListReport"),
+        ("not json", check, "printed no JSON"),
+        ('{"schema_version": 1, "budgets": [], "extra": 1}', list_budgets, "no valid list-report"),
         (
             '{"schema_version": 1, "budgets": [{"id": "a", "file": "budgets.yaml", '
             '"description": null, "labels": [], "measure": "elapsed", "command": ["true"], '
             '"unit": "seconds", "direction": "max", "threshold": "60", "timeout_seconds": null}]}',
             list_budgets,
-            "no valid ListReport",
+            "no valid list-report",
         ),
         ("not json", schema, "not JSON"),
         ("[]", schema, "not a JSON object"),
@@ -252,3 +252,114 @@ def test_a_value_shaped_like_a_flag_is_passed_as_a_value(
     assert listed.budgets == []
     with pytest.raises(OnebudgetspecError, match="--version"):
         list_budgets(paths=["--version"], cwd=tmp_path, binary=built_binary)
+
+
+def report_with(result: dict[str, str], host: dict[str, str] | None = None) -> str:
+    """A check report with one result, its fields overridden by ``result`` and ``host``.
+
+    It is written raw, so a value JSON allows but the schema's formats refuse can be printed.
+    """
+    fields = {
+        "id": '"late"',
+        "file": '"budgets.yaml"',
+        "labels": "[]",
+        "unit": '"seconds"',
+        "direction": '"max"',
+        "threshold": "1.0",
+        "verdict": '"within"',
+        "actual": "0.5",
+        "headroom": "0.5",
+        "headroom_percent": "50.0",
+        "detail": "null",
+        "error": "null",
+        "started_at": '"2026-10-05T10:00:00.123456789Z"',
+        "ended_at": '"2026-10-05T10:00:01.5+02:00"',
+        **result,
+    }
+    host_fields = {
+        "load1": "null",
+        "cpus": "1",
+        "mem_available_mib": "18446744073709551615",
+        "conditions": "{}",
+        **(host or {}),
+    }
+
+    def text(entries: dict[str, str]) -> str:
+        return "{" + ", ".join(f'"{key}": {value}' for key, value in entries.items()) + "}"
+
+    report = {
+        "schema_version": "1",
+        "results": "[" + text({**fields, "host": text(host_fields)}) + "]",
+    }
+    return text(report)
+
+
+def printing(directory: Path, stdout: str) -> Path:
+    """An executable that prints ``stdout`` verbatim and exits 0."""
+    program = directory / "onebudgetspec"
+    program.write_text(f"#!/bin/sh\ncat <<'EOF'\n{stdout}\nEOF\n")
+    program.chmod(0o755)
+    return program
+
+
+@pytest.mark.parametrize(
+    ("result", "host"),
+    [
+        ({"started_at": '"2024-02-29T00:00:00Z"'}, {}),
+        ({}, {"cpus": "4294967295"}),
+        ({"ended_at": '"2026-10-05T23:59:59-23:59"'}, {}),
+    ],
+)
+def test_a_report_at_the_edge_of_its_formats_is_returned(
+    tmp_path: Path, result: dict[str, str], host: dict[str, str]
+) -> None:
+    """A leap day, the largest uint32 and the widest offset are all within the contract."""
+    assert len(check(binary=printing(tmp_path, report_with(result, host))).results) == 1
+
+
+def test_a_report_whose_every_format_holds_is_returned(tmp_path: Path) -> None:
+    """Nanosecond timestamps, offsets and the largest uint64 are all within the contract."""
+    report = check(binary=printing(tmp_path, report_with({})))
+    [result] = report.results
+    assert result.host.mem_available_mib == 2**64 - 1
+    assert result.ended_at.utcoffset() is not None
+
+
+@pytest.mark.parametrize(
+    ("result", "host", "reason"),
+    [
+        ({"started_at": '"yesterday"'}, {}, "is not a 'date-time'"),
+        ({"started_at": '"2026-02-30T00:00:00Z"'}, {}, "is not a 'date-time'"),
+        ({"started_at": '"2100-02-29T00:00:00Z"'}, {}, "is not a 'date-time'"),
+        ({"started_at": '"2026-13-01T00:00:00Z"'}, {}, "is not a 'date-time'"),
+        ({"started_at": '"2026-10-00T00:00:00Z"'}, {}, "is not a 'date-time'"),
+        ({"ended_at": '"2026-10-05T24:00:00Z"'}, {}, "is not a 'date-time'"),
+        ({"ended_at": '"2026-10-05T10:60:00Z"'}, {}, "is not a 'date-time'"),
+        ({"ended_at": '"2026-10-05T10:00:60Z"'}, {}, "is not a 'date-time'"),
+        ({"ended_at": '"2026-10-05T10:00:00+24:00"'}, {}, "is not a 'date-time'"),
+        ({"ended_at": '"2026-10-05T10:00:00+02:60"'}, {}, "is not a 'date-time'"),
+        ({"started_at": "3"}, {}, "3 is not of type 'string'"),
+        ({"actual": "1e400"}, {}, "is not a 'double'"),
+        ({}, {"cpus": "4294967296"}, "is not a 'uint32'"),
+        ({}, {"cpus": "-1"}, "is not a 'uint32'"),
+        ({}, {"mem_available_mib": "18446744073709551616"}, "is not a 'uint64'"),
+        ({}, {"mem_available_mib": "1.5"}, "is not of type 'integer', 'null'"),
+        ({"threshold": "true"}, {}, "True is not of type 'number'"),
+        # Valid by the schema's own grammar, but not an instant Python can hold.
+        ({"started_at": '"0000-01-01T00:00:00Z"'}, {}, "started_at"),
+    ],
+)
+def test_a_report_breaking_its_schema_raises_naming_the_field(
+    tmp_path: Path, result: dict[str, str], host: dict[str, str], reason: str
+) -> None:
+    """Each value the schema's types or formats refuse raises, naming what was wrong."""
+    with pytest.raises(OnebudgetspecError, match="no valid check-report") as refused:
+        check(binary=printing(tmp_path, report_with(result, host)))
+    assert reason in str(refused.value)
+
+
+def test_a_schema_version_of_true_is_not_1(tmp_path: Path) -> None:
+    """``true`` is a JSON boolean, never the integer 1 the schema requires."""
+    printed = report_with({}).replace('"schema_version": 1', '"schema_version": true')
+    with pytest.raises(OnebudgetspecError, match="schema_version: 1 was expected"):
+        check(binary=printing(tmp_path, printed))

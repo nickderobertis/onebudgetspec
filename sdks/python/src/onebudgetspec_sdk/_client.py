@@ -1,22 +1,27 @@
 """Run the ``onebudgetspec`` binary once per call and read the JSON report it prints.
 
 Nothing here measures, loads or selects a budget: the binary does all of it, and this
-module turns a call into its argv and its stdout into the generated report type.
+module turns a call into its argv and its stdout into the generated report type, after
+validating it against the schema that type was generated from.
 """
 
 import importlib.metadata
 import json
+import math
 import os
+import re
 import shutil
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, TypeVar
 
+from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import BaseModel, ValidationError
 
 from ._generated.check_report import CheckReport
 from ._generated.list_report import ListReport
+from ._generated.schemas import REPORT_SCHEMAS
 
 #: The environment variable naming the binary when no explicit one is passed.
 BINARY_ENV = "ONEBUDGETSPEC_BIN"
@@ -152,14 +157,95 @@ def _run(binary: StrPath | None, args: list[str], cwd: StrPath | None) -> bytes:
     raise OnebudgetspecError(message, exit_code=status)
 
 
-def _report(model: type[_Report], stdout: bytes) -> _Report:
+#: An RFC 3339 timestamp, as the reports' ``date-time`` fields carry.
+_RFC3339 = re.compile(
+    r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))",
+    re.IGNORECASE,
+)
+_DAYS_IN_MONTH = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+#: Every format the report schemas name, checked: the timestamps, and the numeric widths
+#: the binary's Rust types carry. A format applies only to its own JSON type; the schema's
+#: ``type`` refuses any other.
+_FORMATS = FormatChecker(formats=())
+
+
+@_FORMATS.checks("date-time")
+def _is_date_time(value: object) -> bool:
+    """An RFC 3339 instant: a day its month has, and every field in range.
+
+    A second of 60 is refused: a leap second cannot be told from a nonexistent one here.
+    """
+    if not isinstance(value, str):
+        return True
+    match = _RFC3339.fullmatch(value)
+    if match is None:
+        return False
+    year, month, day, hour, minute, second = (int(part) for part in match.groups()[:6])
+    offset_hours, offset_minutes = (int(part or 0) for part in match.groups()[6:])
+    if not 1 <= month <= 12:
+        return False
+    leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+    days = _DAYS_IN_MONTH[month - 1] + (1 if month == 2 and leap else 0)
+    return (
+        1 <= day <= days
+        and hour <= 23
+        and minute <= 59
+        and second <= 59
+        and offset_hours <= 23
+        and offset_minutes <= 59
+    )
+
+
+def _is_unsigned(bits: int) -> Callable[[object], bool]:
+    """A check that an integer fits in ``bits`` unsigned bits."""
+
+    def check(value: object) -> bool:
+        if isinstance(value, bool) or not isinstance(value, int):
+            return True
+        return 0 <= value < 2**bits
+
+    return check
+
+
+_FORMATS.checks("uint32")(_is_unsigned(32))
+_FORMATS.checks("uint64")(_is_unsigned(64))
+
+
+@_FORMATS.checks("double")
+def _is_double(value: object) -> bool:
+    """A finite number; JSON holds no infinity, but a literal too large reads as one."""
+    return not isinstance(value, float) or math.isfinite(value)
+
+
+_VALIDATORS = {
+    root: Draft202012Validator(schema, format_checker=_FORMATS)
+    for root, schema in REPORT_SCHEMAS.items()
+}
+
+
+def _report(model: type[_Report], root: str, stdout: bytes) -> _Report:
+    """``stdout`` as ``model``, once it is valid against the schema root ``root``."""
+    try:
+        document = json.loads(stdout)
+    except ValueError as error:
+        raise OnebudgetspecError(
+            f"onebudgetspec: the binary printed no JSON: {error}", exit_code=None
+        ) from error
+    problems = [
+        f"{'/'.join(str(part) for part in error.absolute_path) or '(report)'}: {error.message}"
+        for error in _VALIDATORS[root].iter_errors(document)
+    ]
+    if problems:
+        raise OnebudgetspecError(
+            f"onebudgetspec: the binary printed no valid {root}: {'; '.join(sorted(problems))}",
+            exit_code=None,
+        )
     try:
         # Strict: a report field of the wrong JSON type is refused, never coerced.
         return model.model_validate_json(stdout, strict=True)
     except ValidationError as error:
         raise OnebudgetspecError(
-            f"onebudgetspec: the binary printed no valid {model.__name__}: {error}",
-            exit_code=None,
+            f"onebudgetspec: the binary printed no valid {root}: {error}", exit_code=None
         ) from error
 
 
@@ -193,7 +279,7 @@ def check(
             with the binary's message, or the binary could not run.
     """
     args = ["check", "--json", *_selection(ids, labels, exclude_labels), *_files(paths, recursive)]
-    return _report(CheckReport, _run(binary, args, cwd))
+    return _report(CheckReport, "check-report", _run(binary, args, cwd))
 
 
 def validate(
@@ -217,7 +303,8 @@ def validate(
     Raises:
         OnebudgetspecError: a file is invalid (exit status 2), with the binary's message.
     """
-    return _report(ListReport, _run(binary, ["validate", "--json", *_files(paths, recursive)], cwd))
+    args = ["validate", "--json", *_files(paths, recursive)]
+    return _report(ListReport, "list-report", _run(binary, args, cwd))
 
 
 def list_budgets(
@@ -238,7 +325,7 @@ def list_budgets(
         OnebudgetspecError: the invocation or a budgets file is invalid (exit status 2).
     """
     args = ["list", "--json", *_selection(ids, labels, exclude_labels), *_files(paths, recursive)]
-    return _report(ListReport, _run(binary, args, cwd))
+    return _report(ListReport, "list-report", _run(binary, args, cwd))
 
 
 def schema(*, binary: StrPath | None = None) -> dict[str, Any]:

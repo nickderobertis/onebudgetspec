@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Nick DeRobertis" }]
 classifiers = ["Typing :: Typed"]
-dependencies = ["onebudgetspec-cli==0.1.0", "pydantic>=2.12", "typing-extensions>=4.12"]
+dependencies = ["onebudgetspec-cli==0.1.0", "jsonschema>=4.23", "pydantic>=2.12", "typing-extensions>=4.12"]
 
 [project.urls]
 Repository = "https://github.com/nickderobertis/onebudgetspec"
