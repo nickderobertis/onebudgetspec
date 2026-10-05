@@ -77,3 +77,13 @@ def test_an_example_path_that_leaves_the_tree_is_refused(tmp_path: Path) -> None
         with pytest.raises(ValueError, match="leaves the example tree"):
             readme.lay_out({path: "x"}, tmp_path / "tree")
     assert not (tmp_path / "escape.yaml").exists()
+
+
+def test_the_exit_table_says_where_each_reason_goes() -> None:
+    # A measurement error's reason is its result's `error`; only an unwritable report
+    # puts its reason on stderr. The table must not put both on stderr.
+    row = next(
+        line for line in (ROOT / "README.md").read_text().splitlines() if line.startswith("| 3 |")
+    )
+    assert "that result's `error`" in row, row
+    assert "on stderr" in row.split("or the report could not be written", 1)[1], row

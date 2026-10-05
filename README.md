@@ -88,8 +88,8 @@ budget gate-time: actual 1395 seconds, budget 1800 seconds, headroom 405 seconds
 | ---- | ------- |
 | 0 | every selected budget is within |
 | 1 | at least one is over, and none errored |
-| 2 | the invocation or a file is invalid; nothing was run |
-| 3 | at least one measurement errored, or the report could not be written (the reason is on stderr) |
+| 2 | the invocation or a file is invalid; nothing was run (the reason is on stderr) |
+| 3 | at least one measurement errored (its reason is that result's `error`, in the report), or the report could not be written (that reason is on stderr) |
 
 The npm launcher adds three of its own, each with the reason on stderr: `64` on a platform
 no carrier is published for, `69` when the carrier package is missing or its binary
