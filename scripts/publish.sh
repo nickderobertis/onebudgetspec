@@ -109,7 +109,7 @@ PY
       [ "$identity" = "$name $VERSION" ] \
         || fail "$wheel is $identity, not $name $VERSION" "publish only what scripts/build-dist.sh built for $target at this commit"
     done
-    # llmlint: ignore[changed_behavior_has_e2e] uploading to PyPI needs its token, which this repository is not given until publishing is provisioned; every wheel is checked against its metadata above, which tools/tests/test_scripts.py drives.
+    # llmlint: ignore[changed_behavior_has_e2e] uploading to PyPI needs its token, which this repository is not given until publishing is provisioned; every wheel is checked against its metadata above, which scripts/tests/test_release_scripts.py drives.
     UV_PUBLISH_TOKEN="$PYPI_TOKEN" uv publish --quiet --check-url "https://pypi.org/simple/$name/" "$1"/*.whl
     ;;
   npm | sdk-npm)
