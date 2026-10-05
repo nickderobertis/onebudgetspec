@@ -44,6 +44,8 @@ fn mem_available_mib() -> Option<u64> {
 }
 
 /// The `MemAvailable` line of `/proc/meminfo`, in MiB.
+// Compiled on every platform so its unit tests run everywhere; only Linux has
+// /proc/meminfo to call it on.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn parse_mem_available(meminfo: &str) -> Option<u64> {
     let line = meminfo

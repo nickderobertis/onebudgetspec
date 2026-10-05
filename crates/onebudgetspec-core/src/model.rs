@@ -25,6 +25,7 @@ pub const RESULT_ENV: &str = "ONEBUDGETSPEC_RESULT";
 /// The only file name `--recursive` discovery picks up.
 pub const FILE_NAME: &str = "budgets.yaml";
 
+// llmlint: ignore-block[invalid_states_unrepresentable] These structs are the serde shape of an untrusted file and the source the contract's schema is emitted from. load.rs holds every field to the patterns and rules above and reports every problem in one refusal naming the file and key path; validating newtypes would refuse at deserialization, one problem at a time, and change the emitted schema other repositories build against.
 /// One `budgets.yaml` file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -87,6 +88,7 @@ pub struct Budget {
     pub timeout_seconds: Option<u64>,
 }
 
+// llmlint: ignore-end[invalid_states_unrepresentable]
 /// How a budget's value is measured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]

@@ -5,6 +5,7 @@ use crate::load::{Budgets, LoadedFile};
 use crate::model::{Budget, SCHEMA_VERSION};
 use crate::report::{ListReport, ListedBudget};
 
+// llmlint: ignore-block[invalid_states_unrepresentable] Selection holds what the command line was given: an id matching no budget is refused by Budgets::select, and a label matching none selects nothing, which is the contract's rule rather than an invalid state.
 /// The filters one invocation applies, all together.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Selection {
@@ -16,6 +17,7 @@ pub struct Selection {
     pub exclude_labels: Vec<String>,
 }
 
+// llmlint: ignore-end[invalid_states_unrepresentable]
 /// One selected budget and the file it came from.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Selected<'a> {

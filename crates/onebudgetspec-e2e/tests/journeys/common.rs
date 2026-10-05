@@ -14,7 +14,13 @@ use serde_json::Value;
 /// built beside this test executable.
 pub fn binary() -> PathBuf {
     if let Some(path) = std::env::var_os("ONEBUDGETSPEC_BIN") {
-        return PathBuf::from(path);
+        // Resolved now, because the journeys run it from other working directories.
+        return fs::canonicalize(&path).unwrap_or_else(|error| {
+            panic!(
+                "ONEBUDGETSPEC_BIN={} is not a file ({error})",
+                path.display()
+            )
+        });
     }
     let exe = std::env::current_exe().expect("the test executable has a path");
     let mut dir = exe.parent().expect("the test executable has a directory");

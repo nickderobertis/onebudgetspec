@@ -81,3 +81,36 @@ fn text_stdout_holds_none_of_the_command_output() {
         assert!(run.stderr.contains(mark), "{mark} missing from stderr");
     }
 }
+
+/// A report that cannot be written is said so on stderr, and the exit status is still the
+/// verdict's, for every verb that writes one.
+#[cfg(target_os = "linux")]
+#[test]
+fn an_unwritable_stdout_is_reported_on_stderr() {
+    let fixture = Fixture::new();
+    noisy(&fixture);
+    for (args, status) in [
+        (&["check", "--json"][..], 0),
+        (&["check"][..], 0),
+        (&["validate"][..], 0),
+        (&["list"][..], 0),
+        (&["schema"][..], 0),
+    ] {
+        let full = std::fs::OpenOptions::new()
+            .write(true)
+            .open("/dev/full")
+            .expect("/dev/full opens for writing");
+        let output = std::process::Command::new(crate::common::binary())
+            .args(args)
+            .current_dir(fixture.path())
+            .stdout(full)
+            .output()
+            .expect("onebudgetspec runs");
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert_eq!(output.status.code(), Some(status), "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("cannot write the report to stdout"),
+            "{args:?}: {stderr}"
+        );
+    }
+}

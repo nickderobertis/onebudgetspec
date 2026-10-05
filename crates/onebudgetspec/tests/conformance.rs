@@ -17,8 +17,15 @@ fn cases_dir() -> PathBuf {
 /// The argv prefix of the command under test.
 fn command_under_test() -> Vec<String> {
     match std::env::var("ONEBUDGETSPEC_CONFORMANCE_COMMAND") {
-        Ok(text) => serde_json::from_str(&text)
-            .expect("ONEBUDGETSPEC_CONFORMANCE_COMMAND is a JSON array of strings"),
+        Ok(text) => {
+            let argv: Vec<String> = serde_json::from_str(&text)
+                .expect("ONEBUDGETSPEC_CONFORMANCE_COMMAND is a JSON array of strings");
+            assert!(
+                argv.first().is_some_and(|program| !program.is_empty()),
+                "ONEBUDGETSPEC_CONFORMANCE_COMMAND names no program: {text}"
+            );
+            argv
+        }
         Err(_) => vec![env!("CARGO_BIN_EXE_onebudgetspec").to_owned()],
     }
 }

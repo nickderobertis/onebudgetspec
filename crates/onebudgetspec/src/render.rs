@@ -1,15 +1,15 @@
 //! Rendering what the library returns: JSON for a program, one line per item for a person.
 
 use std::fmt::Write as _;
-use std::io::Write;
+use std::io::{self, Write};
 
 use onebudgetspec_core::{CheckReport, CheckResult, Host, ListReport, UNKNOWN, Verdict};
 use serde::Serialize;
 
 /// One JSON document, then a newline.
-pub fn json(out: &mut impl Write, value: &impl Serialize) {
+pub fn json(out: &mut impl Write, value: &impl Serialize) -> io::Result<()> {
     let text = serde_json::to_string_pretty(value).expect("reports serialise to JSON");
-    let _ = writeln!(out, "{text}");
+    writeln!(out, "{text}")
 }
 
 /// One line per result:
@@ -17,10 +17,11 @@ pub fn json(out: &mut impl Write, value: &impl Serialize) {
 /// `budget <id>: actual <actual> <unit>, budget <threshold> <unit>, headroom <headroom>
 /// <unit> (<percent>%) — <within|over>; host: ...`, or `budget <id>: error — <reason>;
 /// host: ...`.
-pub fn check_text(out: &mut impl Write, report: &CheckReport) {
+pub fn check_text(out: &mut impl Write, report: &CheckReport) -> io::Result<()> {
     for result in &report.results {
-        let _ = writeln!(out, "{}", result_line(result));
+        writeln!(out, "{}", result_line(result))?;
     }
+    Ok(())
 }
 
 fn result_line(result: &CheckResult) -> String {
@@ -61,7 +62,7 @@ fn number(value: Option<f64>) -> String {
 
 /// One line per budget: `<id> (<file>): <measure> <direction> <threshold> <unit>`, with
 /// its labels when it has any.
-pub fn list_text(out: &mut impl Write, report: &ListReport) {
+pub fn list_text(out: &mut impl Write, report: &ListReport) -> io::Result<()> {
     for budget in &report.budgets {
         let mut line = format!(
             "{} ({}): {} {} {} {}",
@@ -75,6 +76,7 @@ pub fn list_text(out: &mut impl Write, report: &ListReport) {
         if !budget.labels.is_empty() {
             let _ = write!(line, " [{}]", budget.labels.join(", "));
         }
-        let _ = writeln!(out, "{line}");
+        writeln!(out, "{line}")?;
     }
+    Ok(())
 }

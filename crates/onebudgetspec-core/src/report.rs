@@ -24,6 +24,7 @@ pub struct CheckReport {
     pub results: Vec<CheckResult>,
 }
 
+// llmlint: ignore-block[invalid_states_unrepresentable] The flat, nullable fields are the check report's frozen wire shape. measure.rs builds every result in one place from the measurement's Result, so a verdict always arrives with its value or its error, which the verdict and error journeys assert.
 /// One budget's measurement.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -62,6 +63,7 @@ pub struct CheckResult {
     pub host: Host,
 }
 
+// llmlint: ignore-end[invalid_states_unrepresentable]
 /// A result's verdict.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
