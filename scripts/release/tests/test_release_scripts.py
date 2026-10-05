@@ -537,3 +537,17 @@ def test_publish_refuses_ids_outside_the_target_s_registry(
     assert refused.returncode == 1, refused.stdout
     assert f"{path} cannot be read as a list of release targets" in refused.stderr
     assert "<name> id" in refused.stderr
+
+
+@pytest.mark.parametrize("covers", ['""', "{}", '"npm:x"'])
+def test_publish_refuses_covers_that_are_not_a_list(tmp_path: Path, covers: str) -> None:
+    path = tmp_path / "release-targets.toml"
+    path.write_text(
+        f'[[target]]\nname = "sdk-npm"\nid = "npm:@onebudgetspec/sdk"\ncovers = {covers}\n'
+    )
+    refused = publish(
+        "sdk-npm", str(tmp_path), NPM_TOKEN="token", ONEBUDGETSPEC_RELEASE_TARGETS=str(path)
+    )
+    assert refused.returncode == 1, refused.stdout
+    assert f"{path} cannot be read as a list of release targets" in refused.stderr
+    assert "`covers` is not a list" in refused.stderr

@@ -36,7 +36,10 @@ class InvalidDeclaration(ValueError):
     """release-targets.toml is not the shape the release reads."""
 
 
-_TARGET_FIELDS = ("id", "name", "what", "published_by", "manifest")
+#: The fields every target must carry, read from Target so the two cannot part.
+_TARGET_FIELDS = tuple(
+    field for field in Target.__annotations__ if field in Target.__required_keys__
+)
 
 
 def targets(root: Path = ROOT) -> list[Target]:

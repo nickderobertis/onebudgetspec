@@ -49,7 +49,10 @@ try:
     targets = tomllib.load(open(sys.argv[1], "rb"))["target"]
     for target in targets:
         if target["name"] == sys.argv[2]:
-            ids = [target["id"], *target.get("covers", [])]
+            covers = target.get("covers", [])
+            if not isinstance(covers, list):
+                sys.exit(f"target {sys.argv[2]}'s `covers` is not a list")
+            ids = [target["id"], *covers]
             for identifier in ids:
                 if not isinstance(identifier, str) or not re.fullmatch(rf"{registry}:\S+", identifier):
                     sys.exit(f"{identifier!r} is not a {registry}:<name> id")
