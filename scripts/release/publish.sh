@@ -43,12 +43,16 @@ readonly DECLARATION="${ONEBUDGETSPEC_RELEASE_TARGETS:-$ROOT/release-targets.tom
 target_packages() {
   local packages
   packages="$(python3 - "$DECLARATION" "$1" <<'PY'
-import sys, tomllib
+import re, sys, tomllib
+registry = {"crate": "crate", "pypi": "pypi", "sdk-pypi": "pypi", "npm": "npm", "sdk-npm": "npm"}.get(sys.argv[2])
 try:
     targets = tomllib.load(open(sys.argv[1], "rb"))["target"]
     for target in targets:
         if target["name"] == sys.argv[2]:
             ids = [target["id"], *target.get("covers", [])]
+            for identifier in ids:
+                if not isinstance(identifier, str) or not re.fullmatch(rf"{registry}:\S+", identifier):
+                    sys.exit(f"{identifier!r} is not a {registry}:<name> id")
             print(" ".join(i.partition(":")[2] for i in ids))
 except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError, AttributeError) as error:
     sys.exit(f"{type(error).__name__}: {error}")

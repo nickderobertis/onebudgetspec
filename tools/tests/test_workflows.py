@@ -304,3 +304,27 @@ def test_yaml_scalars_read_as_github_reads_them(tmp_path: Path) -> None:
     )
     assert jobs["numbered"].body["env"] == {"COUNT": "3"}
     assert jobs["numbered"].steps()[0]["env"] == {"ENABLED": "true"}
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        "bash scripts/ci-guard.sh NPM_TOKEN; touch {marker}",
+        "bash scripts/ci-guard.sh NPM_TOKEN && touch {marker}",
+        "bash scripts/ci-guard.sh $(touch {marker})",
+        "touch {marker} # bash scripts/ci-guard.sh NPM_TOKEN",
+    ],
+)
+def test_a_guard_step_that_runs_more_than_the_guard_is_refused_unrun(
+    tmp_path: Path, run: str
+) -> None:
+    marker = tmp_path / "ran"
+
+    def smuggle(document: dict) -> None:
+        document["jobs"]["guard"]["steps"][1]["run"] = run.format(marker=marker)
+
+    root = _copy_with(tmp_path, "release-plz.yml", smuggle)
+    job = next(job for job in workflows.load(root) if job.key == "release-plz.yml:release-plz")
+    with pytest.raises(workflows.InvalidWorkflow, match="runs more than scripts/ci-guard.sh"):
+        workflows.runs(job, event="push", secrets={}, variables={}, root=root)
+    assert not marker.exists(), "the smuggled command ran"

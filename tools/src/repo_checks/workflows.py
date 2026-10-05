@@ -65,6 +65,10 @@ SECRETS: tuple[Secret, ...] = (
 #: The repository variables that switch each registry's publication on.
 PUBLISH_VARIABLES: tuple[PublishVariable, ...] = ("CARGO_PUBLISH", "PYPI_PUBLISH", "NPM_PUBLISH")
 GUARD_SCRIPT = "scripts/ci-guard.sh"
+#: The one shape a guard step's `run` may take, so running it locally runs the guard alone.
+_GUARD_RUN = re.compile(
+    r"bash scripts/ci-guard\.sh(?P<args>(?: --any)?(?: [A-Za-z_][A-Za-z0-9_]*)*)"
+)
 
 _SECRET = re.compile(r"secrets\.([A-Z0-9_]+)")
 _VARIABLE = re.compile(r"vars\.([A-Z0-9_]+)")
@@ -289,11 +293,16 @@ def run_guard(job: Job, secrets: Mapping[str, str], root: Path = ROOT) -> dict[s
         run = str(step.get("run", ""))
         if GUARD_SCRIPT not in run:
             continue
+        guard = _GUARD_RUN.fullmatch(run.strip())
+        if guard is None:
+            raise InvalidWorkflow(
+                f"{job.key}: step {step.get('id', '?')} runs more than scripts/ci-guard.sh: {run!r}"
+            )
         env = {name: _resolve(str(value), context) for name, value in step.get("env", {}).items()}
         env = {name: value for name, value in env.items() if value}
         with tempfile.NamedTemporaryFile("r", suffix=".out") as output:
             completed = subprocess.run(
-                ["bash", "-c", run],
+                ["bash", GUARD_SCRIPT, *guard.group("args").split()],
                 cwd=root,
                 env={**base, **env, "GITHUB_OUTPUT": output.name},
                 capture_output=True,

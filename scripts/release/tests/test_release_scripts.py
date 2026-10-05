@@ -506,3 +506,34 @@ def test_publish_refuses_a_declaration_it_cannot_read(
     assert f"{path} {reason}" in refused.stderr
     assert "next: restore release-targets.toml from git" in refused.stderr
     assert "already published" not in refused.stdout
+
+
+@pytest.mark.parametrize(
+    ("target", "token", "declaration"),
+    [
+        (
+            "crate",
+            "CARGO_REGISTRY_TOKEN",
+            '[[target]]\nname = "crate"\nid = "pypi:onebudgetspec"\n',
+        ),
+        ("crate", "CARGO_REGISTRY_TOKEN", '[[target]]\nname = "crate"\nid = "onebudgetspec"\n'),
+        (
+            "sdk-npm",
+            "NPM_TOKEN",
+            '[[target]]\nname = "sdk-npm"\nid = "npm:@onebudgetspec/sdk"\ncovers = ["pypi:x"]\n',
+        ),
+    ],
+)
+def test_publish_refuses_ids_outside_the_target_s_registry(
+    tmp_path: Path, target: str, token: str, declaration: str
+) -> None:
+    path = tmp_path / "release-targets.toml"
+    path.write_text(declaration)
+    args = (target,) if target == "crate" else (target, str(tmp_path))
+    env = {token: "token", "ONEBUDGETSPEC_RELEASE_TARGETS": str(path)}
+    # Never crates.io, whatever happens.
+    env["ONEBUDGETSPEC_CRATES_API"] = "http://127.0.0.1:9/api/v1"
+    refused = publish(*args, **env)
+    assert refused.returncode == 1, refused.stdout
+    assert f"{path} cannot be read as a list of release targets" in refused.stderr
+    assert "<name> id" in refused.stderr
