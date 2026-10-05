@@ -331,6 +331,12 @@ def test_a_guard_step_that_runs_more_than_the_guard_is_refused_unrun(
 
 
 def test_the_required_checks_run_again_when_a_draft_is_marked_ready() -> None:
+    """Read the trigger list GitHub reads, since only GitHub can raise the event itself.
+
+    Marking a draft ready emits `ready_for_review`, an event only the hosted repository
+    raises and no local run can replay, so the proof here is the trigger list as GitHub
+    parses it. The merge path's own lift of a draft is the end-to-end proof.
+    """
     document = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
     # PyYAML reads the bare key `on` as the boolean True.
     pull_request = document[True]["pull_request"]
