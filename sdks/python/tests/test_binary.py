@@ -344,6 +344,8 @@ def test_a_report_whose_every_format_holds_is_returned(tmp_path: Path) -> None:
         ({}, {"cpus": "-1"}, "is not a 'uint32'"),
         ({}, {"mem_available_mib": "18446744073709551616"}, "is not a 'uint64'"),
         ({}, {"mem_available_mib": "1.5"}, "is not of type 'integer', 'null'"),
+        # An integral float is a JSON integer to the schema; the model refuses it as one.
+        ({}, {"mem_available_mib": "1e30"}, "mem_available_mib"),
         ({"threshold": "true"}, {}, "True is not of type 'number'"),
         # Valid by the schema's own grammar, but not an instant Python can hold.
         ({"started_at": '"0000-01-01T00:00:00Z"'}, {}, "started_at"),

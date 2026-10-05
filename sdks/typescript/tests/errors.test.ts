@@ -158,18 +158,17 @@ test.each<[string, Record<string, string>, Record<string, string>, string]>([
     'format "date-time"',
   ],
   ["a measurement too large for a double", { actual: "1e400" }, {}, "number"],
-  ["more CPUs than 32 bits hold", {}, { cpus: "4294967296" }, 'format "uint32"'],
-  ["negative CPUs", {}, { cpus: "-1" }, 'format "uint32"'],
-  ["fractional memory", {}, { mem_available_mib: "1.5" }, 'format "uint64"'],
-  ["negative memory", {}, { mem_available_mib: "-1" }, 'format "uint64"'],
+  ["more CPUs than 32 bits hold", {}, { cpus: "4294967296" }, "cpus: 4294967296 is not a 32-bit"],
+  ["negative CPUs", {}, { cpus: "-1" }, "cpus: -1 is not a 32-bit"],
+  ["fractional memory", {}, { mem_available_mib: "1.5" }, "1.5 is not a 64-bit"],
+  ["negative memory", {}, { mem_available_mib: "-1" }, "-1 is not a 64-bit"],
   [
     "memory one past the largest uint64",
     {},
     { mem_available_mib: "18446744073709551616" },
-    "18446744073709551616 is not an integer a report field can hold",
+    "mem_available_mib: 18446744073709551616 is not a 64-bit unsigned integer",
   ],
-  ["memory of 2^65", {}, { mem_available_mib: "36893488147419103232" }, "can hold"],
-  ["a negative integer past 2^53", { actual: "-9007199254740993" }, {}, "can hold"],
+  ["memory in exponent form", {}, { mem_available_mib: "1e30" }, "1e30 is not a 64-bit"],
 ])("%s is refused", async (_what, result, host, reason) => {
   const dir = scratch();
   const program = join(dir, "onebudgetspec");
@@ -181,7 +180,11 @@ test.each<[string, Record<string, string>, Record<string, string>, string]>([
 
 // A JavaScript caller can pass what the types forbid, so each row is typed as the open
 // object such a caller holds; the SDK refuses it at the boundary, before anything runs.
+const sparse = new Array<string>(2);
+sparse[1] = "api";
+
 test.each<[Record<string, unknown>]>([
+  [{ labels: sparse }],
   [{ ids: "api" }],
   [{ labels: ["api", 3] }],
   [{ excludeLabels: [null] }],

@@ -115,7 +115,8 @@ export function resolveBinary(binary?: string): Program {
 
 function strings(name: string, values: readonly string[] | undefined): string[] {
   if (values === undefined) return [];
-  if (!Array.isArray(values) || !values.every((value) => typeof value === "string")) {
+  // `Array.from` makes a sparse array's holes `undefined`, which `every` would skip.
+  if (!Array.isArray(values) || !Array.from(values).every((value) => typeof value === "string")) {
     throw new TypeError(`${name} must be an array of strings, not ${JSON.stringify(values)}`);
   }
   return [...values];
@@ -203,39 +204,46 @@ function isDateTime(value: string): boolean {
     field(10) <= 59
   );
 }
-/** Whether an integer fits in 32 unsigned bits. */
-const isUint32 = (value: number) => Number.isInteger(value) && value >= 0 && value < 2 ** 32;
-/** Whether a number is a non-negative integer: a uint64 as far as a double can say. Its upper
- * bound is checked exactly on the literal while parsing (see {@link parseReport}), since the
- * largest uint64 and the first integer past it read as the same double. */
-const isWholeAndNonNegative = (value: number) => Number.isInteger(value) && value >= 0;
-/** The widest integer a report carries, a uint64. */
-const UINT64_MAX = 2n ** 64n - 1n;
+/** Each integer property the report schemas declare, by name, with its width in bits: the
+ * `uint32` and `uint64` formats the binary's Rust types carry. */
+function integerFields(schema: unknown, found = new Map<string, bigint>()): Map<string, bigint> {
+  if (Array.isArray(schema)) {
+    for (const item of schema) integerFields(item, found);
+  } else if (isObject(schema)) {
+    const properties = isObject(schema.properties) ? schema.properties : {};
+    for (const [name, property] of Object.entries(properties)) {
+      if (isObject(property) && (property.format === "uint32" || property.format === "uint64")) {
+        found.set(name, BigInt(property.format.slice("uint".length)));
+      }
+    }
+    for (const value of Object.values(schema)) integerFields(value, found);
+  }
+  return found;
+}
+const INTEGER_FIELDS = integerFields(reportSchemas);
 
 /**
- * `stdout` parsed as JSON, refusing an integer literal no report field can hold. The integer
- * fields are unsigned, so a bare integer literal past the range a double holds exactly must
- * fit in a uint64, read exactly from its source text; a literal with a fraction or exponent
- * is a double (`1e20`), which the schema's own checks judge. A runtime that does not expose
- * the source cannot tell the two apart, so it refuses.
+ * `stdout` parsed as JSON, with every integer field's literal checked exactly against its
+ * width: a double holds integers exactly only to 2^53, so the largest uint64 and the first
+ * integer past it parse to the same number, and only the source text tells them apart. Double
+ * fields are left to the schema. A runtime that does not expose the source cannot check a
+ * literal past 2^53, so it refuses one.
  */
 function parseReport(stdout: string): unknown {
-  return JSON.parse(stdout, (_key: string, value: unknown, ...context: unknown[]) => {
-    if (typeof value !== "number" || Number.isSafeInteger(value) || !Number.isInteger(value)) {
-      return value;
-    }
+  return JSON.parse(stdout, (key: string, value: unknown, ...context: unknown[]) => {
+    const bits = INTEGER_FIELDS.get(key);
+    if (bits === undefined || typeof value !== "number") return value;
     const [info] = context;
     const source = isObject(info) && typeof info.source === "string" ? info.source : undefined;
-    if (source !== undefined && !/^-?\d+$/.test(source)) return value;
-    if (source === undefined || source.startsWith("-") || BigInt(source) > UINT64_MAX) {
-      throw new RangeError(`${source ?? value} is not an integer a report field can hold`);
+    const exact = source ?? (Number.isSafeInteger(value) ? String(value) : undefined);
+    if (exact === undefined || !/^\d+$/.test(exact) || BigInt(exact) >= 2n ** bits) {
+      throw new RangeError(`${key}: ${source ?? value} is not a ${bits}-bit unsigned integer`);
     }
     return value;
   });
 }
 
-// Every format the schema names is checked: the timestamps, and the numeric widths the
-// binary's Rust types carry.
+// Every format the schema names is known, so none is skipped as unknown.
 const ajv = new Ajv2020({
   allErrors: true,
   formats: {
@@ -243,8 +251,9 @@ const ajv = new Ajv2020({
     // A double is any JSON number: ajv's own `number` check already refuses a value that
     // overflows to Infinity.
     double: true,
-    uint32: { type: "number", validate: isUint32 },
-    uint64: { type: "number", validate: isWholeAndNonNegative },
+    // Checked exactly on each integer field's literal while parsing (see parseReport).
+    uint32: true,
+    uint64: true,
   },
 });
 const checkReport = ajv.compile<CheckReport>(reportSchemas["check-report"]);
