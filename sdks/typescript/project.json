@@ -39,6 +39,14 @@
       },
       "dependsOn": ["onebudgetspec:build"]
     },
+    "generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run --cwd sdks/typescript generate"
+      },
+      "dependsOn": ["onebudgetspec:build"],
+      "cache": false
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {

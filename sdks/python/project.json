@@ -35,6 +35,15 @@
       },
       "dependsOn": ["onebudgetspec:build"]
     },
+    "generate": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync python generate.py",
+        "cwd": "sdks/python"
+      },
+      "dependsOn": ["onebudgetspec:build"],
+      "cache": false
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {

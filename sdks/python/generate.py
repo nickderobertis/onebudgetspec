@@ -1,9 +1,9 @@
 """Generate the SDK's report models from the binary's own ``onebudgetspec schema``.
 
-``python generate.py`` writes ``src/onebudgetspec_sdk/_generated``; ``python generate.py
---check`` writes nothing and fails, naming each file, when what is committed differs from
-what the current schema generates. The binary is ``ONEBUDGETSPEC_BIN`` when set, else the
-workspace's ``target/debug/onebudgetspec``.
+``python generate.py`` (``just generate``) writes ``src/onebudgetspec_sdk/_generated``;
+``python generate.py --check`` (run by ``just lint``) writes nothing and fails, naming each
+file, when what is committed differs from what the current schema generates. The binary is
+``ONEBUDGETSPEC_BIN`` when set, else the workspace's ``target/debug/onebudgetspec``.
 """
 
 import argparse
@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -25,46 +26,77 @@ HEADER = (
     "# Do not edit: re-run the generator. Each docstring is the schema's description verbatim.\n"
     "# ruff: noqa: D200, D205, D212, D400, D415, E501"
 )
+#: What to do when the binary is missing or prints no usable bundle.
+REBUILD = "run 'just generate', which builds the binary first, or point ONEBUDGETSPEC_BIN at one"
 
 
 class GenerateError(Exception):
-    """A step of generation failed; the message says which and what to do."""
+    """A step of generation failed; the message says which and what to do next."""
 
 
-def _run(command: list[str], *, stdin: str | None = None) -> str:
+@dataclass(frozen=True)
+class SchemaBundle:
+    """The parts of ``onebudgetspec schema``'s bundle the generator reads, checked."""
+
+    version: int
+    roots: dict[str, dict[str, object]]
+
+    @classmethod
+    def parse(cls, text: str) -> "SchemaBundle":
+        """Read the bundle the binary printed, refusing any other shape.
+
+        Raises:
+            GenerateError: the text is not JSON, or lacks the version or a root generated here.
+        """
+        try:
+            document = json.loads(text)
+        except ValueError as error:
+            raise GenerateError(f"the binary's schema is not JSON ({error}); {REBUILD}") from error
+        match document:
+            case {"version": int(version), "roots": dict(roots)} if all(
+                isinstance(roots.get(root), dict) for root in ROOTS
+            ):
+                return cls(version, {root: roots[root] for root in ROOTS})
+            case _:
+                raise GenerateError(
+                    f"the binary's schema bundle lacks an integer `version` or one of the roots "
+                    f"{sorted(ROOTS)}; {REBUILD}"
+                )
+
+
+def _run(command: list[str], next_step: str, *, stdin: str | None = None) -> str:
     try:
         completed = subprocess.run(
             command, input=stdin, capture_output=True, text=True, check=False
         )
     except OSError as error:
-        raise GenerateError(f"cannot run {command[0]}: {error}") from error
+        raise GenerateError(f"cannot run {command[0]} ({error}); {next_step}") from error
     if completed.returncode != 0:
         raise GenerateError(
-            f"{' '.join(command)} exited {completed.returncode}:\n{completed.stderr.strip()}"
+            f"{' '.join(command)} exited {completed.returncode}:\n"
+            f"{completed.stderr.strip()}\n{next_step}"
         )
     return completed.stdout
 
 
-def bundle() -> dict[str, object]:
+def bundle() -> SchemaBundle:
     """The schema bundle the binary prints."""
     binary = os.environ.get("ONEBUDGETSPEC_BIN") or str(WORKSPACE_BINARY)
     if not Path(binary).is_file():
-        raise GenerateError(
-            f"{binary} is missing; build it with `cargo build -p onebudgetspec` "
-            "or point ONEBUDGETSPEC_BIN at one"
-        )
-    return json.loads(_run([binary, "schema"]))
+        raise GenerateError(f"{binary} is missing; {REBUILD}")
+    return SchemaBundle.parse(_run([binary, "schema"], REBUILD))
 
 
 def _ruff() -> str:
     ruff = shutil.which("ruff")
     if ruff is None:
-        raise GenerateError("ruff is not on PATH; run the generator with `uv run python ...`")
+        raise GenerateError("ruff is not on PATH; run 'just bootstrap', then 'just generate'")
     return ruff
 
 
-def render(root: str, schema: object) -> str:
+def render(root: str, schema: dict[str, object]) -> str:
     """One root's module: datamodel-codegen's models, formatted as the package is."""
+    tools = "run 'just bootstrap' to install the generator's tools, then 'just generate'"
     with tempfile.TemporaryDirectory() as scratch:
         source = Path(scratch) / f"{root}.json"
         output = Path(scratch) / "models.py"
@@ -102,34 +134,43 @@ def render(root: str, schema: object) -> str:
                 "builtin",
                 "--custom-file-header",
                 HEADER.format(root=root),
-            ]
+            ],
+            tools,
         )
         text = output.read_text()
     config = ["--config", str(HERE / "pyproject.toml")]
     text = _run(
         [_ruff(), "check", *config, "--fix-only", "--quiet", "--stdin-filename", "m.py", "-"],
+        tools,
         stdin=text,
     )
-    return _run([_ruff(), "format", *config, "--stdin-filename", "m.py", "-"], stdin=text)
+    return _run([_ruff(), "format", *config, "--stdin-filename", "m.py", "-"], tools, stdin=text)
 
 
-def files(schema_bundle: dict[str, object]) -> dict[str, str]:
+def files(schema_bundle: SchemaBundle) -> dict[str, str]:
     """Every generated file's name and content."""
-    roots = schema_bundle["roots"]
-    if not isinstance(roots, dict):
-        raise GenerateError("the schema bundle has no `roots` object")
-    version = schema_bundle["version"]
     generated = {
         "__init__.py": (
             '"""Models generated from `onebudgetspec schema`; see sdks/python/generate.py."""\n'
             "\n"
             "#: The version of the schema bundle these models were generated from.\n"
-            f"SCHEMA_BUNDLE_VERSION = {version!r}\n"
+            f"SCHEMA_BUNDLE_VERSION = {schema_bundle.version!r}\n"
         )
     }
     for root, module in ROOTS.items():
-        generated[module] = render(root, roots[root])
+        generated[module] = render(root, schema_bundle.roots[root])
     return generated
+
+
+def _differences(wanted: dict[str, str]) -> tuple[list[str], list[str]]:
+    """The generated files that are stale or missing, and those no root generates."""
+    present = {path.name: path for path in GENERATED.glob("*.py")} if GENERATED.is_dir() else {}
+    stale = sorted(
+        name
+        for name, content in wanted.items()
+        if name not in present or present[name].read_text() != content
+    )
+    return stale, sorted(set(present) - set(wanted))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -139,28 +180,30 @@ def main(argv: list[str] | None = None) -> int:
     arguments = parser.parse_args(argv)
     try:
         wanted = files(bundle())
+        stale, extra = _differences(wanted)
+        if arguments.check:
+            for name in [*stale, *extra]:
+                print(
+                    f"generate: src/onebudgetspec_sdk/_generated/{name} differs from what "
+                    "`onebudgetspec schema` generates; run 'just generate'",
+                    file=sys.stderr,
+                )
+            return 1 if stale or extra else 0
+        GENERATED.mkdir(parents=True, exist_ok=True)
+        for name in stale:
+            (GENERATED / name).write_text(wanted[name])
+        for name in extra:
+            (GENERATED / name).unlink()
     except GenerateError as error:
         print(f"generate: {error}", file=sys.stderr)
         return 1
-    stale = sorted(
-        name
-        for name, content in wanted.items()
-        if not (GENERATED / name).is_file() or (GENERATED / name).read_text() != content
-    )
-    extra = sorted(path.name for path in GENERATED.glob("*.py") if path.name not in wanted)
-    if arguments.check:
-        for name in [*stale, *extra]:
-            print(
-                f"generate: src/onebudgetspec_sdk/_generated/{name} differs from what "
-                "`onebudgetspec schema` generates; run 'uv run python generate.py' in sdks/python",
-                file=sys.stderr,
-            )
-        return 1 if stale or extra else 0
-    GENERATED.mkdir(parents=True, exist_ok=True)
-    for name in stale:
-        (GENERATED / name).write_text(wanted[name])
-    for name in extra:
-        (GENERATED / name).unlink()
+    except OSError as error:
+        print(
+            f"generate: cannot read or write {GENERATED} ({error}); make it writable, "
+            "then run 'just generate'",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

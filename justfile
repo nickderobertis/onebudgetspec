@@ -70,6 +70,11 @@ upgrade:
 schema:
     @cargo run --quiet -p onebudgetspec -- schema
 
+# Regenerate both SDKs' models from the binary's `onebudgetspec schema` (building it first).
+# `just lint` fails while they and the schema part.
+generate:
+    @./scripts/nx run-many -t generate -p sdk-python sdk-typescript
+
 # Every version agrees with the workspace's; `just set-version X` writes X everywhere.
 versions:
     @uv run --quiet --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions check

@@ -11,6 +11,7 @@ import json
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any, NotRequired, TypedDict
 
 import pytest
 from conftest import CASES, run_cli
@@ -27,6 +28,25 @@ from onebudgetspec_sdk import (
 
 CASE_DIRS = sorted(path for path in CASES.iterdir() if path.is_dir())
 EPOCH = "1970-01-01T00:00:00Z"
+
+
+class CaseSpec(TypedDict):
+    """A case.json, as conformance/README.md defines it."""
+
+    description: str
+    args: list[str]
+    exit: int
+    timed: NotRequired[list[str]]
+    error_contains: NotRequired[dict[str, str]]
+
+
+@dataclass(frozen=True)
+class PreparedCase:
+    """A case's name, its case.json, and a fresh copy of its directory to run in."""
+
+    name: str
+    spec: CaseSpec
+    work: Path
 
 
 @dataclass
@@ -81,7 +101,7 @@ def parse(args: list[str]) -> Invocation:
     return invocation
 
 
-def normalize(report: dict, case: dict, name: str) -> dict:
+def normalize(report: dict[str, Any], case: CaseSpec, name: str) -> dict[str, Any]:
     """The normalization conformance/README.md defines, applied to a report in place."""
     timed = case.get("timed", [])
     for result in report["results"]:
@@ -107,12 +127,13 @@ def exit_status(report: CheckReport) -> int:
 
 
 @pytest.fixture
-def case(request: pytest.FixtureRequest, tmp_path: Path) -> tuple[str, dict, Path]:
-    """The case's name, its case.json and a fresh copy of its directory to run in."""
+def case(request: pytest.FixtureRequest, tmp_path: Path) -> PreparedCase:
+    """The case named by the parameter, copied to run in."""
     source: Path = request.param
     work = tmp_path / source.name
     shutil.copytree(source, work)
-    return source.name, json.loads((source / "case.json").read_text()), work
+    spec: CaseSpec = json.loads((source / "case.json").read_text())
+    return PreparedCase(source.name, spec, work)
 
 
 def ids(path: Path) -> str:
@@ -122,10 +143,10 @@ def ids(path: Path) -> str:
 
 @pytest.mark.parametrize("case", CASE_DIRS, ids=ids, indirect=True)
 def test_check_returns_the_report_the_case_expects(
-    case: tuple[str, dict, Path], built_binary: Path, monkeypatch: pytest.MonkeyPatch
+    case: PreparedCase, built_binary: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``check`` returns the case's expected report, or raises as the CLI refuses it."""
-    name, spec, work = case
+    name, spec, work = case.name, case.spec, case.work
     monkeypatch.setenv(BINARY_ENV, str(built_binary))
     invocation = parse(spec["args"])
     assert invocation.verb == "check", f"{name}: the cases are check invocations"
@@ -159,10 +180,10 @@ def test_check_returns_the_report_the_case_expects(
 
 @pytest.mark.parametrize("case", CASE_DIRS, ids=ids, indirect=True)
 def test_list_and_validate_answer_as_the_binary_does(
-    case: tuple[str, dict, Path], built_binary: Path, monkeypatch: pytest.MonkeyPatch
+    case: PreparedCase, built_binary: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """``list_budgets`` and ``validate`` answer, or refuse, exactly as the binary does."""
-    name, spec, work = case
+    name, spec, work = case.name, case.spec, case.work
     monkeypatch.setenv(BINARY_ENV, str(built_binary))
     invocation = parse(spec["args"])
 
