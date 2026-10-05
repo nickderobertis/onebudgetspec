@@ -6,6 +6,7 @@ import pytest
 from conftest import copy_tree
 
 from repo_checks import versions
+from repo_checks.paths import ROOT
 
 FILES = (
     "Cargo.toml",
@@ -50,7 +51,16 @@ def test_set_refuses_what_is_not_a_version(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = copy_tree(tmp_path, *FILES)
-    for bad in ("1.2", "v1.2.3", '1.2.3"\nevil = "x', ""):
+    for bad in (
+        "1.2",
+        "v1.2.3",
+        '1.2.3"\nevil = "x',
+        "",
+        "1.2.3\n",
+        "01.2.3",
+        "1.2.3-..",
+        "1.2.3-01",
+    ):
         assert versions.main(["set", bad], root) == 64
         assert "is not a version" in capsys.readouterr().err
     assert versions.disagreements(root) == []
@@ -80,3 +90,16 @@ def test_a_missing_version_and_a_missing_carrier_are_named(tmp_path: Path) -> No
 def test_usage(capsys: pytest.CaptureFixture[str]) -> None:
     assert versions.main([]) == 64
     assert "usage" in capsys.readouterr().err
+
+
+def test_the_probe_and_this_check_share_one_version_grammar() -> None:
+    def grammar(path: Path) -> str:
+        text = path.read_text()
+        start = text.index("VERSION = re.compile(")
+        return text[start : text.index("\n)\n", start)]
+
+    assert grammar(ROOT / "scripts/release-probe.py") == grammar(
+        ROOT / "tools/src/repo_checks/versions.py"
+    )
+    for good in ("0.1.0", "1.2.3-rc.1", "1.2.3+build.5", "10.20.30-alpha.beta"):
+        assert versions.VERSION.fullmatch(good), good

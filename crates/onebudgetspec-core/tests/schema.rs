@@ -48,3 +48,24 @@ fn canonical(value: &Value) -> String {
         scalar => scalar.to_string(),
     }
 }
+
+/// `list` reports every field a budget declares, plus its file: a field added to the
+/// budgets file but not to the list report fails here.
+#[test]
+fn a_listed_budget_carries_every_budget_field_and_its_file() {
+    let bundle = schema_bundle();
+    let properties = |root: &str, definition: &str| -> Vec<String> {
+        let mut names: Vec<String> = bundle["roots"][root]["$defs"][definition]["properties"]
+            .as_object()
+            .unwrap_or_else(|| panic!("{root} defines no {definition}"))
+            .keys()
+            .cloned()
+            .collect();
+        names.sort();
+        names
+    };
+    let mut expected = properties("budgets-file", "Budget");
+    expected.push("file".to_owned());
+    expected.sort();
+    assert_eq!(properties("list-report", "ListedBudget"), expected);
+}

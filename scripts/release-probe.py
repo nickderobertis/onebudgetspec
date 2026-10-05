@@ -35,7 +35,14 @@ BASES: dict[Registry, str] = {
 }
 REGISTRIES: dict[str, Registry] = {"crate": "crate", "pypi": "pypi", "npm": "npm"}
 AGENT = "onebudgetspec-release-probe (+https://github.com/nickderobertis/onebudgetspec)"
-VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+.][0-9A-Za-z.+-]+)?$")
+#: A release version (Semantic Versioning 2.0.0), matched whole; tools/tests/test_versions.py
+#: holds this pattern identical to repo_checks.versions.VERSION.
+VERSION = re.compile(
+    r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    r"(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+)
 LATER = "re-ask later; a registry that did not answer is not one with no release"
 
 
@@ -110,7 +117,7 @@ def main(argv: list[str]) -> None:
     version = served(registry, document)
     if version is None:
         return
-    if not isinstance(version, str) or not VERSION.match(version):
+    if not isinstance(version, str) or not VERSION.fullmatch(version):
         refuse(f"{registry} serves {name} at {version!r}, which is not a version", LATER)
     print(version)
 

@@ -1,7 +1,7 @@
 [project]
 name = "onebudgetspec-sdk"
 version = "0.1.0"
-description = "The Python SDK for onebudgetspec: register measurable budgets in YAML and gate on them."
+description = "The onebudgetspec Python SDK package, versioned with the onebudgetspec command line; it exposes the release version."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

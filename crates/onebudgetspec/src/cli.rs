@@ -71,6 +71,7 @@ pub struct SelectedFiles {
     pub select: SelectArgs,
 }
 
+// llmlint: ignore-block[invalid_states_unrepresentable] the contract gives these their meaning at selection, not parsing: an id matching no budget is refused by Budgets::select with status 2, and a label matching none leaves an empty selection that exits 0, which a validating type here would turn into a refusal.
 #[derive(Debug, Args)]
 pub struct SelectArgs {
     /// Keep only this budget (repeatable). An id no file registers is an error.
@@ -85,3 +86,4 @@ pub struct SelectArgs {
     #[arg(long = "exclude-label", value_name = "LABEL")]
     pub exclude_labels: Vec<String>,
 }
+// llmlint: ignore-end[invalid_states_unrepresentable]

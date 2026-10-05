@@ -68,7 +68,6 @@ npm_publish() {
   npm publish "$tarball" --access public --userconfig "$NPMRC"
 }
 
-# llmlint: ignore-block[changed_behavior_has_e2e] the uploads below reach crates.io, PyPI and npm with tokens this repository is not given until publishing is provisioned; every refusal before an upload is driven by tools/tests/test_scripts.py.
 target="${1:-}"
 [ $# -gt 0 ] && shift
 case "$target" in
@@ -83,6 +82,7 @@ case "$target" in
         || fail "crates.io could not be reached to ask about $crate $VERSION" "re-run the release workflow once crates.io answers"
       case "$status" in
         200) skipped+=("$crate") ;;
+        # llmlint: ignore[changed_behavior_has_e2e] uploading to crates.io needs its token, which this repository is not given until publishing is provisioned, and cargo publishes only there; the npm path above is driven against a local registry.
         404) cargo publish --locked -p "$crate" --manifest-path "$ROOT/Cargo.toml" ;;
         *) fail "crates.io answered HTTP $status for $crate $VERSION" "re-run the release workflow once crates.io answers" ;;
       esac
@@ -93,13 +93,21 @@ case "$target" in
     need PYPI_TOKEN
     prefix=onebudgetspec_cli
     [ "$target" = pypi ] || prefix=onebudgetspec_sdk
-    for wheel in "$1"/*.whl; do
-      case "$(basename "$wheel")" in
-        "$prefix-$VERSION-"*) ;;
-        *) fail "$wheel is not a $prefix $VERSION wheel" "publish only what scripts/build-dist.sh built for $target at this commit" ;;
-      esac
-    done
     name="${prefix//_/-}"
+    for wheel in "$1"/*.whl; do
+      # The identity the wheel's own metadata declares, not its file name.
+      identity="$(python3 - "$wheel" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[1]) as wheel:
+    metadata = next(n for n in wheel.namelist() if n.endswith(".dist-info/METADATA"))
+    fields = dict(l.split(": ", 1) for l in wheel.read(metadata).decode().splitlines() if ": " in l)
+print(fields["Name"], fields["Version"])
+PY
+)" || fail "$wheel is not a readable wheel" "rebuild it with scripts/build-dist.sh"
+      [ "$identity" = "$name $VERSION" ] \
+        || fail "$wheel is $identity, not $name $VERSION" "publish only what scripts/build-dist.sh built for $target at this commit"
+    done
+    # llmlint: ignore[changed_behavior_has_e2e] uploading to PyPI needs its token, which this repository is not given until publishing is provisioned; every wheel is checked against its metadata above, which tools/tests/test_scripts.py drives.
     UV_PUBLISH_TOKEN="$PYPI_TOKEN" uv publish --quiet --check-url "https://pypi.org/simple/$name/" "$1"/*.whl
     ;;
   npm | sdk-npm)
@@ -107,7 +115,8 @@ case "$target" in
     need NPM_TOKEN
     NPMRC="$(mktemp)"
     trap 'rm -f "$NPMRC"' EXIT
-    printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" >"$NPMRC"
+    registry="$(npm config get registry)"
+    printf '%s:_authToken=%s\n' "${registry#http*:}" "$NPM_TOKEN" >"$NPMRC"
     # In argument order: the carriers must exist before the launcher that pins them.
     for dir in "$@"; do
       for tarball in "$dir"/*.tgz; do npm_publish "$target" "$tarball"; done
@@ -115,8 +124,6 @@ case "$target" in
     ;;
   *) usage "unknown target '${target}'" ;;
 esac
-
-# llmlint: ignore-end[changed_behavior_has_e2e]
 
 if [ ${#skipped[@]} -gt 0 ]; then
   echo "publish: already published at $VERSION, skipped: ${skipped[*]}"

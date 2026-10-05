@@ -9,28 +9,53 @@ import os
 import subprocess
 import sys
 import threading
+import zipfile
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import NamedTuple
+from urllib.parse import unquote
 
 import pytest
 
 from repo_checks.paths import ROOT
 
-#: Each path the local registry answers, and how: a status and a JSON body.
-ANSWERS: dict[str, tuple[int, object]] = {}
+
+class Answer(NamedTuple):
+    """What the local registry answers one path with."""
+
+    status: int
+    body: object
+
+
+#: Each path the local registry answers (unquoted), and how.
+ANSWERS: dict[str, Answer] = {}
+#: The paths the local registry was sent a package to, in order.
+UPLOADS: list[str] = []
 
 
 class Registry(BaseHTTPRequestHandler):
-    """Answers each request from ANSWERS, and 404 for anything else."""
+    """Answers each GET from ANSWERS (404 otherwise) and accepts every upload."""
 
     def do_GET(self) -> None:
         """Answer one GET from ANSWERS."""
-        status, body = ANSWERS.get(self.path, (404, {"errors": "not found"}))
-        payload = body if isinstance(body, bytes) else json.dumps(body).encode()
-        self.send_response(status)
+        answer = ANSWERS.get(unquote(self.path), Answer(404, {"error": "not found"}))
+        payload = (
+            answer.body if isinstance(answer.body, bytes) else json.dumps(answer.body).encode()
+        )
+        self.send_response(answer.status)
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(payload)
+
+    def do_PUT(self) -> None:
+        """Accept one upload and record where it went."""
+        self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        UPLOADS.append(unquote(self.path))
+        self.send_response(201)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"ok": true}')
 
     def log_message(self, format: str, *args: object) -> None:
         """Stay quiet."""
@@ -42,6 +67,7 @@ def registry() -> Iterator[str]:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     ANSWERS.clear()
+    UPLOADS.clear()
     yield f"http://127.0.0.1:{server.server_port}/"
     server.shutdown()
 
@@ -63,16 +89,16 @@ def probe(identifier: str, base: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_the_probe_answers_what_each_registry_serves(registry: str) -> None:
-    ANSWERS["/crates/onebudgetspec"] = (200, {"crate": {"max_stable_version": "0.3.1"}})
-    ANSWERS["/pypi/onebudgetspec-cli/json"] = (200, {"info": {"version": "0.3.1"}})
-    ANSWERS["/npm/@onebudgetspec%2Fcli"] = (200, {"dist-tags": {"latest": "0.3.1"}})
+    ANSWERS["/crates/onebudgetspec"] = Answer(200, {"crate": {"max_stable_version": "0.3.1"}})
+    ANSWERS["/pypi/onebudgetspec-cli/json"] = Answer(200, {"info": {"version": "0.3.1"}})
+    ANSWERS["/npm/@onebudgetspec/cli"] = Answer(200, {"dist-tags": {"latest": "0.3.1"}})
     for identifier in ("crate:onebudgetspec", "pypi:onebudgetspec-cli", "npm:@onebudgetspec/cli"):
         answered = probe(identifier, registry)
         assert (answered.returncode, answered.stdout) == (0, "0.3.1\n"), answered.stderr
 
 
 def test_the_probe_answers_nothing_only_when_the_registry_says_so(registry: str) -> None:
-    ANSWERS["/crates/onebudgetspec"] = (200, {"crate": {"max_stable_version": None}})
+    ANSWERS["/crates/onebudgetspec"] = Answer(200, {"crate": {"max_stable_version": None}})
     for identifier in ("crate:onebudgetspec", "pypi:onebudgetspec-sdk"):
         answered = probe(identifier, registry)
         assert (answered.returncode, answered.stdout) == (0, ""), answered.stderr
@@ -81,15 +107,15 @@ def test_the_probe_answers_nothing_only_when_the_registry_says_so(registry: str)
 @pytest.mark.parametrize(
     ("answer", "reason"),
     [
-        ((500, {"error": "down"}), "answered HTTP 500"),
-        ((200, b"not json"), "could not be read"),
-        ((200, {"info": {}}), "no version where one is expected"),
-        ((200, {"info": {"version": "1.0\nevil"}}), "which is not a version"),
-        ((200, {"info": {"version": 3}}), "which is not a version"),
+        (Answer(500, {"error": "down"}), "answered HTTP 500"),
+        (Answer(200, b"not json"), "could not be read"),
+        (Answer(200, {"info": {}}), "no version where one is expected"),
+        (Answer(200, {"info": {"version": "1.0.0\n"}}), "which is not a version"),
+        (Answer(200, {"info": {"version": 3}}), "which is not a version"),
     ],
 )
 def test_a_registry_that_did_not_answer_is_not_answered(
-    registry: str, answer: tuple[int, object], reason: str
+    registry: str, answer: Answer, reason: str
 ) -> None:
     ANSWERS["/pypi/onebudgetspec-cli/json"] = answer
     answered = probe("pypi:onebudgetspec-cli", registry)
@@ -187,4 +213,88 @@ def test_publish_refuses_a_wheel_of_another_package(tmp_path: Path) -> None:
     (tmp_path / "onebudgetspec_sdk-0.1.0-py3-none-any.whl").write_text("")
     refused = publish("pypi", str(tmp_path), PYPI_TOKEN="token")
     assert refused.returncode == 1
-    assert "is not a onebudgetspec_cli 0.1.0 wheel" in refused.stderr
+    assert "is not a readable wheel" in refused.stderr
+
+
+def npm_registry_env(base: str, tmp_path: Path) -> dict[str, str]:
+    """Point npm at the local registry, with no retries and a private cache."""
+    return {
+        "npm_config_registry": base,
+        "npm_config_cache": str(tmp_path / "npm-cache"),
+        "npm_config_fetch_retries": "0",
+        "NPM_TOKEN": "token",
+    }
+
+
+def packument(version: str) -> Answer:
+    """The registry document of @onebudgetspec/sdk serving ``version``."""
+    manifest = {
+        "name": "@onebudgetspec/sdk",
+        "version": version,
+        "dist": {"tarball": "x", "shasum": "x"},
+    }
+    return Answer(
+        200,
+        {
+            "name": "@onebudgetspec/sdk",
+            "dist-tags": {"latest": version},
+            "versions": {version: manifest},
+        },
+    )
+
+
+def test_publish_skips_a_version_npm_already_serves(registry: str, tmp_path: Path) -> None:
+    ANSWERS["/@onebudgetspec/sdk"] = packument("0.1.0")
+    packed = pack(tmp_path, "@onebudgetspec/sdk", "0.1.0")
+    done = publish("sdk-npm", str(packed), **npm_registry_env(registry, tmp_path))
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == "publish: already published at 0.1.0, skipped: @onebudgetspec/sdk\n"
+    assert UPLOADS == []
+
+
+@pytest.mark.parametrize("served", [None, "0.0.9"])
+def test_publish_uploads_a_version_npm_does_not_serve(
+    registry: str, tmp_path: Path, served: str | None
+) -> None:
+    if served:
+        ANSWERS["/@onebudgetspec/sdk"] = packument(served)
+    packed = pack(tmp_path, "@onebudgetspec/sdk", "0.1.0")
+    done = publish("sdk-npm", str(packed), **npm_registry_env(registry, tmp_path))
+    assert done.returncode == 0, done.stderr
+    assert UPLOADS == ["/@onebudgetspec/sdk"]
+
+
+def test_publish_refuses_when_npm_cannot_say_what_it_serves(registry: str, tmp_path: Path) -> None:
+    ANSWERS["/@onebudgetspec/sdk"] = Answer(500, {"error": "down"})
+    packed = pack(tmp_path, "@onebudgetspec/sdk", "0.1.0")
+    refused = publish("sdk-npm", str(packed), **npm_registry_env(registry, tmp_path))
+    assert refused.returncode == 1
+    assert "npm could not say whether @onebudgetspec/sdk@0.1.0 is published" in refused.stderr
+    assert UPLOADS == []
+
+
+def test_publish_refuses_a_tarball_without_a_manifest(tmp_path: Path) -> None:
+    (tmp_path / "empty").mkdir()
+    (tmp_path / "packed").mkdir()
+    subprocess.run(
+        ["tar", "-czf", str(tmp_path / "packed/broken.tgz"), "-C", str(tmp_path / "empty"), "."],
+        check=True,
+    )
+    refused = publish("sdk-npm", str(tmp_path / "packed"), NPM_TOKEN="token")
+    assert refused.returncode == 1
+    assert "holds no readable package/package.json" in refused.stderr
+
+
+def test_publish_reads_a_wheel_s_identity_from_its_metadata(tmp_path: Path) -> None:
+    wheel = tmp_path / "onebudgetspec_cli-0.1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr(
+            "onebudgetspec_sdk-0.1.0.dist-info/METADATA",
+            "Metadata-Version: 2.4\nName: onebudgetspec-sdk\nVersion: 0.1.0\n",
+        )
+    refused = publish("pypi", str(tmp_path), PYPI_TOKEN="token")
+    assert refused.returncode == 1
+    assert "is onebudgetspec-sdk 0.1.0, not onebudgetspec-cli 0.1.0" in refused.stderr
+    wheel.write_text("not a zip")
+    refused = publish("pypi", str(tmp_path), PYPI_TOKEN="token")
+    assert "is not a readable wheel" in refused.stderr

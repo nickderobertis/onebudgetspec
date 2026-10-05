@@ -20,11 +20,13 @@ TARGET_NAMES = ("crate", "pypi", "npm", "sdk-pypi", "sdk-npm")
 
 def _manifest_name(root: Path, manifest: str) -> str:
     path = root / manifest
-    if path.name == "Cargo.toml":
-        return tomllib.loads(path.read_text())["package"]["name"]
-    if path.name == "pyproject.toml":
-        return tomllib.loads(path.read_text())["project"]["name"]
-    return json.loads(path.read_text())["name"]
+    match path.name:
+        case "Cargo.toml":
+            return tomllib.loads(path.read_text())["package"]["name"]
+        case "pyproject.toml":
+            return tomllib.loads(path.read_text())["project"]["name"]
+        case _:
+            return json.loads(path.read_text())["name"]
 
 
 def carrier_platforms(root: Path = ROOT) -> set[str]:
@@ -68,12 +70,13 @@ def target_problems(root: Path = ROOT) -> list[str]:
                 f"{target['name']}: published_by does not name {job}, the job that publishes it"
             )
         covers = sorted(target.get("covers", []))
-        if target["name"] == "crate":
-            expected = sorted(f"crate:{crate}" for crate in publishable_crates if crate != name)
-        elif target["name"] == "npm":
-            expected = sorted(f"npm:@onebudgetspec/cli-{p}" for p in carrier_platforms(root))
-        else:
-            expected = []
+        match target["name"]:
+            case "crate":
+                expected = sorted(f"crate:{c}" for c in publishable_crates if c != name)
+            case "npm":
+                expected = sorted(f"npm:@onebudgetspec/cli-{p}" for p in carrier_platforms(root))
+            case _:
+                expected = []
         if covers != expected:
             problems.append(f"{target['name']}: covers {covers}, expected {expected}")
         if registry not in ("crate", "pypi", "npm"):
