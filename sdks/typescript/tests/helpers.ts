@@ -1,5 +1,6 @@
 // What the SDK's tests share: the built binary, the conformance cases, and recording
 // binaries that log their name before running the real one.
+import assert from "node:assert";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -19,9 +20,7 @@ export const CASES = join(ROOT, "conformance", "cases");
 /** The `onebudgetspec` cargo built, which Nx's sdk-typescript:test builds first. */
 export function builtBinary(): string {
   const binary = join(ROOT, "target", "debug", "onebudgetspec");
-  if (!existsSync(binary)) {
-    throw new Error(`${binary} is missing; build it with 'cargo build -p onebudgetspec'`);
-  }
+  assert(existsSync(binary), `${binary} is missing; build it with 'just test', which builds it`);
   return binary;
 }
 
@@ -67,11 +66,12 @@ export async function rejection<E extends Error>(
   call: Promise<unknown>,
   kind: abstract new (...args: never[]) => E,
 ): Promise<E> {
+  let outcome: unknown = "a resolved call";
   try {
     await call;
   } catch (error) {
-    if (error instanceof kind) return error;
-    throw error;
+    outcome = error;
   }
-  throw new Error("the call resolved; it should have rejected");
+  assert(outcome instanceof kind, `expected a ${kind.name} rejection, got ${String(outcome)}`);
+  return outcome;
 }
