@@ -1,0 +1,20 @@
+{
+  "description": "Ids, labels and excluded labels select together: a budget runs only when every filter keeps it, and the rest are never measured.",
+  "args": [
+    "check",
+    "--json",
+    "--id",
+    "api-latency",
+    "--id",
+    "api-retries",
+    "--id",
+    "web-bundle",
+    "--label",
+    "api",
+    "--label",
+    "web",
+    "--exclude-label",
+    "slow"
+  ],
+  "exit": 0
+}

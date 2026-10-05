@@ -1,0 +1,5 @@
+{
+  "description": "A directory searched recursively yields its budgets files in path order, and a file outside the paths given is never read.",
+  "args": ["check", "--json", "--recursive", "services"],
+  "exit": 1
+}
