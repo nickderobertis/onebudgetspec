@@ -1,11 +1,10 @@
 # The one command surface. Every gate recipe delegates to Nx: `affected` for what a change
 # can reach (against NX_BASE, nx.json's defaultBase origin/main unless CI derives one),
-# `run-many` for a full sweep. scripts/nx.sh installs the locked Node toolchain first in a
+# `run-many` for a full sweep. scripts/nx installs the locked Node toolchain first in a
 # clone that has none, so every recipe works from a clean clone.
 
 set shell := ["bash", "-uc"]
 
-nx := "./scripts/nx.sh"
 
 # List available recipes.
 default:
@@ -13,7 +12,7 @@ default:
 
 # Set up from a clean clone: the locked Node, Python and Rust dependencies.
 bootstrap:
-    @{{nx}} run workspace:bootstrap
+    @./scripts/nx run workspace:bootstrap
 
 # The full gate over the affected projects: formatting, lint, types, tests (unit, journeys,
 # conformance, packaging journeys) and the coverage floors. Fails on any issue.
@@ -21,47 +20,47 @@ check: format-check lint typecheck test coverage
 
 # The broader tier: the same gate over every project. CI runs it on each merge to main.
 check-all:
-    @{{nx}} run-many -t format-check lint typecheck test coverage --all
+    @./scripts/nx run-many -t format-check lint typecheck test coverage --all
 
 # Tests only, for the affected projects: unit tests, journeys and packaging journeys.
 test:
-    @{{nx}} affected -t test
+    @./scripts/nx affected -t test
 
 # The end-to-end tier on its own: the journeys and the packaging journeys, whatever changed.
 test-e2e:
-    @{{nx}} run-many -t test -p onebudgetspec-e2e onebudgetspec-packaging-e2e
+    @./scripts/nx run-many -t test -p onebudgetspec-e2e onebudgetspec-packaging-e2e
 
 # Coverage for the affected projects: 95% lines for the Rust workspace, each Python
 # project and the TypeScript SDK.
 coverage:
-    @{{nx}} affected -t coverage
+    @./scripts/nx affected -t coverage
 
 # Lint for the affected projects (clippy -D warnings, ruff, biome, actionlint).
 lint:
-    @{{nx}} affected -t lint
+    @./scripts/nx affected -t lint
 
 # Type check the affected projects.
 typecheck:
-    @{{nx}} affected -t typecheck
+    @./scripts/nx affected -t typecheck
 
 # Check formatting without changing anything, for the affected projects.
 format-check:
-    @{{nx}} affected -t format-check
+    @./scripts/nx affected -t format-check
 
 # Format every project in place.
 format:
-    @{{nx}} run-many -t format --all
+    @./scripts/nx run-many -t format --all
 
 # Supply chain: licences, bans, advisories and sources (cargo-deny), and unused crates.
 deny:
-    @{{nx}} run workspace:deny
+    @./scripts/nx run workspace:deny
 
 # Upgrade every ecosystem's dependencies, then re-run the whole gate on the result.
 upgrade:
     @cargo update --quiet
     @uv lock --upgrade --quiet && uv sync --quiet --frozen --all-packages
     @bun update --silent
-    @{{nx}} run-many -t format-check lint typecheck test coverage --all
+    @./scripts/nx run-many -t format-check lint typecheck test coverage --all
 
 # Print the JSON Schema bundle the contract is emitted as.
 # llmlint: ignore[tool_output_is_signal] stdout is the schema bundle itself, consumed by generators.
@@ -89,7 +88,7 @@ governance *flags:
 
 # Show the project graph Nx selects against.
 graph:
-    @{{nx}} graph --file=.nx/graph.html
+    @./scripts/nx graph --file=.nx/graph.html
 
 # llmlint: ignore[tool_output_is_signal] a session-startup installer logs each step and continues rather than blocking startup.
 # Provision the dev toolchain for a session (runs from the SessionStart hook; idempotent).
