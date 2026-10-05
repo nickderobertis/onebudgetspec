@@ -16,7 +16,14 @@ build-backend = "hatchling.build"
 packages = ["src/repo_checks"]
 
 [dependency-groups]
-dev = ["pytest>=9.0", "pytest-cov>=7.1", "ruff>=0.16.4", "ty>=0.0.74", "types-pyyaml>=6.0.12"]
+dev = [
+    "actionlint-py>=1.7.12.25",
+    "pytest>=9.0",
+    "pytest-cov>=7.1",
+    "ruff>=0.16.4",
+    "ty>=0.0.74",
+    "types-pyyaml>=6.0.12",
+]
 
 [tool.ruff]
 line-length = 100

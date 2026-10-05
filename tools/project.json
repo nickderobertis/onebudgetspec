@@ -45,7 +45,7 @@
       "options": {
         "commands": [
           "uv run --frozen --no-sync ruff check --quiet .",
-          "actionlint",
+          "uv run --frozen --no-sync actionlint",
           "bun run biome lint --error-on-warnings ../nx.json ../biome.json ../package.json ../.claude"
         ],
         "cwd": "tools",
