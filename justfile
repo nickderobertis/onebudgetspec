@@ -61,7 +61,7 @@ deny:
 upgrade:
     @cargo update --quiet
     @uv lock --upgrade --quiet && uv sync --quiet --frozen --all-packages
-    @bun update --silent
+    @bun update --latest --silent
     @./scripts/nx run-many -t format-check lint typecheck test coverage --all
 
 # Print the JSON Schema bundle the contract is emitted as.
