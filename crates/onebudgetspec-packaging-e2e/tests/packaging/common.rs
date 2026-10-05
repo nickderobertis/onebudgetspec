@@ -211,3 +211,106 @@ pub fn behaves_like_the_binary(program: &Path, dir: &Path) {
         .collect();
     assert_eq!(verdicts, ["within", "over"]);
 }
+
+/// The conformance case the SDK journeys drive: ids, labels and excluded labels together.
+pub const SDK_CASE: &str = "selection";
+
+/// Copy the conformance case `name` into `dir`; returns the copy and its case.json.
+pub fn conformance_case(dir: &Path, name: &str) -> (PathBuf, Value) {
+    fn copy(from: &Path, to: &Path) {
+        fs::create_dir_all(to).unwrap();
+        for entry in fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy(&entry.path(), &target);
+            } else {
+                fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+    let source = root().join("conformance/cases").join(name);
+    let copied = dir.join(name);
+    copy(&source, &copied);
+    let case = serde_json::from_str(&fs::read_to_string(source.join("case.json")).unwrap())
+        .expect("case.json is JSON");
+    (copied, case)
+}
+
+/// A check report normalized as conformance/README.md defines, for a case whose results
+/// carry no error and no timing.
+pub fn normalized(mut report: Value) -> Value {
+    for result in report["results"].as_array_mut().expect("a results array") {
+        assert!(result["error"].is_null(), "an unexpected error: {result}");
+        result["started_at"] = "1970-01-01T00:00:00Z".into();
+        result["ended_at"] = "1970-01-01T00:00:00Z".into();
+        result["host"]["load1"] = 0.0.into();
+        result["host"]["cpus"] = 1.into();
+        result["host"]["mem_available_mib"] = 0.into();
+    }
+    report
+}
+
+/// What the cargo-built binary prints for `args` run from `cwd`, as JSON.
+pub fn direct_json(args: &[&str], cwd: &Path) -> Value {
+    serde_json::from_str(&succeed(direct_binary(), args, cwd)).expect("the binary printed JSON")
+}
+
+/// The case's `args` after the verb and `--json`, as `list` takes them.
+pub fn case_selection(case: &Value) -> Vec<String> {
+    case["args"].as_array().expect("args")[1..]
+        .iter()
+        .map(|arg| arg.as_str().unwrap().to_owned())
+        .filter(|arg| arg != "--json")
+        .collect()
+}
+
+/// `value` with every number as a float, so a report JavaScript printed (`120`) compares
+/// equal to the same report Rust printed (`120.0`).
+fn numbers_as_floats(value: Value) -> Value {
+    match value {
+        Value::Number(number) => number.as_f64().expect("a finite number").into(),
+        Value::Array(items) => items.into_iter().map(numbers_as_floats).collect(),
+        Value::Object(fields) => fields
+            .into_iter()
+            .map(|(key, field)| (key, numbers_as_floats(field)))
+            .collect(),
+        other => other,
+    }
+}
+
+/// Assert an SDK's answers over [`SDK_CASE`], printed as one JSON document with `check`,
+/// `list`, `validate`, `schema` and `binary`, are what the case and the binary answer,
+/// number for number.
+pub fn assert_sdk_answers(answers: &Value, case_dir: &Path, case: &Value, binary: &Path) {
+    let expected: Value =
+        serde_json::from_str(&fs::read_to_string(case_dir.join("expected.json")).unwrap()).unwrap();
+    assert_eq!(
+        numbers_as_floats(normalized(answers["check"].clone())),
+        numbers_as_floats(expected),
+        "the SDK's check differs from the case's expected report"
+    );
+    let selection = case_selection(case);
+    let mut list_args = vec!["list", "--json"];
+    list_args.extend(selection.iter().map(String::as_str));
+    for (call, args) in [
+        ("list", list_args),
+        ("validate", vec!["validate", "--json"]),
+        ("schema", vec!["schema"]),
+    ] {
+        assert_eq!(
+            numbers_as_floats(answers[call].clone()),
+            numbers_as_floats(direct_json(&args, case_dir)),
+            "the SDK's {call} differs from the binary's"
+        );
+    }
+    assert_eq!(
+        Path::new(
+            answers["binary"]
+                .as_str()
+                .expect("the binary the SDK resolved")
+        ),
+        binary,
+        "the SDK did not run the binary installed beside it"
+    );
+}
