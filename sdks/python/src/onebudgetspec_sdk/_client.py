@@ -19,6 +19,7 @@ from typing import TypeVar
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import BaseModel, JsonValue, ValidationError
 
+from ._generated import BUNDLE_ROOTS
 from ._generated.check_report import CheckReport
 from ._generated.list_report import ListReport
 from ._generated.schemas import REPORT_SCHEMAS
@@ -27,8 +28,6 @@ from ._generated.schemas import REPORT_SCHEMAS
 BINARY_ENV = "ONEBUDGETSPEC_BIN"
 #: The distribution whose wheel carries the binary.
 CLI_DISTRIBUTION = "onebudgetspec-cli"
-#: The roots every schema bundle carries, as `onebudgetspec schema` emits them.
-BUNDLE_ROOTS = ("budgets-file", "check-report", "list-report")
 _EXECUTABLE = "onebudgetspec"
 #: The statuses whose stdout is a report: within, over and error. A verdict is in the
 #: report, so none of them is an exception.
@@ -221,12 +220,15 @@ def _is_double(value: object) -> bool:
 
 def _formats_named(schema: object) -> set[str]:
     """Every ``format`` a JSON Schema names, at any depth."""
-    if isinstance(schema, dict):
-        named = {schema["format"]} if isinstance(schema.get("format"), str) else set()
-        return named.union(*(_formats_named(value) for value in schema.values()))
-    if isinstance(schema, list):
-        return set().union(*(_formats_named(item) for item in schema))
-    return set()
+    match schema:
+        case {"format": str(name), **rest}:
+            return {name}.union(*(_formats_named(value) for value in rest.values()))
+        case dict():
+            return set().union(*(_formats_named(value) for value in schema.values()))
+        case list():
+            return set().union(*(_formats_named(item) for item in schema))
+        case _:
+            return set()
 
 
 def _require_validators(schemas: object) -> None:

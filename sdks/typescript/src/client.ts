@@ -10,14 +10,14 @@ import { dirname, join } from "node:path";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
 import type { CheckReport } from "./generated/check-report.ts";
 import type { ListReport } from "./generated/list-report.ts";
-import { reportSchemas } from "./generated/schemas.ts";
+import { BUNDLE_ROOTS, reportSchemas } from "./generated/schemas.ts";
+
+export { BUNDLE_ROOTS };
 
 /** The environment variable naming the binary when no explicit one is passed. */
 export const BINARY_ENV = "ONEBUDGETSPEC_BIN";
 /** The package whose launcher runs the binary for the host it is installed on. */
 export const CLI_PACKAGE = "@onebudgetspec/cli";
-/** The roots every schema bundle carries, as `onebudgetspec schema` emits them. */
-export const BUNDLE_ROOTS: readonly string[] = ["budgets-file", "check-report", "list-report"];
 /** The statuses whose stdout is a report: within, over and error. A verdict is in the
  * report, so none of them rejects. */
 const REPORTED = new Set([0, 1, 3]);

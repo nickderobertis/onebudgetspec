@@ -40,6 +40,8 @@ class SchemaBundle:
 
     version: int
     roots: dict[str, dict[str, object]]
+    #: Every root the bundle carries, in the order the binary emits them.
+    root_names: tuple[str, ...]
 
     @classmethod
     def parse(cls, text: str) -> "SchemaBundle":
@@ -56,7 +58,7 @@ class SchemaBundle:
             case {"version": int(version), "roots": dict(roots)} if not isinstance(
                 version, bool
             ) and all(isinstance(roots.get(root), dict) for root in ROOTS):
-                return cls(version, {root: roots[root] for root in ROOTS})
+                return cls(version, {root: roots[root] for root in ROOTS}, tuple(roots))
             case _:
                 raise GenerateError(
                     f"the binary's schema bundle lacks an integer `version` or one of the roots "
@@ -154,11 +156,14 @@ def _formatted(text: str) -> str:
 def files(schema_bundle: SchemaBundle) -> dict[str, str]:
     """Every generated file's name and content."""
     generated = {
-        "__init__.py": (
+        "__init__.py": _formatted(
             '"""Models generated from `onebudgetspec schema`; see sdks/python/generate.py."""\n'
             "\n"
             "#: The version of the schema bundle these models were generated from.\n"
             f"SCHEMA_BUNDLE_VERSION = {schema_bundle.version!r}\n"
+            "\n"
+            "#: Every root the schema bundle carries, which the client requires of one.\n"
+            f"BUNDLE_ROOTS = {schema_bundle.root_names!r}\n"
         )
     }
     for root, module in ROOTS.items():

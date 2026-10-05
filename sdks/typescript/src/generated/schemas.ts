@@ -4,6 +4,9 @@
 /** The version of the schema bundle these types were generated from. */
 export const SCHEMA_BUNDLE_VERSION = 1;
 
+/** Every root the schema bundle carries, which the client requires of one. */
+export const BUNDLE_ROOTS: readonly string[] = ["budgets-file", "check-report", "list-report"];
+
 /** The bundle roots the client's reports are validated against. */
 export const reportSchemas = {
   "check-report": {

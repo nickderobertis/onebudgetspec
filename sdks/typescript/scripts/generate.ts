@@ -54,7 +54,12 @@ function formatted(name: string, content: string): string {
   return run(biome, ["format", path], TOOLS, content);
 }
 
-type SchemaBundle = { version: number; roots: Record<Root, Record<string, unknown>> };
+type SchemaBundle = {
+  version: number;
+  roots: Record<Root, Record<string, unknown>>;
+  /** Every root the bundle carries, in the order the binary emits them. */
+  rootNames: string[];
+};
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -92,6 +97,7 @@ function parseBundle(text: string): SchemaBundle {
       "check-report": rootOf(roots, "check-report"),
       "list-report": rootOf(roots, "list-report"),
     },
+    rootNames: Object.keys(roots),
   };
 }
 
@@ -133,6 +139,8 @@ wanted.set(
       "// Do not edit: re-run the generator. The client validates every report against these.\n\n" +
       "/** The version of the schema bundle these types were generated from. */\n" +
       `export const SCHEMA_BUNDLE_VERSION = ${JSON.stringify(bundle.version)};\n\n` +
+      "/** Every root the schema bundle carries, which the client requires of one. */\n" +
+      `export const BUNDLE_ROOTS: readonly string[] = ${JSON.stringify(bundle.rootNames)};\n\n` +
       "/** The bundle roots the client's reports are validated against. */\n" +
       `export const reportSchemas = ${JSON.stringify(bundle.roots)};\n`,
   ),
