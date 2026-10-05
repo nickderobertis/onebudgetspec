@@ -5,10 +5,35 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
-use std::sync::OnceLock;
+use std::process::{Child, Command, Output, Stdio};
+use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
 use serde_json::Value;
+
+/// Held while a file is written and while a process is spawned, so the two never overlap.
+/// A process forked while another test thread has a script open for writing inherits that
+/// descriptor until it execs, and running the script meanwhile fails with "text file busy".
+fn fork_lock() -> MutexGuard<'static, ()> {
+    static LOCK: Mutex<()> = Mutex::new(());
+    LOCK.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Spawn `command`, with whatever streams it was given, under the fork lock.
+pub fn spawn(command: &mut Command) -> Child {
+    let _forking = fork_lock();
+    command.spawn().expect("onebudgetspec runs")
+}
+
+/// Run `command` to completion with its output captured, spawned under the fork lock.
+pub fn output(command: &mut Command) -> Output {
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    spawn(command)
+        .wait_with_output()
+        .expect("onebudgetspec's output is read")
+}
 
 /// The built `onebudgetspec` binary: `ONEBUDGETSPEC_BIN` when set, else the one cargo
 /// built beside this test executable.
@@ -95,10 +120,7 @@ impl Run {
 pub fn schema_bundle() -> &'static Value {
     static BUNDLE: OnceLock<Value> = OnceLock::new();
     BUNDLE.get_or_init(|| {
-        let output = Command::new(binary())
-            .arg("schema")
-            .output()
-            .expect("onebudgetspec schema runs");
+        let output = output(Command::new(binary()).arg("schema"));
         assert!(output.status.success(), "onebudgetspec schema failed");
         serde_json::from_slice(&output.stdout).expect("the schema bundle is JSON")
     })
@@ -138,9 +160,20 @@ impl Fixture {
 
     /// Write `text` to `relative`, creating its directories.
     pub fn write(&self, relative: &str, text: &str) -> PathBuf {
+        self.write_mode(relative, text, false)
+    }
+
+    /// Write `text` to `relative`, executable when `executable`, under the fork lock.
+    fn write_mode(&self, relative: &str, text: &str, executable: bool) -> PathBuf {
         let path = self.path().join(relative);
+        let _writing = fork_lock();
         fs::create_dir_all(path.parent().expect("a file has a directory")).unwrap();
         fs::write(&path, text).unwrap();
+        #[cfg(unix)]
+        if executable {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
         path
     }
 
@@ -152,13 +185,7 @@ impl Fixture {
 
     /// Write an executable POSIX shell script.
     pub fn script(&self, relative: &str, body: &str) -> PathBuf {
-        let path = self.write(relative, &format!("#!/bin/sh\n{body}\n"));
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        path
+        self.write_mode(relative, &format!("#!/bin/sh\n{body}\n"), true)
     }
 
     /// A script that records each invocation by appending `label` to `log`, then runs
@@ -199,7 +226,7 @@ where
     for (name, value) in env {
         command.env(name, value);
     }
-    Run::from(command.output().expect("onebudgetspec runs"))
+    Run::from(output(&mut command))
 }
 
 /// The argv of a `reported` command that writes `result` (a JSON text) and exits 0.

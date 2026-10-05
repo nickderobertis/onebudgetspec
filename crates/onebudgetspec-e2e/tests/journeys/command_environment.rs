@@ -136,14 +136,14 @@ fn commands_see_end_of_input_whatever_the_caller_pipes_in() {
             }],
         }),
     );
-    let mut child = Command::new(crate::common::binary())
-        .args(["check", "--json"])
-        .current_dir(fixture.path())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("onebudgetspec runs");
+    let mut child = crate::common::spawn(
+        Command::new(crate::common::binary())
+            .args(["check", "--json"])
+            .current_dir(fixture.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped()),
+    );
     child
         .stdin
         .take()

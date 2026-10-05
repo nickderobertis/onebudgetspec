@@ -131,3 +131,77 @@ fn condition_output_that_is_not_utf8_is_recorded_with_replacement_characters() {
         "ok\u{fffd}ok"
     );
 }
+
+/// One shared log shows the order things ran in: a file's conditions in declaration order,
+/// just before its first measured budget, and a file whose budgets are all left out by the
+/// selection runs no condition at all.
+#[test]
+fn conditions_run_in_order_before_their_file_is_measured_and_not_for_an_unselected_file() {
+    let fixture = Fixture::new();
+    for (dir, conditions, budgets) in [
+        (
+            "first",
+            &["alpha", "beta"][..],
+            &["first-one", "first-two"][..],
+        ),
+        ("second", &["gamma"][..], &["second-one"][..]),
+    ] {
+        for name in conditions {
+            fixture.counted(&format!("{dir}/{name}.sh"), "order.log", name, "echo 1");
+        }
+        for id in budgets {
+            fixture.counted(
+                &format!("{dir}/{id}.sh"),
+                "order.log",
+                id,
+                "printf '{\"value\": 1}' > \"$ONEBUDGETSPEC_RESULT\"",
+            );
+        }
+        let conditions: Vec<Value> = conditions
+            .iter()
+            .map(|name| json!({ "name": name, "command": [format!("./{name}.sh")] }))
+            .collect();
+        let budgets: Vec<Value> = budgets
+            .iter()
+            .map(|id| {
+                json!({
+                    "id": id,
+                    "labels": [dir],
+                    "measure": "reported",
+                    "command": [format!("./{id}.sh")],
+                    "unit": "runs",
+                    "direction": "max",
+                    "threshold": 1,
+                })
+            })
+            .collect();
+        fixture.budgets(
+            &format!("{dir}/budgets.yaml"),
+            &json!({ "schema_version": 1, "conditions": conditions, "budgets": budgets }),
+        );
+    }
+
+    fixture
+        .run(["check", "--json", "--recursive"])
+        .expect_status(0)
+        .check_report();
+    assert_eq!(
+        fixture.log("order.log"),
+        [
+            "alpha",
+            "beta",
+            "first-one",
+            "first-two",
+            "gamma",
+            "second-one"
+        ]
+    );
+
+    std::fs::remove_file(fixture.path().join("order.log")).unwrap();
+    let report = fixture
+        .run(["check", "--json", "--recursive", "--exclude-label", "first"])
+        .expect_status(0)
+        .check_report();
+    assert_eq!(ids(&report, "results"), ["second-one"]);
+    assert_eq!(fixture.log("order.log"), ["gamma", "second-one"]);
+}

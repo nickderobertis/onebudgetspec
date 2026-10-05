@@ -100,12 +100,16 @@ fn an_unwritable_stdout_is_reported_on_stderr() {
             .write(true)
             .open("/dev/full")
             .expect("/dev/full opens for writing");
-        let output = std::process::Command::new(crate::common::binary())
-            .args(args)
-            .current_dir(fixture.path())
-            .stdout(full)
-            .output()
-            .expect("onebudgetspec runs");
+        let output = crate::common::spawn(
+            std::process::Command::new(crate::common::binary())
+                .args(args)
+                .current_dir(fixture.path())
+                .stdin(std::process::Stdio::null())
+                .stdout(full)
+                .stderr(std::process::Stdio::piped()),
+        )
+        .wait_with_output()
+        .expect("onebudgetspec's output is read");
         let stderr = String::from_utf8(output.stderr).unwrap();
         assert_eq!(output.status.code(), Some(3), "{args:?}: {stderr}");
         assert!(
