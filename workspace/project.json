@@ -52,7 +52,8 @@
           "cargo update --quiet",
           "uv lock --upgrade --quiet",
           "uv sync --quiet --frozen --all-packages",
-          "bun update --latest --silent"
+          "bun update --latest --silent",
+          "bun install --silent"
         ],
         "parallel": false
       },
