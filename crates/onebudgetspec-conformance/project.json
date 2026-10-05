@@ -3,6 +3,9 @@
   "name": "onebudgetspec-conformance",
   "projectType": "library",
   "tags": ["lang:rust", "type:e2e"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "rust"]
+  },
   "//": "Runs the conformance cases against the built binary, behind its own edge so a change that cannot reach the binary or the cases never spawns it.",
   "implicitDependencies": ["onebudgetspec", "conformance"],
   "targets": {

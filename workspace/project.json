@@ -3,6 +3,9 @@
   "name": "workspace",
   "projectType": "library",
   "tags": ["type:workspace"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "rust", "js", "python"]
+  },
   "//": "Cross-cutting targets: bootstrap, the supply chain, workspace-wide formatting, and clearing the coverage data every instrumented test run depends on, so one invocation's report covers exactly that invocation's runs.",
   "targets": {
     "bootstrap": {

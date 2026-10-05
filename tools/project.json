@@ -3,6 +3,9 @@
   "name": "repo-checks",
   "projectType": "library",
   "tags": ["lang:python", "type:tooling"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
   "//": "The checks the repository holds itself to: workflow guards, the library boundary, version agreement, the AGENTS.md journey list and the README examples. It reads every other project, so it depends on all of them, and its inputs name the root files it reads.",
   "implicitDependencies": [
     "onebudgetspec-core",

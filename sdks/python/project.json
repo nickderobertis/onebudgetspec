@@ -3,6 +3,9 @@
   "name": "sdk-python",
   "projectType": "library",
   "tags": ["lang:python", "type:sdk"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
   "targets": {
     "format": {
       "executor": "nx:run-commands",

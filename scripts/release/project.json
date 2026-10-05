@@ -3,6 +3,9 @@
   "name": "release-scripts",
   "projectType": "library",
   "tags": ["lang:bash", "type:tooling"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
   "//": "What the release workflow runs to publish and what other repositories run to ask what is published: publish.sh and release-probe.py. scripts-integration drives both against local registries.",
   "targets": {
     "lint": {

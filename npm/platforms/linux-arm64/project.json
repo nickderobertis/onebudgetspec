@@ -3,6 +3,9 @@
   "name": "npm-cli-linux-arm64",
   "projectType": "library",
   "tags": ["lang:javascript", "type:distribution"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "js"]
+  },
   "//": "The @onebudgetspec/cli-linux-arm64 carrier: this manifest plus the binary scripts/build-dist.sh builds for aarch64-unknown-linux-gnu. `build` needs a host that can build that target, which is why it is not part of any gate.",
   "targets": {
     "build": {

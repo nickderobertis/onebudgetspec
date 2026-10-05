@@ -3,6 +3,9 @@
   "name": "onebudgetspec-e2e",
   "projectType": "library",
   "tags": ["lang:rust", "type:e2e"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "rust"]
+  },
   "//": "The journeys: the built binary driven over real budgets files. Behind its own edge, so only a change that can reach the binary runs them.",
   "implicitDependencies": ["onebudgetspec"],
   "targets": {

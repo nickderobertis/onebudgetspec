@@ -3,6 +3,9 @@
   "name": "scripts",
   "projectType": "library",
   "tags": ["lang:bash", "type:tooling"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*"]
+  },
   "//": "The gate's and the build's own scripts: the Nx wrapper, bootstrap, the coverage floors, the CI guard and base, and build-dist.sh, which every release artifact is built by. onebudgetspec-packaging-e2e builds every artifact through build-dist.sh; repo-checks drives the CI guard and base.",
   "targets": {
     "lint": {

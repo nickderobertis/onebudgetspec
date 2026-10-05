@@ -3,6 +3,9 @@
   "name": "npm-cli",
   "projectType": "library",
   "tags": ["lang:javascript", "type:distribution"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "js"]
+  },
   "//": "The @onebudgetspec/cli launcher, a member of the bun workspace whose carriers it names as `workspace:*`, which `bun pm pack` (scripts/build-dist.sh) writes as the release version. Its decisions are unit-tested here; onebudgetspec-packaging-e2e installs and drives the packed launcher.",
   "targets": {
     "build": {

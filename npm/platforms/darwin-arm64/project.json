@@ -3,6 +3,9 @@
   "name": "npm-cli-darwin-arm64",
   "projectType": "library",
   "tags": ["lang:javascript", "type:distribution"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "js"]
+  },
   "//": "The @onebudgetspec/cli-darwin-arm64 carrier: this manifest plus the binary scripts/build-dist.sh builds for aarch64-apple-darwin. `build` needs a host that can build that target, which is why it is not part of any gate.",
   "targets": {
     "build": {

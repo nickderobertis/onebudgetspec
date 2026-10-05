@@ -102,9 +102,8 @@ case "$target" in
   pypi | sdk-pypi)
     [ $# -eq 1 ] && [ -d "$1" ] || usage "$target takes the directory holding its wheels"
     need PYPI_TOKEN
-    prefix=onebudgetspec_cli
-    [ "$target" = pypi ] || prefix=onebudgetspec_sdk
-    name="${prefix//_/-}"
+    # The project release-targets.toml publishes under this target.
+    name="$(target_packages "$target")"
     for wheel in "$1"/*.whl; do
       # The identity the wheel's own metadata declares, not its file name.
       identity="$(python3 - "$wheel" <<'PY'

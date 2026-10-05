@@ -3,6 +3,9 @@
   "name": "python-coverage",
   "projectType": "library",
   "tags": ["type:workspace"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
   "//": "The Python line floor: one report over the combined data of the SDK's and the repository checks' instrumented test runs, held to 95%, depending on those test targets alone. scripts-integration holds its own floor behind its own edge.",
   "// suppression": "llmlint: ignore-file[expensive_tests_stay_behind_their_own_edge] this project is the coverage aggregate, and create-repo's coverage_combined_across_crates and coverage_combined_across_projects require it to depend on its language's test targets, which is the edge this rule objects to; the two rules contradict each other, and the follow-up drafts:approved-budgets/drafts/20261005T060137Z-create-repo-buildout-rules-contradict-each-other asks create-repo to reconcile them. JSON has no comment to scope this to the one target.",
   "implicitDependencies": ["sdk-python", "repo-checks"],

@@ -3,6 +3,9 @@
   "name": "conformance",
   "projectType": "library",
   "tags": ["type:contract"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*"]
+  },
   "//": "The data-only conformance cases: a case is a budgets file, its scripts and the report it must produce, referencing no implementation. onebudgetspec-conformance runs them against the binary, so a change here selects it, and any other runner can take them unchanged.",
   "targets": {
     "lint": {

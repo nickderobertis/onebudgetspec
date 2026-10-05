@@ -3,6 +3,9 @@
   "name": "sdk-typescript",
   "projectType": "library",
   "tags": ["lang:typescript", "type:sdk"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "js"]
+  },
   "targets": {
     "build": {
       "executor": "nx:run-commands",

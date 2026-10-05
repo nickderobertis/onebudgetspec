@@ -3,6 +3,9 @@
   "name": "onebudgetspec",
   "projectType": "library",
   "tags": ["lang:rust", "type:binary"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "rust"]
+  },
   "//": "The CLI binary over onebudgetspec-core. `build` produces target/debug/onebudgetspec for the targets that spawn the uninstrumented binary; its `test` builds it instrumented, as the journeys' and conformance tests do, so their runs measure it.",
   "implicitDependencies": ["onebudgetspec-core"],
   "targets": {

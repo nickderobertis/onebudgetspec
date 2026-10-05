@@ -3,6 +3,9 @@
   "name": "scripts-integration",
   "projectType": "library",
   "tags": ["lang:python", "type:integration"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
   "//": "The release scripts driven against local registries: the probe over HTTP and publish.sh against a local npm registry. Slow, so behind its own edge to the two scripts it drives, and it holds its own 95% line floor over the probe (measured through its subprocess runs) rather than joining python-coverage, which would run it for every Python change.",
   "implicitDependencies": ["release-scripts"],
   "targets": {
