@@ -4,6 +4,8 @@
 //! change only on purpose: when this test fails, the change was to the contract. Bump
 //! `SCHEMA_BUNDLE_VERSION`, then record the new digest and version in `schema.golden`.
 
+use std::fmt::Write;
+
 use onebudgetspec_core::{SCHEMA_BUNDLE_VERSION, schema_bundle};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -13,10 +15,12 @@ const GOLDEN: &str = include_str!("../schema.golden");
 #[test]
 fn the_bundle_matches_its_golden_digest() {
     let text = canonical(&schema_bundle());
-    let digest: String = Sha256::digest(text.as_bytes())
+    let digest = Sha256::digest(text.as_bytes())
         .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect();
+        .fold(String::new(), |mut hex, byte| {
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        });
     let actual = format!("version {SCHEMA_BUNDLE_VERSION}\nsha256 {digest}\n");
     assert_eq!(
         GOLDEN, actual,
@@ -25,7 +29,7 @@ fn the_bundle_matches_its_golden_digest() {
 }
 
 /// The bundle with every object's keys sorted, so the digest does not depend on whether a
-/// build happens to enable serde_json's insertion-ordered maps.
+/// build happens to enable `serde_json`'s insertion-ordered maps.
 fn canonical(value: &Value) -> String {
     match value {
         Value::Object(fields) => {

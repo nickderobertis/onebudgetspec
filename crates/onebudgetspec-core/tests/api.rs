@@ -59,7 +59,7 @@ fn loads_validates_and_lists_a_file() {
     let dir = tempfile::tempdir().unwrap();
     let file = two_budgets(dir.path());
 
-    let budgets = load(&[file.clone()], false).unwrap();
+    let budgets = load(std::slice::from_ref(&file), false).unwrap();
     assert_eq!(budgets.files().len(), 1);
     assert_eq!(budgets.budget_count(), 2);
 
@@ -216,7 +216,7 @@ fn selects_by_id_label_and_excluded_label() {
 fn measures_a_reported_and_an_elapsed_budget() {
     let dir = tempfile::tempdir().unwrap();
     let file = two_budgets(dir.path());
-    let budgets = load(&[file.clone()], false).unwrap();
+    let budgets = load(std::slice::from_ref(&file), false).unwrap();
     let report = budgets.all().check();
 
     assert_eq!(report.schema_version, 1);
