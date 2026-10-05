@@ -102,3 +102,24 @@ fn a_failing_condition_is_recorded_as_unknown() {
     );
     assert!(run.stderr.contains("broken"), "{}", run.stderr);
 }
+
+#[test]
+fn condition_output_that_is_not_utf8_is_recorded_with_replacement_characters() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &json!({
+            "schema_version": 1,
+            "conditions": [{ "name": "raw", "command": ["printf", "ok\\377ok"] }],
+            "budgets": [reported("only", 1.0, "max", 2.0)],
+        }),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(0)
+        .check_report();
+    assert_eq!(
+        result(&report, "only")["host"]["conditions"]["raw"],
+        "ok\u{fffd}ok"
+    );
+}

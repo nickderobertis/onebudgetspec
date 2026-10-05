@@ -22,7 +22,7 @@ fn compile(pattern: &str) -> Regex {
 }
 
 /// Whether `name` is a valid condition name: the pattern, and none of the host values.
-pub(crate) fn is_condition_name(name: &str) -> bool {
+pub(crate) fn matches_condition_name_pattern(name: &str) -> bool {
     CONDITION_NAME.is_match(name)
 }
 

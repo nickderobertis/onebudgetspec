@@ -110,3 +110,51 @@ fn arguments_reach_the_command_byte_for_byte_with_no_shell() {
     let received = fs::read_to_string(recorded).unwrap();
     assert_eq!(received.lines().collect::<Vec<_>>(), tricky);
 }
+
+/// Commands never read the caller's stdin: a check piped data still gives every command
+/// an immediate end of input, so none can hang on or consume it.
+#[test]
+fn commands_see_end_of_input_whatever_the_caller_pipes_in() {
+    use std::io::Write as _;
+    use std::process::{Command, Stdio};
+
+    let fixture = Fixture::new();
+    let counts =
+        "n=$(wc -c | tr -d ' '); printf '{\"value\": %s}' \"$n\" > \"$ONEBUDGETSPEC_RESULT\"";
+    fixture.budgets(
+        "budgets.yaml",
+        &json!({
+            "schema_version": 1,
+            "conditions": [{ "name": "stdin_bytes", "command": ["sh", "-c", "wc -c | tr -d ' '"] }],
+            "budgets": [{
+                "id": "stdin-bytes",
+                "measure": "reported",
+                "command": ["sh", "-c", counts],
+                "unit": "bytes",
+                "direction": "max",
+                "threshold": 0,
+            }],
+        }),
+    );
+    let mut child = Command::new(crate::common::binary())
+        .args(["check", "--json"])
+        .current_dir(fixture.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("onebudgetspec runs");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"caller data the commands must not see\n")
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    crate::common::validate("check-report", &report);
+    let measured = result(&report, "stdin-bytes");
+    assert_eq!(measured["actual"], 0.0);
+    assert_eq!(measured["host"]["conditions"]["stdin_bytes"], "0");
+}

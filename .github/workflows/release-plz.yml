@@ -31,9 +31,9 @@ jobs:
     needs: [guard]
     if: needs.guard.outputs.enabled == 'true'
     runs-on: ubuntu-latest
+    # Every write goes through RELEASE_PLZ_TOKEN, so the job's own token only reads.
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     concurrency:
       group: release-plz
       cancel-in-progress: false

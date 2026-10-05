@@ -14,7 +14,7 @@ use chrono::Utc;
 use serde_json::Value;
 
 use crate::host;
-use crate::load::{LoadedFile, is_condition_name};
+use crate::load::{LoadedFile, matches_condition_name_pattern};
 use crate::model::{
     CONDITION_NAME_PATTERN, Direction, Measure, RESERVED_CONDITION_NAMES, RESULT_ENV,
     SCHEMA_VERSION,
@@ -284,7 +284,7 @@ fn returned_conditions(
 ) -> Result<BTreeMap<String, String>, String> {
     let mut returned = BTreeMap::new();
     for (name, value) in conditions {
-        if !is_condition_name(name) {
+        if !matches_condition_name_pattern(name) {
             return Err(format!(
                 "the result returns a condition named \"{name}\", which does not match {CONDITION_NAME_PATTERN}"
             ));

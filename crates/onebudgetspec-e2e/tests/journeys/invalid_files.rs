@@ -226,3 +226,31 @@ fn the_valid_base_is_accepted() {
         .check_report();
     assert_eq!(fixture.log("ran.log"), ["condition", "budget"]);
 }
+
+#[test]
+fn a_budgets_file_that_is_not_utf8_is_refused() {
+    let fixture = Fixture::new();
+    let contents = base(&fixture);
+    let path = fixture.budgets("budgets.yaml", &contents);
+    let mut bytes = std::fs::read(&path).unwrap();
+    bytes.extend_from_slice(b"# \xff\xfe\n");
+    std::fs::write(&path, bytes).unwrap();
+    assert_refused(&fixture, "not UTF-8", "cannot read");
+}
+
+#[cfg(unix)]
+#[test]
+fn a_budgets_file_that_cannot_be_read_is_refused() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let fixture = Fixture::new();
+    let contents = base(&fixture);
+    let path = fixture.budgets("budgets.yaml", &contents);
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o000)).unwrap();
+    if std::fs::read(&path).is_ok() {
+        // Running as root: permissions lock nothing, so there is no refusal to see.
+        return;
+    }
+    assert_refused(&fixture, "unreadable", "cannot read");
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+}

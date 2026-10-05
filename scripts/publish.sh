@@ -55,14 +55,23 @@ npm_publish() {
     *) fail "$tarball is $name, which target $target does not publish" "publish only what scripts/build-dist.sh built for $target" ;;
   esac
   [ "$version" = "$VERSION" ] || fail "$tarball is $name@$version, not the workspace's $VERSION" "rebuild it from this commit with scripts/build-dist.sh"
-  local answer
-  if answer="$(npm view "$name@$VERSION" version 2>&1)"; then
-    if [ -n "$answer" ]; then
-      skipped+=("$name")
-      return
-    fi
-  elif ! printf '%s' "$answer" | grep -q E404; then
-    printf '%s\n' "$answer" >&2
+  local served errors
+  errors="$(mktemp)"
+  if served="$(npm view "$name@$VERSION" version 2>"$errors")"; then
+    rm -f "$errors"
+    case "$served" in
+      "$VERSION")
+        skipped+=("$name")
+        return
+        ;;
+      "") ;;
+      *) fail "npm answered '$served' when asked for $name@$VERSION" "re-run the release workflow once npm answers plainly" ;;
+    esac
+  elif grep -q E404 "$errors"; then
+    rm -f "$errors"
+  else
+    cat "$errors" >&2
+    rm -f "$errors"
     fail "npm could not say whether $name@$VERSION is published" "re-run the release workflow once npm answers"
   fi
   npm publish "$tarball" --access public --userconfig "$NPMRC"

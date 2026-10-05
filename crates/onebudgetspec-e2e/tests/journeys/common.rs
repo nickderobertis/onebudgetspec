@@ -51,7 +51,8 @@ impl Run {
                 .code()
                 .expect("onebudgetspec exits with a status"),
             stdout: String::from_utf8(output.stdout).expect("stdout is UTF-8"),
-            stderr: String::from_utf8(output.stderr).expect("stderr is UTF-8"),
+            // Commands' own output reaches stderr byte for byte, and it may not be UTF-8.
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         }
     }
 
