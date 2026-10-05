@@ -104,8 +104,6 @@ def render(root: str, schema: dict[str, object]) -> str:
         _run(
             [
                 sys.executable,
-                "-W",
-                "ignore",
                 "-m",
                 "datamodel_code_generator",
                 "--input",
