@@ -328,3 +328,10 @@ def test_a_guard_step_that_runs_more_than_the_guard_is_refused_unrun(
     with pytest.raises(workflows.InvalidWorkflow, match="runs more than scripts/ci-guard.sh"):
         workflows.runs(job, event="push", secrets={}, variables={}, root=root)
     assert not marker.exists(), "the smuggled command ran"
+
+
+def test_the_required_checks_run_again_when_a_draft_is_marked_ready() -> None:
+    document = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    # PyYAML reads the bare key `on` as the boolean True.
+    pull_request = document[True]["pull_request"]
+    assert {"opened", "synchronize", "reopened", "ready_for_review"} <= set(pull_request["types"])
