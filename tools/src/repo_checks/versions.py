@@ -74,8 +74,11 @@ def places() -> list[Place]:
         Place("Cargo.toml", r'^(onebudgetspec-core = \{[^}]*version = "=)([^"]+)(")'),
         Place("pyproject.toml", r'^(version = ")([^"]+)(")'),
         Place("sdks/python/pyproject.toml", r'^(version = ")([^"]+)(")'),
+        # The SDK runs the binary its wheel's release ships, so it pins that release.
+        Place("sdks/python/pyproject.toml", r'^(dependencies = \["onebudgetspec-cli==)([^"]+)(")'),
         Place("sdks/python/src/onebudgetspec_sdk/__init__.py", r'^(__version__ = ")([^"]+)(")'),
         Place("sdks/typescript/package.json", r'^(  "version": ")([^"]+)(")'),
+        Place("sdks/typescript/package.json", r'^(    "@onebudgetspec/cli": ")([^"]+)(")'),
         Place("sdks/typescript/src/index.ts", r'^(export const VERSION = ")([^"]+)(")'),
         Place("npm/cli/package.json", r'^(  "version": ")([^"]+)(")'),
     ]

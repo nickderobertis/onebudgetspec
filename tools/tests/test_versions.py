@@ -1,7 +1,9 @@
 """Every manifest and SDK releases at the workspace version, and drift is named."""
 
+import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -39,6 +41,26 @@ def test_each_place_that_drifts_is_named(
     ]
     assert versions.main(["check"], root) == 1
     assert chosen.path in capsys.readouterr().err
+
+
+def test_each_sdk_s_pin_on_the_cli_is_held_to_the_workspace_version() -> None:
+    held = {(place.path, place.read(ROOT)) for place in versions.places()}
+    version = versions.workspace_version()
+    manifest = tomllib.loads((ROOT / "sdks/python/pyproject.toml").read_text())
+    assert f"onebudgetspec-cli=={version}" in manifest["project"]["dependencies"]
+    package = json.loads((ROOT / "sdks/typescript/package.json").read_text())
+    assert package["optionalDependencies"] == {"@onebudgetspec/cli": version}
+    assert "@onebudgetspec/cli" not in package.get("dependencies", {})
+    pins = [
+        place
+        for place in versions.places()
+        if "onebudgetspec-cli==" in place.pattern or "@onebudgetspec/cli" in place.pattern
+    ]
+    assert {place.path for place in pins} == {
+        "sdks/python/pyproject.toml",
+        "sdks/typescript/package.json",
+    }
+    assert all((place.path, version) in held for place in pins)
 
 
 def test_set_brings_every_place_and_the_workspace_to_one_version(tmp_path: Path) -> None:
