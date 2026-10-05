@@ -36,7 +36,7 @@
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider",
+        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider --cov=examples --cov-report=term-missing:skip-covered --cov-fail-under=95",
         "cwd": "tools/readme"
       },
       "dependsOn": ["onebudgetspec:build"],

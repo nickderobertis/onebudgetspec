@@ -14,7 +14,7 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal, TypedDict
 
 import yaml
 
@@ -30,9 +30,28 @@ Secret = Literal[
     "OPENAI_API_KEY",
 ]
 PublishVariable = Literal["CARGO_PUBLISH", "PYPI_PUBLISH", "NPM_PUBLISH"]
-#: A workflow document as YAML parses it. Its shape is GitHub's, read field by field below
-#: and checked by actionlint, so it stays an untyped mapping rather than a second model.
-Document = Mapping[str, Any]
+
+
+class Step(TypedDict, total=False):
+    """The fields of a workflow step this module reads."""
+
+    id: str
+    run: str
+    env: dict[str, str]
+
+
+#: The fields of a workflow job this module reads (`if` is a keyword, hence this form).
+JobBody = TypedDict(
+    "JobBody",
+    {
+        "if": str,
+        "needs": str | list[str],
+        "steps": list[Step],
+        "outputs": dict[str, str],
+        "env": dict[str, str],
+    },
+    total=False,
+)
 
 #: The secrets publishing and the judged lint need; none exists until provisioning.
 SECRETS: tuple[Secret, ...] = (
@@ -62,8 +81,8 @@ class Job:
 
     workflow: str
     name: str
-    body: Document
-    siblings: Mapping[str, Document]
+    body: JobBody
+    siblings: Mapping[str, JobBody]
 
     @property
     def key(self) -> str:
@@ -97,7 +116,7 @@ class Job:
         """Whether this job is a guard: one whose steps run ``scripts/ci-guard.sh``."""
         return any(GUARD_SCRIPT in str(step.get("run", "")) for step in self.steps())
 
-    def steps(self) -> list[Document]:
+    def steps(self) -> list[Step]:
         """The job's steps."""
         return list(self.body.get("steps", []))
 
@@ -190,7 +209,7 @@ def run_guard(job: Job, secrets: Mapping[str, str], root: Path = ROOT) -> dict[s
                 )
             for line in output.read().splitlines():
                 name, _, value = line.partition("=")
-                context[f"steps.{step['id']}.outputs.{name}"] = value
+                context[f"steps.{step.get('id', '')}.outputs.{name}"] = value
     return {
         name: _resolve(str(value), context) for name, value in job.body.get("outputs", {}).items()
     }

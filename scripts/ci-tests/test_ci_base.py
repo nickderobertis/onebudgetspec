@@ -3,6 +3,7 @@
 import os
 import subprocess
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 from repo_checks.paths import ROOT
@@ -30,7 +31,14 @@ def commit(cwd: Path, name: str) -> str:
     return git(cwd, "rev-parse", "HEAD")
 
 
-def base(cwd: Path, tmp_path: Path, **env: str) -> tuple[subprocess.CompletedProcess[str], str]:
+class Derived(NamedTuple):
+    """What one run of ci-base.sh did: the process, and what it wrote to GITHUB_OUTPUT."""
+
+    completed: subprocess.CompletedProcess[str]
+    output: str
+
+
+def base(cwd: Path, tmp_path: Path, **env: str) -> Derived:
     output = tmp_path / "github-output"
     output.write_text("")
     completed = subprocess.run(
@@ -46,7 +54,7 @@ def base(cwd: Path, tmp_path: Path, **env: str) -> tuple[subprocess.CompletedPro
         text=True,
         check=False,
     )
-    return completed, output.read_text()
+    return Derived(completed, output.read_text())
 
 
 @pytest.fixture
