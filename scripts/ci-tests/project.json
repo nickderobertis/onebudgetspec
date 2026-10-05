@@ -6,7 +6,7 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "python"]
   },
-  "//": "scripts/ci-base.sh driven over real git histories. Behind its own edge to the scripts it drives.",
+  "//": "The gate's scripts driven for real: ci-base.sh over real git histories, and build-dist.sh naming the artifact it built beside earlier builds. Behind its own edge to the scripts it drives.",
   "implicitDependencies": ["scripts"],
   "targets": {
     "format": {
