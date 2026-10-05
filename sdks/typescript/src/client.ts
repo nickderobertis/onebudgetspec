@@ -236,8 +236,14 @@ function parseReport(stdout: string): unknown {
     const [info] = context;
     const source = isObject(info) && typeof info.source === "string" ? info.source : undefined;
     const exact = source ?? (Number.isSafeInteger(value) ? String(value) : undefined);
-    if (exact === undefined || !/^\d+$/.test(exact) || BigInt(exact) >= 2n ** bits) {
-      throw new RangeError(`${key}: ${source ?? value} is not a ${bits}-bit unsigned integer`);
+    if (exact === undefined) {
+      throw new RangeError(
+        `${key}: ${value} is past 2^53, which this runtime cannot check exactly; run on one ` +
+          "whose JSON.parse passes source text to a reviver (Node 21+, Bun)",
+      );
+    }
+    if (!/^\d+$/.test(exact) || BigInt(exact) >= 2n ** bits) {
+      throw new RangeError(`${key}: ${exact} is not a ${bits}-bit unsigned integer`);
     }
     return value;
   });

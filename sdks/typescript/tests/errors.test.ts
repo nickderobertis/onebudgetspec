@@ -1,9 +1,18 @@
 // How a call that gets no report rejects, and what it refuses before anything runs.
 import { afterAll, expect, test } from "bun:test";
 import { chmodSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { check, listBudgets, OnebudgetspecError, schema, validate } from "../src/index.ts";
-import { builtBinary, cleanScratch, recording, rejection, runCli, scratch } from "./helpers.ts";
+import {
+  builtBinary,
+  cleanScratch,
+  ROOT,
+  recording,
+  rejection,
+  runCli,
+  scratch,
+} from "./helpers.ts";
 
 afterAll(cleanScratch);
 
@@ -228,4 +237,51 @@ test("a measurement and threshold too large for an integer come back as the doub
   expect(printed.stdout).toContain('"actual": 1e+20');
   const [result] = (await check({ cwd: dir, binary: builtBinary() })).results;
   expect([result?.verdict, result?.actual, result?.threshold]).toEqual(["within", 1e20, 1e300]);
+});
+
+// A runtime whose JSON.parse passes a reviver no source text, as runtimes before the
+// source-text proposal do: the SDK runs in a child process with that one difference.
+const WITHOUT_SOURCE = `
+const parse = JSON.parse;
+JSON.parse = (text, reviver) =>
+  parse(text, reviver && function (key, value) { return reviver.call(this, key, value); });
+`;
+
+function withoutSource(printed: string): { status: number | null; stdout: string } {
+  const dir = scratch();
+  writeFileSync(join(dir, "without-source.js"), WITHOUT_SOURCE);
+  const program = join(dir, "onebudgetspec");
+  writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${printed}\nEOF\n`);
+  chmodSync(program, 0o755);
+  const script = join(dir, "drive.ts");
+  const sdk = join(ROOT, "sdks", "typescript", "src", "index.ts");
+  writeFileSync(
+    script,
+    `import { check } from ${JSON.stringify(sdk)};\n` +
+      `check({ binary: ${JSON.stringify(program)} }).then(\n` +
+      "  (report) => console.log(JSON.stringify(report.results[0]?.host)),\n" +
+      "  (error) => console.log(error.message),\n" +
+      ");\n",
+  );
+  const ran = spawnSync(process.execPath, ["--preload", join(dir, "without-source.js"), script], {
+    encoding: "utf8",
+  });
+  return { status: ran.status, stdout: ran.stdout.trim() };
+}
+
+test("without source text, integers a double holds exactly are still read", () => {
+  const ran = withoutSource(reportWith({}, { mem_available_mib: "9007199254740991" }));
+  expect(ran.status).toBe(0);
+  expect(JSON.parse(ran.stdout)).toEqual({
+    load1: null,
+    cpus: 1,
+    mem_available_mib: 9007199254740991,
+    conditions: {},
+  });
+});
+
+test("without source text, an integer past 2^53 is refused as uncheckable", () => {
+  const ran = withoutSource(reportWith({}, { mem_available_mib: "18446744073709551615" }));
+  expect(ran.status).toBe(0);
+  expect(ran.stdout).toContain("this runtime cannot check exactly");
 });
