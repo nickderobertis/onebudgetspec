@@ -1,12 +1,15 @@
 """The project graph's edges follow the allowed directions, and Cargo's edges are in it."""
 
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
 from conftest import copy_tree
 
 from repo_checks import graph
+from repo_checks.paths import ROOT
 
 
 def test_the_graph_holds_to_its_boundaries() -> None:
@@ -66,3 +69,50 @@ def test_a_malformed_or_repeated_project_is_refused(tmp_path: Path) -> None:
     (tmp_path / "b/project.json").write_text(json.dumps({"name": "x", "tags": ["type:sdk"]}))
     with pytest.raises(graph.InvalidProject, match="repeats the project name x"):
         graph.projects(tmp_path)
+
+
+def test_an_sdk_may_depend_on_the_binary_and_the_contract_and_nothing_further(
+    tmp_path: Path,
+) -> None:
+    assert graph.ALLOWED["sdk"] == {"binary", "contract"}
+    sdks = {"sdk-python", "sdk-typescript"}
+    for name in sdks:
+        assert set(graph.projects()[graph.ProjectName(name)].dependencies) == {
+            "onebudgetspec",
+            "conformance",
+        }
+    root = copy_tree(
+        tmp_path,
+        "crates",
+        "sdks/python/project.json",
+        "sdks/typescript/project.json",
+        "npm",
+        "conformance/project.json",
+    )
+    assert graph.problems(root) == []
+    _edit(root, "sdks/python", {"implicitDependencies": ["onebudgetspec", "npm-cli"]})
+    assert graph.problems(root) == ["sdk-python (sdk) may not depend on npm-cli (distribution)"]
+    _edit(root, "sdks/python", {"implicitDependencies": ["onebudgetspec-e2e"]})
+    assert graph.problems(root) == ["sdk-python (sdk) may not depend on onebudgetspec-e2e (e2e)"]
+
+
+@pytest.mark.parametrize(
+    "changed",
+    ["crates/onebudgetspec-core/src/report.rs", "conformance/cases/selection/case.json"],
+)
+def test_a_contract_or_case_change_selects_both_sdks(changed: str) -> None:
+    affected = subprocess.run(
+        [
+            str(ROOT / "node_modules/.bin/nx"),
+            "show",
+            "projects",
+            "--affected",
+            f"--files={changed}",
+        ],
+        cwd=ROOT,
+        env={**os.environ, "NX_DAEMON": "false"},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert {"sdk-python", "sdk-typescript"} <= set(json.loads(affected.stdout)), affected.stdout
