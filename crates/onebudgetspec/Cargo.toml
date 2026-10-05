@@ -1,0 +1,25 @@
+[package]
+name = "onebudgetspec"
+description = "The onebudgetspec command line: check, validate and list the budgets registered in budgets.yaml files."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme = "../../README.md"
+keywords = ["budget", "performance", "gate", "measurement", "cli"]
+categories = ["command-line-utilities", "development-tools::testing"]
+
+[[bin]]
+name = "onebudgetspec"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+onebudgetspec-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints.clippy]
+pedantic = { level = "deny", priority = -1 }

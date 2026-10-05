@@ -1,0 +1,4 @@
+# Pinned so local and CI compile with byte-identical rustc, clippy and rustfmt.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy", "llvm-tools-preview"]

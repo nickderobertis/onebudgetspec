@@ -1,0 +1,2 @@
+# Mirrors `rust-version` in Cargo.toml so clippy never suggests an API newer than the floor.
+msrv = "1.97"
