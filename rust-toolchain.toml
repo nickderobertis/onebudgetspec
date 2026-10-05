@@ -2,3 +2,10 @@
 [toolchain]
 channel = "1.97.1"
 components = ["rustfmt", "clippy", "llvm-tools-preview"]
+# The release builds each of these; scripts/build-dist.sh refuses any other.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+]

@@ -62,9 +62,7 @@ deny:
 
 # Upgrade every ecosystem's dependencies, then re-run the whole gate on the result.
 upgrade:
-    @cargo update --quiet
-    @uv lock --upgrade --quiet && uv sync --quiet --frozen --all-packages
-    @bun update --latest --silent
+    @./scripts/nx run workspace:upgrade
     @just check-all
 
 # Print the JSON Schema bundle the contract is emitted as.

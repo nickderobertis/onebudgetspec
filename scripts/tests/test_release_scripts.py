@@ -415,3 +415,15 @@ def test_publish_refuses_an_unexpected_answer_from_npm(registry: str, tmp_path: 
     assert refused.returncode == 1
     assert "npm answered '0.1.0-other' when asked for @onebudgetspec/sdk@0.1.0" in refused.stderr
     assert UPLOADS == []
+
+
+def test_an_unusable_registry_url_is_refused_with_its_fix() -> None:
+    answered = subprocess.run(
+        [sys.executable, str(ROOT / "scripts/release-probe.py"), "pypi:onebudgetspec-cli"],
+        env={**os.environ, "ONEBUDGETSPEC_PROBE_PYPI_URL": "not a url/"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert answered.returncode == 2
+    assert "correct ONEBUDGETSPEC_PROBE_PYPI_URL" in answered.stderr

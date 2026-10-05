@@ -112,7 +112,15 @@ def main(argv: list[str]) -> None:
         refuse(
             f"release-targets.toml names {identifier} on no registry this probe reads", "fix its id"
         )
-    request = urllib.request.Request(url(registry, name), headers={"User-Agent": AGENT})
+    try:
+        request = urllib.request.Request(url(registry, name), headers={"User-Agent": AGENT})
+    except ValueError as error:
+        refuse(
+            f"the {registry} registry URL is not usable ({error})",
+            f"correct ONEBUDGETSPEC_PROBE_{registry.upper()}_URL, "
+            f"or unset it to ask {BASES[registry]}",
+            2,
+        )
     try:
         # One blocking standard-library request is this short-lived command's whole job, which
         # keeps it runnable on any host with no install; the answer is checked below.

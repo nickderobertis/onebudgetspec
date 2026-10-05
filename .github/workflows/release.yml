@@ -26,9 +26,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      # rust-toolchain.toml pins the toolchain and every release target.
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          target: ${{ matrix.target }}
       - uses: astral-sh/setup-uv@v7
       - name: Build the wheel and the npm carrier
         env:

@@ -41,6 +41,19 @@
         "parallel": false
       },
       "cache": false
+    },
+    "upgrade": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "cargo update --quiet",
+          "uv lock --upgrade --quiet",
+          "uv sync --quiet --frozen --all-packages",
+          "bun update --latest --silent"
+        ],
+        "parallel": false
+      },
+      "cache": false
     }
   }
 }

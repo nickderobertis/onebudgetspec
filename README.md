@@ -91,6 +91,10 @@ budget gate-time: actual 1395 seconds, budget 1800 seconds, headroom 405 seconds
 | 2 | the invocation or a file is invalid; nothing was run |
 | 3 | at least one measurement errored, or the report could not be written (the reason is on stderr) |
 
+The npm launcher adds three of its own, each with the reason on stderr: `64` on a platform
+no carrier is published for, `69` when the carrier package is missing or its binary
+cannot run, and `70` when the binary was ended by a signal.
+
 ## Nesting budgets files
 
 Each project registers its own budgets beside its code, and only the budgets a change can
