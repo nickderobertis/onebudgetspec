@@ -1,0 +1,39 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "onebudgetspec-core",
+  "projectType": "library",
+  "tags": ["lang:rust", "type:contract"],
+  "//": "The Rust SDK and the contract's one source: the budgets file, the check and list reports, and the schema bundle emitted from them. It depends on no other project here.",
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec-core"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec-core -- --check"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo clippy --quiet -p onebudgetspec-core --all-targets --locked -- -D warnings"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo check --quiet -p onebudgetspec-core --all-targets --locked"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo test --quiet -p onebudgetspec-core --locked"
+      }
+    }
+  }
+}

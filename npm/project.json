@@ -1,0 +1,27 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "npm-cli",
+  "projectType": "library",
+  "tags": ["lang:javascript", "type:distribution"],
+  "//": "The @onebudgetspec/cli launcher and its platform carriers. Published packages rather than workspace members: each carrier receives its binary only when scripts/build-dist.sh packs it. onebudgetspec-packaging-e2e installs and drives them.",
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format --write npm"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format npm"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome lint --error-on-warnings npm"
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "workspace",
+  "projectType": "library",
+  "tags": ["type:workspace"],
+  "//": "The Rust line-coverage floor, enforced once over every crate's run (the journeys spawn the instrumented binary, so the floor counts what they cover), and the supply chain. Depends on every crate so a change to any of them selects it.",
+  "implicitDependencies": ["onebudgetspec-core", "onebudgetspec", "onebudgetspec-e2e"],
+  "targets": {
+    "bootstrap": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/bootstrap.sh"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format nx.json biome.json package.json .claude workspace crates sdks tools npm"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format --write nx.json biome.json package.json .claude workspace crates sdks tools npm"
+      }
+    },
+    "coverage": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/rust-coverage.sh"
+      }
+    },
+    "deny": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": ["cargo deny check", "cargo machete"],
+        "parallel": false
+      },
+      "cache": false
+    }
+  }
+}

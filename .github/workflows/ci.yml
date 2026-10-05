@@ -1,0 +1,161 @@
+# Prove the workspace from a clean checkout: `just bootstrap` then the same `just check` a
+# contributor runs, over the projects a pull request's diff can reach, and every project on a merge to main.
+# `check` is the one required gate job; it aggregates the platform lanes and the supply
+# chain so the required-check set names one stable context.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The journeys run commands through POSIX `sh`, so the gate covers the platforms the
+  # release ships: Linux and macOS.
+  gate:
+    name: gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The merge base is derived below; a shallow checkout cannot resolve it.
+          fetch-depth: 0
+      - uses: extractions/setup-just@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      # Reads rust-toolchain.toml, so CI and local builds use the same rustc, clippy and rustfmt.
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,cargo-nextest,actionlint
+
+      - name: Bootstrap
+        run: just bootstrap
+
+      # Affected selection against the pull request's merge base, derived explicitly: an
+      # implicit base is how selection quietly compares against the wrong commit.
+      - name: Derive the comparison base
+        id: base
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags origin "$BASE_REF"
+          echo "base=$(git merge-base "$BASE_SHA" HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Check the affected projects
+        if: github.event_name == 'pull_request'
+        env:
+          NX_BASE: ${{ steps.base.outputs.base }}
+          NX_HEAD: HEAD
+        run: just check
+
+      # The broader tier, once per merged commit: every project, whatever the diff.
+      - name: Check every project
+        if: github.event_name != 'pull_request'
+        run: just check-all
+
+  # Supply chain, Linux-only: the dependency graph is the same on every platform.
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: extractions/setup-just@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-machete
+      - name: Supply-chain gate
+        run: just deny
+
+  # The one required gate context: green only when every lane above is.
+  check:
+    if: ${{ always() }}
+    needs: [gate, deny]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every gate lane passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then
+              echo "::error::a gate lane finished '$result'; open the failed lane above for its report" >&2
+              exit 1
+            fi
+          done
+
+  # The PR title becomes the squash commit release-plz reads, so a malformed one must not merge.
+  pr-title:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Whether the judged lint has a harness credential. Until publishing is provisioned it
+  # has none, and the llmlint job below is skipped rather than failed.
+  llmlint-guard:
+    if: github.event_name == 'pull_request' && github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.guard.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: guard
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: bash scripts/ci-guard.sh --any CLAUDE_CODE_OAUTH_TOKEN OPENAI_API_KEY
+
+  # The LLM-judge tier over the files this pull request changed. Separate from `check`
+  # because it is non-deterministic and needs an authenticated harness.
+  llmlint:
+    needs: [llmlint-guard]
+    if: needs.llmlint-guard.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Fetch main (diff base)
+        run: git fetch --no-tags origin main
+      - uses: extractions/setup-just@v4
+      - uses: astral-sh/setup-uv@v7
+      - name: Install oneharness + llmlint
+        run: |
+          just setup-llmlint
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Install the coding harnesses
+        run: npm i -g @anthropic-ai/claude-code @openai/codex
+      - name: Validate the llmlint config (no model)
+        run: just lint-llm-validate --diff-base origin/main
+      - name: Lint the changed files
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: just lint-llm-diff origin/main

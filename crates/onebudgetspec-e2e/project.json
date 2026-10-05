@@ -1,0 +1,41 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "onebudgetspec-e2e",
+  "projectType": "library",
+  "tags": ["lang:rust", "type:e2e"],
+  "//": "The journeys: the built binary driven over real budgets files. Behind its own edge, so only a change that can reach the binary runs them.",
+  "implicitDependencies": ["onebudgetspec"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec-e2e"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt -p onebudgetspec-e2e -- --check"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo clippy --quiet -p onebudgetspec-e2e --all-targets --locked -- -D warnings"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo check --quiet -p onebudgetspec-e2e --all-targets --locked"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo test --quiet -p onebudgetspec-e2e --locked"
+      },
+      "dependsOn": ["onebudgetspec:build"]
+    }
+  }
+}

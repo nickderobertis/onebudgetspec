@@ -1,0 +1,50 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "sdk-python",
+  "projectType": "library",
+  "tags": ["lang:python", "type:sdk"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet .",
+        "cwd": "sdks/python"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check .",
+        "cwd": "sdks/python"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff check --quiet .",
+        "cwd": "sdks/python"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet",
+        "cwd": "sdks/python"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q --no-cov",
+        "cwd": "sdks/python"
+      }
+    },
+    "coverage": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q",
+        "cwd": "sdks/python"
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@onebudgetspec/cli-darwin-arm64",
+  "version": "0.1.0",
+  "description": "The onebudgetspec binary for darwin-arm64, installed by @onebudgetspec/cli.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nickderobertis/onebudgetspec.git",
+    "directory": "npm/platforms/darwin-arm64"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

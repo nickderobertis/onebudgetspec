@@ -1,0 +1,35 @@
+# Conventional Commits determine the version; release-plz writes the Cargo manifests and
+# the changelog, tags `v<version>` and cuts the GitHub Release that fires release.yml.
+# release.yml publishes the crates, so release-plz publishes nothing itself.
+[workspace]
+publish = false
+# Only release-worthy commits open a release; its own `chore: release` commit is not one,
+# which keeps auto-merge from looping.
+release_commits = "(?s)^(feat|fix|perf)(\\([^)]+\\))?!?:|BREAKING CHANGE:"
+# Every main push, so a fix after a partly failed publish can resume it.
+release_always = true
+git_tag_name = "v{{ version }}"
+git_release_name = "v{{ version }}"
+
+[[package]]
+name = "onebudgetspec-core"
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "onebudgetspec-e2e"
+release = false
+
+[[package]]
+name = "onebudgetspec-packaging-e2e"
+release = false
+
+[changelog]
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix", group = "Fixed" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Changed" },
+  { message = "^docs", group = "Documentation" },
+  { message = ".*", skip = true },
+]

@@ -4,9 +4,7 @@
     {
       "id": "within",
       "file": "budgets.yaml",
-      "labels": [
-        "api"
-      ],
+      "labels": ["api"],
       "unit": "seconds",
       "direction": "max",
       "threshold": 1800.0,

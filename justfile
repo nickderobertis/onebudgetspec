@@ -1,0 +1,119 @@
+# The one command surface. Every gate recipe delegates to Nx: `affected` for what a change
+# can reach (against NX_BASE, nx.json's defaultBase origin/main unless CI derives one),
+# `run-many` for a full sweep. scripts/nx.sh installs the locked Node toolchain first in a
+# clone that has none, so every recipe works from a clean clone.
+
+set shell := ["bash", "-uc"]
+
+nx := "./scripts/nx.sh"
+
+# List available recipes.
+default:
+    @just --list
+
+# Set up from a clean clone: the locked Node, Python and Rust dependencies.
+bootstrap:
+    @{{nx}} run workspace:bootstrap
+
+# The full gate over the affected projects: formatting, lint, types, tests (unit, journeys,
+# conformance, packaging journeys) and the coverage floors. Fails on any issue.
+check: format-check lint typecheck test coverage
+
+# The broader tier: the same gate over every project. CI runs it on each merge to main.
+check-all:
+    @{{nx}} run-many -t format-check lint typecheck test coverage --all
+
+# Tests only, for the affected projects: unit tests, journeys and packaging journeys.
+test:
+    @{{nx}} affected -t test
+
+# The end-to-end tier on its own: the journeys and the packaging journeys, whatever changed.
+test-e2e:
+    @{{nx}} run-many -t test -p onebudgetspec-e2e onebudgetspec-packaging-e2e
+
+# Coverage for the affected projects: 95% lines for the Rust workspace, each Python
+# project and the TypeScript SDK.
+coverage:
+    @{{nx}} affected -t coverage
+
+# Lint for the affected projects (clippy -D warnings, ruff, biome, actionlint).
+lint:
+    @{{nx}} affected -t lint
+
+# Type check the affected projects.
+typecheck:
+    @{{nx}} affected -t typecheck
+
+# Check formatting without changing anything, for the affected projects.
+format-check:
+    @{{nx}} affected -t format-check
+
+# Format every project in place.
+format:
+    @{{nx}} run-many -t format --all
+
+# Supply chain: licences, bans, advisories and sources (cargo-deny), and unused crates.
+deny:
+    @{{nx}} run workspace:deny
+
+# Upgrade every ecosystem's dependencies, then re-run the whole gate on the result.
+upgrade:
+    @cargo update --quiet
+    @uv lock --upgrade --quiet && uv sync --quiet --frozen --all-packages
+    @bun update --silent
+    @{{nx}} run-many -t format-check lint typecheck test coverage --all
+
+# Print the JSON Schema bundle the contract is emitted as.
+# llmlint: ignore[tool_output_is_signal] stdout is the schema bundle itself, consumed by generators.
+schema:
+    @cargo run --quiet -p onebudgetspec -- schema
+
+# Every version agrees with the workspace's; `just set-version X` writes X everywhere.
+versions:
+    @uv run --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions check
+
+set-version version:
+    @uv run --frozen --package onebudgetspec-repo-checks python -m repo_checks.versions set {{version}}
+
+# create-repo's governance script (dero-skills), from the user-scope skill install.
+governance_script := env("CREATE_REPO_SKILL_DIR", home_directory() / ".claude/skills/create-repo") / "scripts/setup_github_governance.py"
+
+# Branch protection on main requiring exactly `check` and `pr-title`, with the squash-only
+# merge model. llmlint joins the required set when publishing is provisioned (AGENTS.md).
+# Extra flags pass through: `--verify` reads the live state back; `--dry-run --repo
+# nickderobertis/onebudgetspec --branch main` prints what it would apply, offline.
+# llmlint: ignore[tool_output_is_signal] the governance script's report is the answer the caller asked for.
+governance *flags:
+    @test -f "{{governance_script}}" || { echo "governance: {{governance_script}} not found; install the create-repo skill or set CREATE_REPO_SKILL_DIR" >&2; exit 1; }
+    @uv run --quiet --script "{{governance_script}}" check pr-title --allow-missing-llmlint {{flags}}
+
+# Show the project graph Nx selects against.
+graph:
+    @{{nx}} graph --file=.nx/graph.html
+
+# llmlint: ignore[tool_output_is_signal] a session-startup installer logs each step and continues rather than blocking startup.
+# Provision the dev toolchain for a session (runs from the SessionStart hook; idempotent).
+session-setup:
+    ./scripts/session-setup.sh
+
+# llmlint: ignore[tool_output_is_signal] a session-startup installer logs each step and continues rather than blocking startup.
+# Install or refresh the judged-lint toolchain (oneharness + llmlint). Idempotent.
+setup-llmlint:
+    ./scripts/setup-llmlint.sh
+
+# Out of the deterministic gate: these need an authenticated harness and the network.
+
+# LLM-judge lint over the configured set (or the paths given).
+lint-llm *paths:
+    @command -v llmlint >/dev/null 2>&1 || { echo "llmlint not installed — run 'just setup-llmlint'"; exit 1; }
+    @llmlint {{paths}}
+
+# Model-free llmlint gate (config, suppressions, versions). CI runs it before the judged lint.
+lint-llm-validate *args:
+    @command -v llmlint >/dev/null 2>&1 || { echo "llmlint not installed — run 'just setup-llmlint'"; exit 1; }
+    @llmlint validate {{args}}
+
+# The judged lint over what this branch changed since it forked from the base.
+lint-llm-diff base="origin/main" *args:
+    @command -v llmlint >/dev/null 2>&1 || { echo "llmlint not installed — run 'just setup-llmlint'"; exit 1; }
+    @llmlint --diff --diff-base "{{base}}" {{args}}

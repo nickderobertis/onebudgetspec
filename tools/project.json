@@ -1,0 +1,87 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "repo-checks",
+  "projectType": "library",
+  "tags": ["lang:python", "type:tooling"],
+  "//": "The checks the repository holds itself to: workflow guards, the library boundary, version agreement, the AGENTS.md journey list and the README examples. It reads every other project, so it depends on all of them, and its inputs name the root files it reads.",
+  "implicitDependencies": [
+    "onebudgetspec-core",
+    "onebudgetspec",
+    "onebudgetspec-e2e",
+    "onebudgetspec-packaging-e2e",
+    "npm-cli",
+    "sdk-python",
+    "sdk-typescript"
+  ],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet .",
+        "cwd": "tools"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check .",
+        "cwd": "tools"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run --frozen --no-sync ruff check --quiet .",
+          "actionlint",
+          "bun run biome lint --error-on-warnings ../nx.json ../biome.json ../package.json ../.claude"
+        ],
+        "cwd": "tools",
+        "parallel": false
+      },
+      "inputs": [
+        "default",
+        "{workspaceRoot}/.github/**/*",
+        "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/.claude/**/*"
+      ]
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet",
+        "cwd": "tools"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q --no-cov",
+        "cwd": "tools"
+      },
+      "dependsOn": ["onebudgetspec:build"],
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/.github/**/*",
+        "{workspaceRoot}/scripts/**/*",
+        "{workspaceRoot}/AGENTS.md",
+        "{workspaceRoot}/README.md",
+        "{workspaceRoot}/release-targets.toml",
+        "{workspaceRoot}/Cargo.toml",
+        "{workspaceRoot}/Cargo.lock",
+        "{workspaceRoot}/uv.lock",
+        "{workspaceRoot}/bun.lock",
+        "{workspaceRoot}/pyproject.toml"
+      ]
+    },
+    "coverage": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q",
+        "cwd": "tools"
+      },
+      "dependsOn": ["onebudgetspec:build"]
+    }
+  }
+}

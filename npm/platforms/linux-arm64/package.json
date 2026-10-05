@@ -1,0 +1,23 @@
+{
+  "name": "@onebudgetspec/cli-linux-arm64",
+  "version": "0.1.0",
+  "description": "The onebudgetspec binary for linux-arm64, installed by @onebudgetspec/cli.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nickderobertis/onebudgetspec.git",
+    "directory": "npm/platforms/linux-arm64"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

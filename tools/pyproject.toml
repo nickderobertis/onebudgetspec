@@ -1,0 +1,36 @@
+# Checks this repository holds itself to, run by `just check` through the `repo-checks` Nx
+# project. Development tooling only: nothing here ships.
+[project]
+name = "onebudgetspec-repo-checks"
+version = "0.0.0"
+description = "Repository checks for onebudgetspec: workflow guards, the library boundary, versions, journeys and README examples."
+requires-python = ">=3.12"
+classifiers = ["Private :: Do Not Upload"]
+dependencies = ["pyyaml>=6.0.3"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repo_checks"]
+
+[dependency-groups]
+dev = ["pytest>=9.0", "pytest-cov>=7.1", "ruff>=0.16.4", "ty>=0.0.74", "types-pyyaml>=6.0.12"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ANN", "D"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D103"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=repo_checks --cov-report=term-missing:skip-covered --cov-fail-under=95"
+testpaths = ["tests"]
