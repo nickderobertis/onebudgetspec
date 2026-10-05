@@ -21,8 +21,14 @@ def examples(root: Path = ROOT) -> dict[str, str]:
 
 
 def lay_out(files: dict[str, str], into: Path) -> None:
-    """Write ``files`` under ``into``."""
+    """Write ``files`` under ``into``.
+
+    Raises:
+        ValueError: an example's path is absolute or climbs out of ``into``.
+    """
     for relative, contents in files.items():
+        if Path(relative).is_absolute() or ".." in Path(relative).parts:
+            raise ValueError(f"the README example path {relative!r} leaves the example tree")
         path = into / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(contents)

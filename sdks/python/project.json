@@ -28,7 +28,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync ty check --quiet",
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning",
         "cwd": "sdks/python"
       }
     },

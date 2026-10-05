@@ -75,10 +75,12 @@ case "$target" in
     [ $# -eq 0 ] || usage "crate takes no directory"
     need CARGO_REGISTRY_TOKEN
     # The SDK before the binary crate that depends on it, as release-targets.toml covers it.
+    # ONEBUDGETSPEC_CRATES_API points the lookup elsewhere, as the tests do.
+    api="${ONEBUDGETSPEC_CRATES_API:-https://crates.io/api/v1}"
     for crate in $(target_packages crate | awk '{for (i = NF; i > 0; i--) print $i}'); do
       status="$(curl -sS -o /dev/null -w '%{http_code}' \
         -A "onebudgetspec-release (+https://github.com/nickderobertis/onebudgetspec)" \
-        "https://crates.io/api/v1/crates/$crate/$VERSION")" \
+        "$api/crates/$crate/$VERSION")" \
         || fail "crates.io could not be reached to ask about $crate $VERSION" "re-run the release workflow once crates.io answers"
       case "$status" in
         200) skipped+=("$crate") ;;

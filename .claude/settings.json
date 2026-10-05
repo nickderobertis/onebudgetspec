@@ -42,10 +42,9 @@
       "Bash(./scripts/setup-llmlint.sh)",
       "Bash(./scripts/session-setup.sh)",
       "Bash(git status)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git diff)",
+      "Bash(git diff --stat)",
+      "Bash(git log --oneline)"
     ],
     "deny": []
   }

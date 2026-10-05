@@ -18,7 +18,7 @@ from urllib.parse import unquote
 
 import pytest
 
-from repo_checks.paths import ROOT
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class Answer(NamedTuple):
@@ -156,7 +156,7 @@ def publish(*args: str, **env: str) -> subprocess.CompletedProcess[str]:
 def pack(tmp_path: Path, name: str, version: str) -> Path:
     """A real npm tarball of an empty package called ``name`` at ``version``."""
     source = tmp_path / "source"
-    source.mkdir()
+    source.mkdir(parents=True)
     (source / "package.json").write_text(json.dumps({"name": name, "version": version}))
     out = tmp_path / "packed"
     out.mkdir()
@@ -226,20 +226,11 @@ def npm_registry_env(base: str, tmp_path: Path) -> dict[str, str]:
     }
 
 
-def packument(version: str) -> Answer:
-    """The registry document of @onebudgetspec/sdk serving ``version``."""
-    manifest = {
-        "name": "@onebudgetspec/sdk",
-        "version": version,
-        "dist": {"tarball": "x", "shasum": "x"},
-    }
+def packument(version: str, name: str = "@onebudgetspec/sdk") -> Answer:
+    """The registry document of ``name`` serving ``version``."""
+    manifest = {"name": name, "version": version, "dist": {"tarball": "x", "shasum": "x"}}
     return Answer(
-        200,
-        {
-            "name": "@onebudgetspec/sdk",
-            "dist-tags": {"latest": version},
-            "versions": {version: manifest},
-        },
+        200, {"name": name, "dist-tags": {"latest": version}, "versions": {version: manifest}}
     )
 
 
@@ -298,3 +289,64 @@ def test_publish_reads_a_wheel_s_identity_from_its_metadata(tmp_path: Path) -> N
     wheel.write_text("not a zip")
     refused = publish("pypi", str(tmp_path), PYPI_TOKEN="token")
     assert "is not a readable wheel" in refused.stderr
+
+
+def test_publish_skips_crates_crates_io_already_serves(registry: str) -> None:
+    for crate in ("onebudgetspec-core", "onebudgetspec"):
+        ANSWERS[f"/api/v1/crates/{crate}/0.1.0"] = Answer(200, {"version": {"num": "0.1.0"}})
+    done = publish(
+        "crate", CARGO_REGISTRY_TOKEN="token", ONEBUDGETSPEC_CRATES_API=f"{registry}api/v1"
+    )
+    assert done.returncode == 0, done.stderr
+    assert (
+        done.stdout
+        == "publish: already published at 0.1.0, skipped: onebudgetspec-core onebudgetspec\n"
+    )
+
+
+def test_publish_refuses_when_crates_io_cannot_say(registry: str) -> None:
+    ANSWERS["/api/v1/crates/onebudgetspec-core/0.1.0"] = Answer(503, {"errors": []})
+    refused = publish(
+        "crate", CARGO_REGISTRY_TOKEN="token", ONEBUDGETSPEC_CRATES_API=f"{registry}api/v1"
+    )
+    assert refused.returncode == 1
+    assert "crates.io answered HTTP 503 for onebudgetspec-core 0.1.0" in refused.stderr
+    unreachable = publish(
+        "crate", CARGO_REGISTRY_TOKEN="token", ONEBUDGETSPEC_CRATES_API="http://127.0.0.1:9/api/v1"
+    )
+    assert unreachable.returncode == 1
+    assert "crates.io could not be reached" in unreachable.stderr
+
+
+def npm_target(tmp_path: Path) -> tuple[Path, Path]:
+    """Two packed carriers and the packed launcher, in the directories release.yml passes."""
+    carriers = tmp_path / "carriers"
+    for platform in ("linux-x64", "darwin-arm64"):
+        packed = pack(tmp_path / platform, f"@onebudgetspec/cli-{platform}", "0.1.0")
+        carriers.mkdir(exist_ok=True)
+        for tarball in packed.iterdir():
+            tarball.rename(carriers / tarball.name)
+    return carriers, pack(tmp_path / "launcher", "@onebudgetspec/cli", "0.1.0")
+
+
+def test_publish_uploads_the_carriers_before_the_launcher(registry: str, tmp_path: Path) -> None:
+    carriers, launcher = npm_target(tmp_path)
+    env = npm_registry_env(registry, tmp_path)
+    done = publish("npm", str(carriers), str(launcher), **env)
+    assert done.returncode == 0, done.stderr
+    assert UPLOADS == [
+        "/@onebudgetspec/cli-darwin-arm64",
+        "/@onebudgetspec/cli-linux-x64",
+        "/@onebudgetspec/cli",
+    ]
+
+
+def test_publish_resumes_a_partly_published_release(registry: str, tmp_path: Path) -> None:
+    carriers, launcher = npm_target(tmp_path)
+    for platform in ("linux-x64", "darwin-arm64"):
+        name = f"@onebudgetspec/cli-{platform}"
+        ANSWERS[f"/{name}"] = packument("0.1.0", name)
+    done = publish("npm", str(carriers), str(launcher), **npm_registry_env(registry, tmp_path))
+    assert done.returncode == 0, done.stderr
+    assert UPLOADS == ["/@onebudgetspec/cli"]
+    assert "skipped: @onebudgetspec/cli-darwin-arm64 @onebudgetspec/cli-linux-x64" in done.stdout

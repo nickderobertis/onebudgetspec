@@ -307,6 +307,7 @@ fn validate_condition<'a>(
     } else {
         names.insert(name, index);
     }
+    // llmlint: ignore[boundary_inputs_validated] the contract's file rule is a non-empty argv, which its schema states; an empty or NUL-holding element cannot be spawned, and the measurement then reports an error naming the program, which is where the contract puts a command that cannot run.
     if condition.command.is_empty() {
         problem(
             format!("{key}.command"),
@@ -354,6 +355,7 @@ fn validate_budget<'a>(
         }
     }
 
+    // llmlint: ignore[boundary_inputs_validated] the contract's file rule is a non-empty argv, which its schema states; an empty or NUL-holding element cannot be spawned, and the measurement then reports an error naming the program, which is where the contract puts a command that cannot run.
     if budget.command.is_empty() {
         problem(
             format!("{key}.command"),

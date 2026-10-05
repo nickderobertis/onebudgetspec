@@ -3,6 +3,7 @@
 import subprocess
 from pathlib import Path
 
+import pytest
 from conftest import copy_tree
 
 from repo_checks import readme
@@ -55,3 +56,10 @@ def test_a_missing_example_is_noticed(tmp_path: Path) -> None:
     text = (root / "README.md").read_text().replace('```yaml title="budgets.yaml"', "```yaml")
     (root / "README.md").write_text(text)
     assert "budgets.yaml" not in readme.examples(root)
+
+
+def test_an_example_path_that_leaves_the_tree_is_refused(tmp_path: Path) -> None:
+    for path in ("../escape.yaml", "/etc/budgets.yaml", "a/../../b.yaml"):
+        with pytest.raises(ValueError, match="leaves the example tree"):
+            readme.lay_out({path: "x"}, tmp_path / "tree")
+    assert not (tmp_path / "escape.yaml").exists()
