@@ -108,6 +108,7 @@ def test_a_contract_or_case_change_selects_both_sdks(changed: str) -> None:
             "projects",
             "--affected",
             f"--files={changed}",
+            "--json",
         ],
         cwd=ROOT,
         env={**os.environ, "NX_DAEMON": "false"},
