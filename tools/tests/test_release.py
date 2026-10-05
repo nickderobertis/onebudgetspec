@@ -140,3 +140,58 @@ def test_a_malformed_release_declaration_is_named(
     (tmp_path / "release-targets.toml").write_text(declaration)
     with pytest.raises(release.InvalidDeclaration, match=reason):
         release.targets(tmp_path)
+
+
+def test_each_publish_job_uploads_what_its_target_names() -> None:
+    assert release.artifact_problems() == []
+    by_name = {target["name"]: target for target in release.targets()}
+    assert by_name["sdk-pypi"]["id"] == "pypi:onebudgetspec-sdk"
+    assert by_name["sdk-npm"]["id"] == "npm:@onebudgetspec/sdk"
+
+
+def test_a_job_publishing_another_package_s_artifact_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    workflow = root / ".github/workflows/release.yml"
+    workflow.write_text(
+        workflow.read_text()
+        .replace("publish.sh sdk-pypi dist/sdk-pypi", "publish.sh sdk-pypi dist/sdk-npm")
+        .replace("publish.sh sdk-npm dist/sdk-npm", "publish.sh sdk-npm dist/elsewhere")
+    )
+    assert release.artifact_problems(root) == [
+        "sdk-pypi: publishes dist/sdk-npm, built as sdk-typescript (@onebudgetspec/sdk), "
+        "not ['onebudgetspec-sdk']",
+        "sdk-npm: publishes dist/elsewhere, which no build-dist.sh step fills",
+    ]
+
+
+def test_an_artifact_built_from_another_package_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    build = root / "scripts/build-dist.sh"
+    build.write_text(
+        build.read_text()
+        .replace("--package onebudgetspec-sdk ", "--package onebudgetspec-repo-checks ")
+        .replace('npm pack "$ROOT/sdks/typescript"', 'npm pack "$ROOT/npm/cli"')
+        .replace('"$ROOT/sdks/typescript" build', '"$ROOT/npm/cli" build')
+    )
+    assert release.artifact_problems(root) == [
+        "scripts/build-dist.sh sdk-python does not build onebudgetspec-sdk",
+        "scripts/build-dist.sh sdk-typescript does not build @onebudgetspec/sdk",
+    ]
+    build.write_text(build.read_text().replace("  sdk-python)\n", "  sdk-py)\n"))
+    assert any("release.py knows" in problem for problem in release.artifact_problems(root))
+
+
+def test_a_target_whose_probe_asks_for_another_package_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    path = root / "release-targets.toml"
+    path.write_text(
+        path.read_text().replace('"npm:@onebudgetspec/sdk"', '"npm:@onebudgetspec/cli"')
+    )
+    assert (
+        "sdk-npm: id names @onebudgetspec/cli, sdks/typescript/package.json declares "
+        "@onebudgetspec/sdk" in release.target_problems(root)
+    )
+    assert release.artifact_problems(root) == [
+        "sdk-npm: publishes dist/sdk-npm, built as sdk-typescript (@onebudgetspec/sdk), "
+        "not ['@onebudgetspec/cli']"
+    ]

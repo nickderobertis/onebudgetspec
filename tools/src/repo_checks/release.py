@@ -210,3 +210,91 @@ def launcher_status_problems(root: Path = ROOT) -> list[str]:
             f"npm/cli/lib/launcher.js returns {returned}"
         ]
     return []
+
+
+#: What each scripts/build-dist.sh artifact packs: the manifest (a glob, for the carriers)
+#: declaring the package it builds.
+ARTIFACT_MANIFESTS = {
+    "cli-wheel": "pyproject.toml",
+    "npm-carrier": "npm/platforms/*/package.json",
+    "npm-launcher": "npm/cli/package.json",
+    "sdk-python": "sdks/python/pyproject.toml",
+    "sdk-typescript": "sdks/typescript/package.json",
+}
+
+
+def _build_arms(root: Path) -> dict[str, str]:
+    """Each artifact scripts/build-dist.sh builds, and the text of its case arm."""
+    script = (root / "scripts/build-dist.sh").read_text()
+    body = script.split('case "$ARTIFACT" in', 1)[-1]
+    arms = re.split(r"^  ([a-z-]+)\)\n", body, flags=re.M)
+    return dict(zip(arms[1::2], arms[2::2], strict=True))
+
+
+def _arm_builds(root: Path, arm: str, manifest: str, name: str) -> bool:
+    """Whether a build-dist.sh arm builds ``manifest``'s package.
+
+    For the root wheel, maturin over the crate its ``[tool.maturin]`` names; for a uv
+    workspace member, ``--package`` with its name; otherwise the manifest's own directory.
+    """
+    if manifest == "pyproject.toml":
+        maturin = tomllib.loads((root / manifest).read_text())["tool"]["maturin"]
+        return "maturin build" in arm and f'"$ROOT/{maturin["manifest-path"]}"' in arm
+    directory = manifest.rsplit("/", 1)[0].removesuffix("/*")
+    return f"$ROOT/{directory}" in arm or f"--package {name} " in arm
+
+
+def artifact_problems(root: Path = ROOT) -> list[str]:
+    """Every publish job that would upload an artifact built from another package.
+
+    Each directory a ``publish.sh <target>`` step names must be one release.yml fills with
+    ``build-dist.sh <artifact> <directory>``, and that artifact must build a package the
+    target publishes (its id or what it covers).
+    """
+    problems: list[str] = []
+    arms = _build_arms(root)
+    if sorted(arms) != sorted(ARTIFACT_MANIFESTS):
+        known = sorted(ARTIFACT_MANIFESTS)
+        problems.append(f"scripts/build-dist.sh builds {sorted(arms)}; release.py knows {known}")
+    packages: dict[str, set[str]] = {}
+    for artifact, pattern in ARTIFACT_MANIFESTS.items():
+        names = {
+            _manifest_name(root, path.relative_to(root).as_posix())
+            for path in sorted(root.glob(pattern))
+        }
+        packages[artifact] = names
+        arm = arms.get(artifact, "")
+        for name in sorted(names):
+            if not _arm_builds(root, arm, pattern, name):
+                problems.append(f"scripts/build-dist.sh {artifact} does not build {name}")
+    jobs = yaml.safe_load((root / ".github/workflows/release.yml").read_text())["jobs"]
+    built: dict[str, str] = {}
+    for body in jobs.values():
+        for step in body.get("steps", []):
+            for match in re.finditer(r"build-dist\.sh (\S+) (\S+)", str(step.get("run", ""))):
+                built[match.group(2)] = match.group(1)
+    for target in targets(root):
+        publishes = {target["id"].partition(":")[2]} | {
+            cover.partition(":")[2] for cover in target.get("covers", [])
+        }
+        for job in jobs.values():
+            for step in job.get("steps", []):
+                run = str(step.get("run", ""))
+                match = re.search(
+                    rf"scripts/release/publish\.sh {re.escape(target['name'])}((?: \S+)*)", run
+                )
+                if match is None:
+                    continue
+                for directory in match.group(1).split():
+                    artifact = built.get(directory, "")
+                    if artifact not in packages:
+                        problems.append(
+                            f"{target['name']}: publishes {directory}, "
+                            "which no build-dist.sh step fills"
+                        )
+                    elif not packages[artifact] or not packages[artifact] <= publishes:
+                        problems.append(
+                            f"{target['name']}: publishes {directory}, built as {artifact} "
+                            f"({', '.join(sorted(packages[artifact]))}), not {sorted(publishes)}"
+                        )
+    return problems
