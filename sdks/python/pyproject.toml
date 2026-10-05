@@ -1,14 +1,13 @@
 [project]
-# llmlint: ignore[names_match_behavior] the package name is fixed by the release contract other repositories install against, and this package's interface is the release version until its API lands on it.
 name = "onebudgetspec-sdk"
 version = "0.1.0"
-description = "The onebudgetspec Python SDK package, versioned with the onebudgetspec command line; it exposes the release version."
+description = "The onebudgetspec Python SDK: check, validate and list budgets through the onebudgetspec binary, with report models generated from its schema."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Nick DeRobertis" }]
 classifiers = ["Typing :: Typed"]
-dependencies = []
+dependencies = ["onebudgetspec-cli==0.1.0", "pydantic>=2.12", "typing-extensions>=4.12"]
 
 [project.urls]
 Repository = "https://github.com/nickderobertis/onebudgetspec"
@@ -21,7 +20,7 @@ build-backend = "hatchling.build"
 packages = ["src/onebudgetspec_sdk"]
 
 [dependency-groups]
-dev = ["pytest>=9.0", "pytest-cov>=7.1", "ruff>=0.16.4", "ty>=0.0.74"]
+dev = ["datamodel-code-generator>=0.33", "pytest>=9.0", "pytest-cov>=7.1", "ruff>=0.16.4", "ty>=0.0.74"]
 
 [tool.ruff]
 line-length = 100
@@ -34,3 +33,6 @@ convention = "google"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.uv.sources]
+onebudgetspec-cli = { workspace = true }
