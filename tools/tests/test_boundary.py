@@ -204,8 +204,12 @@ def test_crediting_the_model_layout_is_the_one_exception() -> None:
 def test_python_and_bun_dependencies_are_followed(tmp_path: Path) -> None:
     root = copy_tree(tmp_path, *LIBRARY)
     uv = root / "uv.lock"
-    sdk = 'name = "onebudgetspec-sdk"\nversion = "0.1.0"\nsource = { editable = "sdks/python" }\n'
-    planted = 'dependencies = [{ name = "onejudge-client" }]\n'
+    sdk = (
+        'name = "onebudgetspec-sdk"\nversion = "0.1.0"\nsource = { editable = "sdks/python" }\n'
+        "dependencies = [\n"
+    )
+    planted = '    { name = "onejudge-client" },\n'
+    assert sdk in uv.read_text()
     uv.write_text(uv.read_text().replace(sdk, sdk + planted))
     bun = root / "bun.lock"
     bun.write_text(
