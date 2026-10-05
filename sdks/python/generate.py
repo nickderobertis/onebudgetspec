@@ -173,15 +173,46 @@ def files(schema_bundle: SchemaBundle) -> dict[str, str]:
     return generated
 
 
+#: What Python writes beside the modules it imports, which is never the generator's to judge.
+CACHE = "__pycache__"
+
+
+def _is_model_file(path: Path) -> bool:
+    """Whether ``path`` is a regular file in place, not a symlink to one elsewhere."""
+    return path.is_file() and not path.is_symlink()
+
+
 def _differences(wanted: dict[str, str]) -> tuple[list[str], list[str]]:
-    """The generated files that are stale or missing, and those no root generates."""
-    present = {path.name: path for path in GENERATED.glob("*.py")} if GENERATED.is_dir() else {}
+    """The generated files that are stale or missing, and every other entry beside them.
+
+    A model's name held by anything but a regular file is stale, and is never read through.
+    Any entry no root generates is extra, whatever it is, except Python's cache.
+    """
+    present = (
+        {path.name: path for path in GENERATED.iterdir() if path.name != CACHE}
+        if GENERATED.is_dir()
+        else {}
+    )
     stale = sorted(
         name
         for name, content in wanted.items()
-        if name not in present or present[name].read_text() != content
+        if name not in present
+        or not _is_model_file(present[name])
+        or present[name].read_text() != content
     )
     return stale, sorted(set(present) - set(wanted))
+
+
+def _remove(path: Path) -> None:
+    """Remove ``path`` without following a link.
+
+    A link or file is unlinked; a real directory is removed with its contents, whose own
+    links are unlinked rather than followed.
+    """
+    if path.is_symlink() or not path.is_dir():
+        path.unlink(missing_ok=True)
+    else:
+        shutil.rmtree(path)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -202,9 +233,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1 if stale or extra else 0
         GENERATED.mkdir(parents=True, exist_ok=True)
         for name in stale:
-            (GENERATED / name).write_text(wanted[name])
+            target = GENERATED / name
+            if target.is_symlink() or (target.exists() and not _is_model_file(target)):
+                _remove(target)
+            target.write_text(wanted[name])
         for name in extra:
-            (GENERATED / name).unlink()
+            _remove(GENERATED / name)
     except GenerateError as error:
         print(f"generate: {error}", file=sys.stderr)
         return 1

@@ -43,8 +43,24 @@ def generate(package: Path, binary: Path, *args: str) -> subprocess.CompletedPro
 
 
 def contents(package: Path) -> dict[str, str]:
-    """Each generated file's name and text."""
-    return {path.name: path.read_text() for path in (package / GENERATED).glob("*.py")}
+    """Every entry under the generated directory, by relative path, outside ``__pycache__``.
+
+    A regular file maps to its text and a symlink to ``-> <target>``, never followed, so any
+    change the generator makes to either shows.
+    """
+    root = package / GENERATED
+    found: dict[str, str] = {}
+    for directory, subdirectories, names in os.walk(root, followlinks=False):
+        here = Path(directory)
+        subdirectories[:] = [name for name in subdirectories if name != "__pycache__"]
+        for name in [*names, *subdirectories]:
+            path = here / name
+            relative = path.relative_to(root).as_posix()
+            if path.is_symlink():
+                found[relative] = f"-> {os.readlink(path)}"
+            elif path.is_file():
+                found[relative] = path.read_text()
+    return found
 
 
 def test_check_passes_on_the_committed_files_and_writes_nothing(
@@ -167,3 +183,63 @@ def test_a_missing_formatter_is_refused_with_a_next_step(
     assert refused.returncode == 1
     assert "ruff is not on PATH; run 'just bootstrap'" in refused.stderr
     assert contents(package) == before
+
+
+def test_check_names_unexpected_entries_of_any_kind_and_generate_removes_them(
+    package: Path, built_binary: Path, tmp_path: Path
+) -> None:
+    """Extras of any kind are named and removed; a link's target and the cache are kept."""
+    committed = contents(package)
+    generated = package / GENERATED
+    (generated / "stray.json").write_text("{}\n")
+    (generated / "notes" / "inner").mkdir(parents=True)
+    (generated / "notes" / "inner" / "readme.txt").write_text("not a model\n")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("keep me\n")
+    (generated / "link").symlink_to(outside, target_is_directory=True)
+    (generated / "__pycache__").mkdir()
+    (generated / "__pycache__" / "x.cpython.pyc").write_bytes(b"cache")
+    drifted = contents(package)
+
+    checked = generate(package, built_binary, "--check")
+    assert checked.returncode == 1, checked.stderr
+    for name in ("stray.json", "notes", "link"):
+        assert f"_generated/{name} differs" in checked.stderr
+    assert "__pycache__" not in checked.stderr
+    assert contents(package) == drifted, "--check changed the generated directory"
+
+    regenerated = generate(package, built_binary)
+    assert (regenerated.returncode, regenerated.stderr) == (0, "")
+    assert contents(package) == committed
+    assert not (generated / "link").is_symlink()
+    assert (outside / "keep.txt").read_text() == "keep me\n", "the link's target was followed"
+    assert (generated / "__pycache__" / "x.cpython.pyc").read_bytes() == b"cache"
+    assert generate(package, built_binary, "--check").returncode == 0
+
+
+def test_a_directory_or_link_where_a_model_belongs_is_stale_and_replaced(
+    package: Path, built_binary: Path, tmp_path: Path
+) -> None:
+    """A model's name held by a directory or a symlink is named stale, never read through."""
+    committed = contents(package)
+    generated = package / GENERATED
+    (generated / "check_report.py").unlink()
+    (generated / "check_report.py").mkdir()
+    (generated / "check_report.py" / "inside.txt").write_text("in the way\n")
+    elsewhere = tmp_path / "elsewhere.py"
+    elsewhere.write_text((PACKAGE / GENERATED / "list_report.py").read_text())
+    (generated / "list_report.py").unlink()
+    (generated / "list_report.py").symlink_to(elsewhere)
+
+    checked = generate(package, built_binary, "--check")
+    assert checked.returncode == 1, checked.stderr
+    assert "_generated/check_report.py differs" in checked.stderr
+    assert "_generated/list_report.py differs" in checked.stderr
+    assert "cannot read or write" not in checked.stderr
+
+    assert generate(package, built_binary).returncode == 0
+    assert contents(package) == committed
+    assert not (generated / "list_report.py").is_symlink()
+    assert elsewhere.read_text() == (PACKAGE / GENERATED / "list_report.py").read_text()
+    assert generate(package, built_binary, "--check").returncode == 0
