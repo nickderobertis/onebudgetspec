@@ -2,4 +2,4 @@
 # follows into, and that file is what these tests measure.
 [tool.coverage.run]
 patch = ["subprocess"]
-include = ["*/scripts/release-probe.py"]
+include = ["*/scripts/release/release-probe.py"]

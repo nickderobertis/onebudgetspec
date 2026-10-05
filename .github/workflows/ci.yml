@@ -58,15 +58,16 @@ jobs:
         run: bash scripts/ci-base.sh
 
       - name: Check the affected projects
-        if: ${{ !startsWith(github.head_ref, 'release-plz-') }}
+        if: ${{ !startsWith(github.head_ref, 'release-plz-') || matrix.os != 'ubuntu-latest' }}
         env:
           NX_BASE: ${{ steps.base.outputs.base }}
           NX_HEAD: HEAD
         run: just check
 
-      # The broader tier, once, on the pull request whose merge releases.
+      # The broader tier, once, on one lane of the pull request whose merge releases; the
+      # other lane runs the affected tier as on any pull request.
       - name: Check every project before a release
-        if: ${{ startsWith(github.head_ref, 'release-plz-') }}
+        if: ${{ startsWith(github.head_ref, 'release-plz-') && matrix.os == 'ubuntu-latest' }}
         run: just check-all
 
   # Supply chain, Linux-only: the dependency graph is the same on every platform.

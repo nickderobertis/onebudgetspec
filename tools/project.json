@@ -19,7 +19,8 @@
     "npm-cli-darwin-x64",
     "npm-cli-darwin-arm64",
     "onebudgetspec-conformance",
-    "scripts-integration"
+    "scripts-integration",
+    "release-scripts"
   ],
   "targets": {
     "format": {

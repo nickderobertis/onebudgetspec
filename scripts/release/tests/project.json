@@ -1,0 +1,48 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "scripts-integration",
+  "projectType": "library",
+  "tags": ["lang:python", "type:integration"],
+  "//": "The release scripts driven against local registries: the probe over HTTP and publish.sh against a local npm registry. Slow, so behind its own edge to the two scripts it drives, and it holds its own 95% line floor over the probe (measured through its subprocess runs) rather than joining python-coverage, which would run it for every Python change.",
+  "implicitDependencies": ["release-scripts"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --config scripts/release/ruff.toml scripts/release/tests"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check --config scripts/release/ruff.toml scripts/release/tests"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff check --quiet --config scripts/release/ruff.toml scripts/release/tests"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 scripts/release/tests"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider --cov --cov-config=coverage.toml --cov-report=term-missing:skip-covered --cov-fail-under=95",
+        "cwd": "scripts/release/tests"
+      },
+      "cache": false,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/release-targets.toml",
+        "{workspaceRoot}/Cargo.toml"
+      ]
+    }
+  }
+}

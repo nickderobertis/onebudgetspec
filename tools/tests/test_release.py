@@ -47,11 +47,11 @@ def test_a_renamed_target_and_a_wrong_manifest_are_named(tmp_path: Path) -> None
 def test_an_unpublished_target_and_a_stale_cover_are_named(tmp_path: Path) -> None:
     root = copy_tree(tmp_path, *FILES)
     workflow = root / ".github/workflows/release.yml"
-    workflow.write_text(workflow.read_text().replace("scripts/publish.sh sdk-pypi", "true"))
+    workflow.write_text(workflow.read_text().replace("scripts/release/publish.sh sdk-pypi", "true"))
     path = root / "release-targets.toml"
     path.write_text(path.read_text().replace('    "npm:@onebudgetspec/cli-darwin-x64",\n', ""))
     path.write_text(
-        path.read_text().replace('probe = "scripts/release-probe.py"', 'probe = "nope"')
+        path.read_text().replace('probe = "scripts/release/release-probe.py"', 'probe = "nope"')
     )
     problems = release.target_problems(root)
     assert any(problem.startswith("release.yml publishes") for problem in problems), problems

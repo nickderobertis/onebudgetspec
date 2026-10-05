@@ -98,7 +98,7 @@ def test_the_probe_and_this_check_share_one_version_grammar() -> None:
         start = text.index("VERSION = re.compile(")
         return text[start : text.index("\n)\n", start)]
 
-    assert grammar(ROOT / "scripts/release-probe.py") == grammar(
+    assert grammar(ROOT / "scripts/release/release-probe.py") == grammar(
         ROOT / "tools/src/repo_checks/versions.py"
     )
     for good in ("0.1.0", "1.2.3-rc.1", "1.2.3+build.5", "10.20.30-alpha.beta"):

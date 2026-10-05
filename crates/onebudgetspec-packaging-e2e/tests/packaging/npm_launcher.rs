@@ -105,3 +105,33 @@ fn a_binary_ended_by_a_signal_exits_70() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("terminated by SIGKILL"), "{stderr}");
 }
+
+/// An installed launcher and host carrier, the carrier then damaged in place: its binary
+/// removed, and its binary replaced by a link that escapes the package.
+#[test]
+fn the_installed_launcher_refuses_a_damaged_carrier() {
+    let launcher = artifact("npm-launcher");
+    let carrier = artifact("npm-carrier");
+    let dir = tempfile::tempdir().unwrap();
+    let project = npm_project_with(dir.path(), &[&carrier, &launcher]);
+    let installed = project.join("node_modules/.bin/onebudgetspec");
+    let binary = project
+        .join("node_modules/@onebudgetspec")
+        .join(format!("cli-{}", host_platform()))
+        .join("bin/onebudgetspec");
+
+    std::fs::remove_file(&binary).unwrap();
+    let output = run(&installed, &["--version"], &project);
+    assert_eq!(output.status.code(), Some(69));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("is not installed (ENOENT)"), "{stderr}");
+
+    let outside = dir.path().join("outside");
+    std::fs::write(&outside, "#!/bin/sh\necho hijacked\n").unwrap();
+    std::os::unix::fs::symlink(&outside, &binary).unwrap();
+    let output = run(&installed, &["--version"], &project);
+    assert_eq!(output.status.code(), Some(69));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("outside the package"), "{stderr}");
+    assert!(output.stdout.is_empty(), "the escaping binary ran");
+}

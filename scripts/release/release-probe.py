@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """What a public registry serves right now for one release target of this repository.
 
-    usage: scripts/release-probe.py <registry>:<name>
+    usage: scripts/release/release-probe.py <registry>:<name>
 
 Three answers, kept apart on purpose:
 
@@ -24,9 +24,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Literal, NoReturn, TypedDict
+from typing import Literal, NewType, NoReturn, TypedDict
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 Registry = Literal["crate", "pypi", "npm"]
 BASES: dict[Registry, str] = {
     "crate": "https://crates.io/api/v1/crates/",
@@ -46,13 +46,17 @@ VERSION = re.compile(
 LATER = "re-ask later; a registry that did not answer is not one with no release"
 
 
+#: A registry-qualified target id, ``<registry>:<name>``, as release-targets.toml declares.
+TargetId = NewType("TargetId", str)
+
+
 class Target(TypedDict):
     """The part of a release-targets.toml ``[[target]]`` the probe reads."""
 
-    id: str
+    id: TargetId
 
 
-def target_ids() -> list[str]:
+def target_ids() -> list[TargetId]:
     """The ids release-targets.toml declares, sorted."""
     declared: list[Target] = tomllib.loads((ROOT / "release-targets.toml").read_text())["target"]
     return sorted(target["id"] for target in declared)
@@ -98,7 +102,7 @@ def main(argv: list[str]) -> None:
         case _:
             refuse(
                 "takes exactly one registry-qualified id",
-                "run 'scripts/release-probe.py pypi:onebudgetspec-cli'",
+                "run 'scripts/release/release-probe.py pypi:onebudgetspec-cli'",
                 2,
             )
     ids = target_ids()

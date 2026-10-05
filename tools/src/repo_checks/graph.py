@@ -10,10 +10,12 @@ import json
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NewType
 
 from repo_checks.paths import ROOT
 
+#: An Nx project's name, as project.json declares it and other projects depend on it.
+ProjectName = NewType("ProjectName", str)
 ProjectType = Literal[
     "contract", "sdk", "distribution", "binary", "e2e", "integration", "tooling", "workspace"
 ]
@@ -47,10 +49,10 @@ class InvalidProject(ValueError):
 class Project:
     """What this check reads from one project.json."""
 
-    name: str
+    name: ProjectName
     root: Path
     tags: tuple[str, ...]
-    dependencies: tuple[str, ...]
+    dependencies: tuple[ProjectName, ...]
 
     @classmethod
     def read(cls, path: Path) -> "Project":
@@ -65,20 +67,25 @@ class Project:
         for field, values in (("tags", tags), ("implicitDependencies", dependencies)):
             if not isinstance(values, list) or not all(isinstance(v, str) for v in values):
                 raise InvalidProject(f"{path}: `{field}` is not a list of strings")
-        return cls(name, path.parent, tuple(tags), tuple(dependencies))
+        return cls(
+            ProjectName(name),
+            path.parent,
+            tuple(tags),
+            tuple(ProjectName(dependency) for dependency in dependencies),
+        )
 
     def kinds(self) -> list[str]:
         """The values of this project's ``type:`` tags."""
         return [tag.removeprefix("type:") for tag in self.tags if tag.startswith("type:")]
 
 
-def projects(root: Path = ROOT) -> dict[str, Project]:
+def projects(root: Path = ROOT) -> dict[ProjectName, Project]:
     """Every project under ``root``, by name.
 
     Raises:
         InvalidProject: a project.json is malformed, or two share a name.
     """
-    found: dict[str, Project] = {}
+    found: dict[ProjectName, Project] = {}
     for path in sorted(root.glob("**/project.json")):
         if {"node_modules", "target"} & set(path.parts):
             continue
@@ -105,7 +112,7 @@ def problems(root: Path = ROOT) -> list[str]:
     """Every project without one known type, and every edge its type does not allow."""
     found = projects(root)
     issues: list[str] = []
-    kinds: dict[str, ProjectType] = {}
+    kinds: dict[ProjectName, ProjectType] = {}
     for name, project in found.items():
         kind = _kind(project)
         if kind is None:

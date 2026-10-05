@@ -9,22 +9,27 @@ import json
 import re
 import tomllib
 from pathlib import Path
-from typing import NamedTuple, NotRequired, TypedDict
+from typing import NamedTuple, NewType, NotRequired, TypedDict
 
 import yaml
 
 from repo_checks.paths import ROOT
 
+#: A registry-qualified target id, ``<registry>:<name>``.
+TargetId = NewType("TargetId", str)
+#: One of the five short target names other repositories wait on.
+TargetName = NewType("TargetName", str)
+
 
 class Target(TypedDict):
     """One ``[[target]]`` of release-targets.toml."""
 
-    id: str
-    name: str
+    id: TargetId
+    name: TargetName
     what: str
     published_by: str
     manifest: str
-    covers: NotRequired[list[str]]
+    covers: NotRequired[list[TargetId]]
 
 
 def targets(root: Path = ROOT) -> list[Target]:
@@ -74,7 +79,9 @@ def target_problems(root: Path = ROOT) -> list[str]:
     published: dict[str, str] = {}
     for job, body in workflow.items():
         for step in body.get("steps", []):
-            for match in re.finditer(r"scripts/publish\.sh (\S+)", str(step.get("run", ""))):
+            for match in re.finditer(
+                r"scripts/release/publish\.sh (\S+)", str(step.get("run", ""))
+            ):
                 published[match.group(1)] = job
     if sorted(published) != sorted(TARGET_NAMES):
         problems.append(f"release.yml publishes {sorted(published)}, not {sorted(TARGET_NAMES)}")

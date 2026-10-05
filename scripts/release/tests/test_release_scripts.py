@@ -18,7 +18,7 @@ from urllib.parse import unquote
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 
 
 class Answer(NamedTuple):
@@ -80,7 +80,7 @@ def probe(identifier: str, base: str) -> subprocess.CompletedProcess[str]:
         "ONEBUDGETSPEC_PROBE_NPM_URL": f"{base}npm/",
     }
     return subprocess.run(
-        [sys.executable, str(ROOT / "scripts/release-probe.py"), identifier],
+        [sys.executable, str(ROOT / "scripts/release/release-probe.py"), identifier],
         env=env,
         capture_output=True,
         text=True,
@@ -128,7 +128,7 @@ def test_a_registry_that_did_not_answer_is_not_answered(
 def test_the_probe_refuses_what_is_not_a_target() -> None:
     for argv in ([], ["crate:onebudgetspec-core"], ["a", "b"]):
         answered = subprocess.run(
-            [sys.executable, str(ROOT / "scripts/release-probe.py"), *argv],
+            [sys.executable, str(ROOT / "scripts/release/release-probe.py"), *argv],
             capture_output=True,
             text=True,
             check=False,
@@ -145,7 +145,7 @@ def test_an_unreachable_registry_is_not_answered() -> None:
 
 def publish(*args: str, **env: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(ROOT / "scripts/publish.sh"), *args],
+        ["bash", str(ROOT / "scripts/release/publish.sh"), *args],
         env={"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp"), **env},
         capture_output=True,
         text=True,
@@ -181,7 +181,7 @@ def test_publish_refuses_a_malformed_call(args: tuple[str, ...], reason: str) ->
     refused = publish(*args)
     assert refused.returncode == 1
     assert reason in refused.stderr
-    assert "next: run 'scripts/publish.sh" in refused.stderr
+    assert "next: run 'scripts/release/publish.sh" in refused.stderr
 
 
 @pytest.mark.parametrize(
@@ -419,7 +419,7 @@ def test_publish_refuses_an_unexpected_answer_from_npm(registry: str, tmp_path: 
 
 def test_an_unusable_registry_url_is_refused_with_its_fix() -> None:
     answered = subprocess.run(
-        [sys.executable, str(ROOT / "scripts/release-probe.py"), "pypi:onebudgetspec-cli"],
+        [sys.executable, str(ROOT / "scripts/release/release-probe.py"), "pypi:onebudgetspec-cli"],
         env={**os.environ, "ONEBUDGETSPEC_PROBE_PYPI_URL": "not a url/"},
         capture_output=True,
         text=True,

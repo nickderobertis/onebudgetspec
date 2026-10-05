@@ -16,6 +16,7 @@ const CARRIERS = ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"];
  */
 function locate(platform, arch, resolve) {
   const key = `${platform}-${arch}`;
+  // llmlint: ignore[changed_behavior_has_e2e] reaching this branch through the installed launcher needs a host outside the four platforms the release ships, which no runner here provides; tests/launcher.test.js drives the decision with real files, and the packaging journeys drive every other refusal through the installed launcher.
   if (!CARRIERS.includes(key)) {
     return {
       status: 64,

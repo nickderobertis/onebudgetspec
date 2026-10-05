@@ -6,13 +6,13 @@
 # was switched on. Each artifact is checked against the target it is published under and
 # the workspace version before it is uploaded.
 #
-# Usage: scripts/publish.sh crate
-#        scripts/publish.sh pypi|sdk-pypi <wheel-dir>
-#        scripts/publish.sh npm <carrier-dir> <launcher-dir>
-#        scripts/publish.sh sdk-npm <package-dir>
+# Usage: scripts/release/publish.sh crate
+#        scripts/release/publish.sh pypi|sdk-pypi <wheel-dir>
+#        scripts/release/publish.sh npm <carrier-dir> <launcher-dir>
+#        scripts/release/publish.sh sdk-npm <package-dir>
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly ROOT
 
 fail() {
@@ -24,7 +24,7 @@ need() {
   [ -n "${!1:-}" ] || fail "$1 is not set" "provision the $1 repository secret (AGENTS.md, Commits, releases, and merging), then re-run the release workflow"
 }
 usage() {
-  fail "$1" "run 'scripts/publish.sh crate | pypi|sdk-pypi <dir> | npm <carriers> <launcher> | sdk-npm <dir>'"
+  fail "$1" "run 'scripts/release/publish.sh crate | pypi|sdk-pypi <dir> | npm <carriers> <launcher> | sdk-npm <dir>'"
 }
 
 VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' "$ROOT/Cargo.toml" | head -n 1)"
@@ -118,7 +118,7 @@ PY
       [ "$identity" = "$name $VERSION" ] \
         || fail "$wheel is $identity, not $name $VERSION" "publish only what scripts/build-dist.sh built for $target at this commit"
     done
-    # llmlint: ignore[changed_behavior_has_e2e] uploading to PyPI needs its token, which this repository is not given until publishing is provisioned; every wheel is checked against its metadata above, which scripts/tests/test_release_scripts.py drives.
+    # llmlint: ignore[changed_behavior_has_e2e] uploading to PyPI needs its token, which this repository is not given until publishing is provisioned; every wheel is checked against its metadata above, which scripts/release/tests/test_release_scripts.py drives.
     UV_PUBLISH_TOKEN="$PYPI_TOKEN" uv publish --quiet --check-url "https://pypi.org/simple/$name/" "$1"/*.whl
     ;;
   npm | sdk-npm)

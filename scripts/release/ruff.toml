@@ -1,5 +1,5 @@
 # The tools project's ruff settings, for the probe and the release-script tests.
-extend = "../tools/pyproject.toml"
+extend = "../../tools/pyproject.toml"
 
 [lint.extend-per-file-ignores]
 "**/tests/**" = ["D103"]

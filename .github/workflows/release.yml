@@ -98,7 +98,7 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: bash scripts/publish.sh crate
+        run: bash scripts/release/publish.sh crate
 
   # Target `pypi`: the onebudgetspec-cli wheels.
   publish-pypi:
@@ -115,7 +115,7 @@ jobs:
           merge-multiple: true
       - env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: bash scripts/publish.sh pypi dist/wheels
+        run: bash scripts/release/publish.sh pypi dist/wheels
 
   # Target `sdk-pypi`: the onebudgetspec-sdk wheel.
   publish-sdk-pypi:
@@ -131,7 +131,7 @@ jobs:
           path: dist
       - env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: bash scripts/publish.sh sdk-pypi dist/sdk-pypi
+        run: bash scripts/release/publish.sh sdk-pypi dist/sdk-pypi
 
   # Target `npm`: every platform carrier, then the launcher that pins them.
   publish-npm:
@@ -151,7 +151,7 @@ jobs:
           path: dist
       - env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: bash scripts/publish.sh npm dist/carriers dist/npm
+        run: bash scripts/release/publish.sh npm dist/carriers dist/npm
 
   # Target `sdk-npm`: the @onebudgetspec/sdk package.
   publish-sdk-npm:
@@ -166,7 +166,7 @@ jobs:
           path: dist
       - env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: bash scripts/publish.sh sdk-npm dist/sdk-npm
+        run: bash scripts/release/publish.sh sdk-npm dist/sdk-npm
 
   # The install path the README documents, run with the README's own commands once the
   # registries serve this release. It runs whenever the release did, and fails when any
