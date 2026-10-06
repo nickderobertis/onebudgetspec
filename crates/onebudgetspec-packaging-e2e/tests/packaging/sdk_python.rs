@@ -1,6 +1,7 @@
 //! The `onebudgetspec-sdk` wheel, installed into a fresh environment beside the
 //! `onebudgetspec-cli` wheel it requires, checks, validates and lists a conformance case and
-//! prints the schema through the binary that wheel installed.
+//! prints the schema through the binary that wheel installed; and a measurement written in
+//! Python reports through it to that binary's check.
 
 use std::path::Path;
 use std::process::Command;
@@ -8,8 +9,8 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::common::{
-    SDK_CASE, VERSION, artifact, assert_sdk_answers, conformance_case, exe, node_dir, succeed,
-    venv_bin,
+    SDK_CASE, VERSION, artifact, assert_reports, assert_sdk_answers, conformance_case, exe,
+    node_dir, succeed, venv_bin, write_reporting_budgets,
 };
 
 /// Each call over the case named by argv[1], with the selection its case.json gives.
@@ -153,4 +154,28 @@ fn the_installed_sdk_answers_a_conformance_case_through_the_wheel_s_binary() {
         .unwrap();
     answers["binary"] = resolved.to_string_lossy().into_owned().into();
     assert_sdk_answers(&answers, &case_dir, &case, &installed);
+}
+
+/// One generic runner for every budget of a file: its figure is chosen by the budget's id.
+const MEASURE: &str = r#"
+import os
+from onebudgetspec_sdk import report
+
+figures = {"api-requests": (12.5, "p95 of the api"), "worker-requests": (30, None)}
+value, detail = figures[os.environ["ONEBUDGETSPEC_BUDGET_ID"]]
+assert report(value, detail) is True
+"#;
+
+#[test]
+fn a_python_measurement_reports_through_the_installed_sdk_to_the_wheel_s_binary() {
+    let sdk = artifact("sdk-python");
+    let cli = artifact("cli-wheel");
+    let dir = tempfile::tempdir().unwrap();
+    let bin = venv_with_requirements(dir.path(), &[&sdk, &cli]);
+    let python = bin.join(exe("python"));
+    let budgets = dir.path().join("budgets");
+    std::fs::create_dir_all(&budgets).unwrap();
+    std::fs::write(budgets.join("measure.py"), MEASURE).unwrap();
+    write_reporting_budgets(&budgets, &[python.to_str().unwrap(), "measure.py"]);
+    assert_reports(&bin.join(exe("onebudgetspec")), &[], &budgets);
 }

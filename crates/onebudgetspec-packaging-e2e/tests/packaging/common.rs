@@ -393,3 +393,59 @@ pub fn assert_sdk_answers(answers: &Value, case_dir: &Path, case: &Value, binary
         "the SDK did not run the binary installed beside it"
     );
 }
+
+/// What the generic runner of [`write_reporting_budgets`] reports for each budget, by id:
+/// its value, and its detail when it gives one.
+pub const REPORTED: [(&str, f64, Option<&str>); 2] = [
+    ("api-requests", 12.5, Some("p95 of the api")),
+    ("worker-requests", 30.0, None),
+];
+
+/// Write `dir/budgets.yaml`: the two `reported` budgets of [`REPORTED`], each measured by
+/// `command`, one generic runner that picks its figure by `ONEBUDGETSPEC_BUDGET_ID` and
+/// writes it through an SDK's `report`. The first is within its threshold and the second
+/// over.
+pub fn write_reporting_budgets(dir: &Path, command: &[&str]) {
+    let budgets: Vec<Value> = REPORTED
+        .iter()
+        .map(|(id, _, _)| {
+            serde_json::json!({
+                "id": id,
+                "measure": "reported",
+                "command": command,
+                "unit": "requests",
+                "direction": "max",
+                "threshold": 20,
+            })
+        })
+        .collect();
+    let file = serde_json::json!({ "schema_version": 1, "budgets": budgets });
+    // JSON is YAML, so the file needs no YAML writer of its own.
+    fs::write(dir.join("budgets.yaml"), file.to_string()).unwrap();
+}
+
+/// Assert `check --json`, run by `program` with `args` before it from `dir`, reports what
+/// the runner of [`write_reporting_budgets`] reported: each value as `actual` and each
+/// detail as `detail`.
+pub fn assert_reports(program: &Path, args: &[&str], dir: &Path) {
+    let mut args = args.to_vec();
+    args.extend(["check", "--json"]);
+    let output = run(program, &args, dir);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "one budget is over:\n{stderr}"
+    );
+    let report: Value = serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| panic!("no report ({error}):\n{stderr}"));
+    let results = report["results"].as_array().expect("a results array");
+    assert_eq!(results.len(), REPORTED.len(), "{report:#}");
+    for ((id, value, detail), result) in REPORTED.iter().zip(results) {
+        assert_eq!(result["id"], *id, "{report:#}");
+        assert_eq!(result["actual"].as_f64(), Some(*value), "{result:#}");
+        assert_eq!(result["detail"], serde_json::json!(detail), "{result:#}");
+        let verdict = if *value <= 20.0 { "within" } else { "over" };
+        assert_eq!(result["verdict"], verdict, "{result:#}");
+    }
+}

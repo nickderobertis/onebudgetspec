@@ -1,7 +1,8 @@
 //! The packed `@onebudgetspec/sdk`, installed into a fresh project beside the
 //! `@onebudgetspec/cli` launcher and this host's carrier, checks, validates and lists a
 //! conformance case and prints the schema through that launcher, with type declarations a
-//! consumer compiles against.
+//! consumer compiles against; and a measurement written in JavaScript reports through it to
+//! that launcher's check.
 
 use std::fs;
 use std::path::Path;
@@ -10,8 +11,8 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::common::{
-    SDK_CASE, VERSION, artifact, assert_sdk_answers, conformance_case, npm_project_with, root,
-    succeed,
+    SDK_CASE, VERSION, artifact, assert_reports, assert_sdk_answers, conformance_case,
+    npm_project_with, root, succeed, write_reporting_budgets,
 };
 
 /// Each call over the case named by argv[1], with the selection its case.json gives.
@@ -47,16 +48,18 @@ import {
   type ListReport,
   check,
   listBudgets,
+  report,
   schema,
   validate,
 } from "@onebudgetspec/sdk";
 
-const report: CheckReport = await check({ ids: ["a"], labels: ["b"], excludeLabels: ["c"], recursive: true, cwd: "." });
-const conditions: string | undefined = report.results[0]?.host.conditions["region"];
+const checked: CheckReport = await check({ ids: ["a"], labels: ["b"], excludeLabels: ["c"], recursive: true, cwd: "." });
+const conditions: string | undefined = checked.results[0]?.host.conditions["region"];
 const listed: ListReport = await listBudgets({ paths: ["budgets.yaml"] });
 const validated: ListReport = await validate({ paths: ["budgets.yaml"], recursive: false });
 const bundle: Record<string, unknown> = await schema();
-console.log(conditions, listed.budgets.length, validated.schema_version, Object.keys(bundle));
+const reported: boolean = report(1.5, "detail") && report(2);
+console.log(conditions, listed.budgets.length, validated.schema_version, Object.keys(bundle), reported);
 "#;
 
 /// The manifest packed into `tarball`. Named relative to its directory, since a `C:` in a
@@ -161,4 +164,31 @@ fn a_consumer_type_checks_against_the_installed_declarations() {
     .unwrap();
     let tsc = root().join("node_modules/typescript/bin/tsc");
     succeed("node", &[tsc.to_str().unwrap(), "-p", "."], &project);
+}
+
+/// One generic runner for every budget of a file: its figure is chosen by the budget's id.
+const MEASURE: &str = r#"
+import { report } from "@onebudgetspec/sdk";
+
+const figures = { "api-requests": [12.5, "p95 of the api"], "worker-requests": [30] };
+const [value, detail] = figures[process.env.ONEBUDGETSPEC_BUDGET_ID];
+if (report(value, detail) !== true) throw new Error("report wrote nothing under a check");
+"#;
+
+#[test]
+fn a_javascript_measurement_reports_through_the_installed_sdk_to_the_launcher() {
+    let sdk = artifact("sdk-typescript");
+    let launcher = artifact("npm-launcher");
+    let carrier = artifact("npm-carrier");
+    let dir = tempfile::tempdir().unwrap();
+    let project = npm_project_with(dir.path(), &[&carrier, &launcher, &sdk]);
+    // Beside node_modules, so the runner resolves the installed SDK from the directory the
+    // check runs it in.
+    fs::write(project.join("measure.mjs"), MEASURE).unwrap();
+    write_reporting_budgets(&project, &["node", "measure.mjs"]);
+    assert_reports(
+        Path::new("node"),
+        &["node_modules/@onebudgetspec/cli/bin/onebudgetspec.js"],
+        &project,
+    );
 }
