@@ -515,3 +515,34 @@ fn an_unwritable_stderr_still_leaves_the_reason_in_the_report() {
     crate::common::validate("check-report", &report);
     assert_eq!(error(&report, "explained"), EXPLAINED);
 }
+
+/// A budget with a timeout is waited on another way; one that finishes in time is
+/// reported exactly as one without a timeout.
+#[test]
+fn a_command_finishing_within_its_timeout_is_reported_the_same_way() {
+    let fixture = Fixture::new();
+    explaining(&fixture);
+    let mut failing = budget("failing", "reported", &json!(["./explain.sh"]));
+    failing["timeout_seconds"] = json!(30);
+    let mut succeeding = budget(
+        "succeeding",
+        "reported",
+        &json!([
+            "sh",
+            "-c",
+            "echo 'warning: cache cold' >&2; printf '{\"value\": 3}' > \"$ONEBUDGETSPEC_RESULT\""
+        ]),
+    );
+    succeeding["timeout_seconds"] = json!(30);
+    fixture.budgets("budgets.yaml", &file(&[failing, succeeding]));
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert_eq!(error(&report, "failing"), EXPLAINED);
+    let succeeding = result(&report, "succeeding");
+    assert_eq!(succeeding["verdict"], "within", "{succeeding:#}");
+    assert_eq!(succeeding["actual"], 3.0);
+    assert!(succeeding["error"].is_null(), "{succeeding:#}");
+    assert!(!report.to_string().contains("cache cold"), "{report:#}");
+}
