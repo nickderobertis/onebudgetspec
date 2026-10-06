@@ -8,9 +8,17 @@ import json
 import math
 import os
 from pathlib import Path
+from typing import NotRequired, TypedDict
 
 #: The environment variable naming the file a ``reported`` budget's command writes to.
 RESULT_ENV = "ONEBUDGETSPEC_RESULT"
+
+
+class _Result(TypedDict):
+    """The one JSON object a result file holds: a finite value, and a detail when given."""
+
+    value: float
+    detail: NotRequired[str]
 
 
 def report(value: float, detail: str | None = None) -> bool:
@@ -30,7 +38,7 @@ def report(value: float, detail: str | None = None) -> bool:
     path = os.environ.get(RESULT_ENV)
     if not path:
         return False
-    result: dict[str, float | str] = {"value": value}
+    result: _Result = {"value": value}
     if detail is not None:
         result["detail"] = detail
     Path(path).write_text(json.dumps(result), encoding="utf-8")
