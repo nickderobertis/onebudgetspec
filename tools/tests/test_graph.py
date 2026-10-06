@@ -84,6 +84,17 @@ def test_a_malformed_or_repeated_project_is_refused(tmp_path: Path) -> None:
     (tmp_path / "a/project.json").write_text(json.dumps({"tags": []}))
     with pytest.raises(graph.InvalidProject, match="no string `name`"):
         graph.projects(tmp_path)
+    for targets, refusal in (
+        ([], "`targets` is not an object"),
+        ({"lint": None}, "target lint is not an object"),
+        ({"lint": {"options": "x"}}, "target lint's `options` is not an object"),
+        ({"lint": {"options": {"commands": "ls *"}}}, "target lint's command\\(s\\) are malformed"),
+        ({"lint": {"options": {"command": 1}}}, "target lint's command\\(s\\) are malformed"),
+        ({"lint": {"options": {"commands": [{"command": 1}]}}}, "a command that is not a string"),
+    ):
+        (tmp_path / "a/project.json").write_text(json.dumps({"name": "x", "targets": targets}))
+        with pytest.raises(graph.InvalidProject, match=refusal):
+            graph.projects(tmp_path)
     (tmp_path / "a/project.json").write_text(json.dumps({"name": "x", "tags": ["type:sdk"]}))
     (tmp_path / "b").mkdir()
     (tmp_path / "b/project.json").write_text(json.dumps({"name": "x", "tags": ["type:sdk"]}))

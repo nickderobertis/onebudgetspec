@@ -86,18 +86,34 @@ class Project:
 
 
 def _commands(path: Path, targets: object) -> tuple[str, ...]:
-    """Every ``nx:run-commands`` command line of ``targets``."""
+    """Every ``nx:run-commands`` command line of ``targets``, refusing any other shape."""
     if not isinstance(targets, dict):
         raise InvalidProject(f"{path}: `targets` is not an object")
     found: list[str] = []
-    for target in targets.values():
-        options = target.get("options", {}) if isinstance(target, dict) else {}
-        entries = [options["command"]] if "command" in options else options.get("commands", [])
+    for name, target in targets.items():
+        match target:
+            case {"options": {"command": str(command)}}:
+                entries: list[object] = [command]
+            case {"options": {"commands": list(entries)}}:
+                pass
+            case {"options": {"command": _}} | {"options": {"commands": _}}:
+                raise InvalidProject(f"{path}: target {name}'s command(s) are malformed")
+            case {"options": dict()}:
+                entries = []
+            case {"options": _}:
+                raise InvalidProject(f"{path}: target {name}'s `options` is not an object")
+            case dict():
+                entries = []
+            case _:
+                raise InvalidProject(f"{path}: target {name} is not an object")
         for entry in entries:
-            command = entry.get("command") if isinstance(entry, dict) else entry
-            if not isinstance(command, str):
-                raise InvalidProject(f"{path}: a target's command is not a string")
-            found.append(command)
+            match entry:
+                case str(command) | {"command": str(command)}:
+                    found.append(command)
+                case _:
+                    raise InvalidProject(
+                        f"{path}: target {name} has a command that is not a string"
+                    )
     return tuple(found)
 
 
