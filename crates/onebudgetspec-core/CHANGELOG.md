@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3](https://github.com/nickderobertis/onebudgetspec/compare/v0.1.2...v0.1.3) - 2026-10-06
+
+### Added
+
+- tell a budget's command its id and give each SDK an in-process reporter ([#22](https://github.com/nickderobertis/onebudgetspec/pull/22))
+
 ## [0.1.2](https://github.com/nickderobertis/onebudgetspec/compare/v0.1.1...v0.1.2) - 2026-10-06
 
 ### Added
