@@ -2,31 +2,31 @@ schema_version: 1
 budgets:
   - id: explained
     measure: reported
-    command: ["sh", "explain.sh"]
+    command: ["node", "explain.cjs"]
     unit: items
     direction: max
     threshold: 10
   - id: raw
     measure: reported
-    command: ["sh", "raw.sh"]
+    command: ["node", "raw.cjs"]
     unit: items
     direction: max
     threshold: 10
   - id: verbose
     measure: reported
-    command: ["sh", "verbose.sh"]
+    command: ["node", "verbose.cjs"]
     unit: items
     direction: max
     threshold: 10
   - id: unreadable
     measure: reported
-    command: ["sh", "unreadable.sh"]
+    command: ["node", "unreadable.cjs"]
     unit: items
     direction: max
     threshold: 10
   - id: noisy-success
     measure: reported
-    command: ["sh", "noisy.sh"]
+    command: ["node", "noisy.cjs"]
     unit: items
     direction: max
     threshold: 10

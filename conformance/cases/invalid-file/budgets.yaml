@@ -3,7 +3,7 @@ budgets:
   - id: gate-time
     workload: the whole gate
     measure: elapsed
-    command: ["true"]
+    command: ["node", "-e", ""]
     unit: seconds
     direction: max
     threshold: 1800

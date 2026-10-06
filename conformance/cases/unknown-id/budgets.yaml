@@ -2,7 +2,7 @@ schema_version: 1
 budgets:
   - id: known
     measure: reported
-    command: ["sh", "report.sh", '{"value": 1}']
+    command: ["node", "report.cjs", '{"value": 1}']
     unit: items
     direction: max
     threshold: 10

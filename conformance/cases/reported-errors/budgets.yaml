@@ -2,25 +2,25 @@ schema_version: 1
 budgets:
   - id: empty-result
     measure: reported
-    command: ["true"]
+    command: ["node", "-e", ""]
     unit: items
     direction: max
     threshold: 10
   - id: not-json
     measure: reported
-    command: ["sh", "report.sh", "value: 3"]
+    command: ["node", "report.cjs", "value: 3"]
     unit: items
     direction: max
     threshold: 10
   - id: no-value
     measure: reported
-    command: ["sh", "report.sh", '{"detail": "forgot"}']
+    command: ["node", "report.cjs", '{"detail": "forgot"}']
     unit: items
     direction: max
     threshold: 10
   - id: within
     measure: reported
-    command: ["sh", "report.sh", '{"value": 2}']
+    command: ["node", "report.cjs", '{"value": 2}']
     unit: items
     direction: max
     threshold: 10
