@@ -4,6 +4,7 @@
 
 mod common;
 
+mod budget_id;
 mod command_environment;
 mod command_stderr;
 mod conditions;
@@ -19,6 +20,7 @@ mod list;
 mod measurement_order;
 mod output_streams;
 mod returned_conditions;
+mod rust_report;
 mod selection;
 mod text_output;
 mod validate;

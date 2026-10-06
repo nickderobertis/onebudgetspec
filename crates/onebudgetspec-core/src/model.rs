@@ -22,6 +22,9 @@ pub const CONDITION_NAME_PATTERN: &str = "^[a-z][a-z0-9_]*$";
 pub const RESERVED_CONDITION_NAMES: [&str; 3] = ["load1", "cpus", "mem_available_mib"];
 /// The environment variable naming the file a `reported` command writes its result to.
 pub const RESULT_ENV: &str = "ONEBUDGETSPEC_RESULT";
+/// The environment variable holding the id of the budget whose command is running, set for
+/// every budget's command and for no condition's.
+pub const BUDGET_ID_ENV: &str = "ONEBUDGETSPEC_BUDGET_ID";
 /// The only file name `--recursive` discovery picks up.
 pub const FILE_NAME: &str = "budgets.yaml";
 

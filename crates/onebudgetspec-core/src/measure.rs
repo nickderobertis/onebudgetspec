@@ -3,7 +3,8 @@
 //! Every command runs from the directory holding its budgets file, with the environment
 //! inherited, no shell, and its stdout and stderr copied to this process's stderr so they
 //! never mix with a report on stdout. A command that fails, or whose result cannot be
-//! read, has the tail of its stderr kept in the reason recorded for it.
+//! read, has the tail of its stderr kept in the reason recorded for it. A budget's command
+//! is given its budget's id in `ONEBUDGETSPEC_BUDGET_ID`; a condition's command is not.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::io::{self, Read, Write};
@@ -18,8 +19,8 @@ use serde_json::Value;
 use crate::host;
 use crate::load::{LoadedFile, matches_condition_name_pattern};
 use crate::model::{
-    CONDITION_NAME_PATTERN, Direction, Measure, RESERVED_CONDITION_NAMES, RESULT_ENV,
-    SCHEMA_VERSION,
+    BUDGET_ID_ENV, CONDITION_NAME_PATTERN, Direction, Measure, RESERVED_CONDITION_NAMES,
+    RESULT_ENV, SCHEMA_VERSION,
 };
 use crate::report::{CheckReport, CheckResult, Host, Verdict};
 use crate::select::{Selected, SelectedBudgets};
@@ -107,7 +108,10 @@ fn run_conditions(file: &LoadedFile) -> BTreeMap<String, String> {
 }
 
 fn run_condition(dir: &Path, argv: &[String]) -> Result<String, String> {
+    // A condition belongs to no budget, so it never sees an id, even one this process
+    // inherited from a check it is itself measured by.
     let mut child = command(dir, argv)
+        .env_remove(BUDGET_ID_ENV)
         .spawn()
         .map_err(|error| format!("cannot run {}: {error}", argv[0]))?;
     // The value is the command's stdout, read here rather than passed through.
@@ -147,8 +151,10 @@ fn measure(selected: Selected<'_>, declared: &BTreeMap<String, String>) -> Check
     let sample = host::sample();
     let timeout = budget.timeout_seconds.map(Duration::from_secs);
     let outcome = match budget.measure {
-        Measure::Elapsed => measure_elapsed(&file.dir, &budget.command, timeout),
-        Measure::Reported => measure_reported(&file.dir, &budget.command, timeout, declared),
+        Measure::Elapsed => measure_elapsed(&file.dir, &budget.id, &budget.command, timeout),
+        Measure::Reported => {
+            measure_reported(&file.dir, &budget.id, &budget.command, timeout, declared)
+        }
     };
     let ended_at = Utc::now().max(started_at);
 
@@ -219,10 +225,12 @@ pub fn judge(direction: Direction, threshold: f64, actual: f64) -> (Verdict, f64
 
 fn measure_elapsed(
     dir: &Path,
+    id: &str,
     argv: &[String],
     timeout: Option<Duration>,
 ) -> Result<Measured, String> {
     let mut command = command(dir, argv);
+    command.env(BUDGET_ID_ENV, id);
     let finished = run(&mut command, &argv[0], timeout)?;
     if !finished.status.success() {
         return Err(finished.failure(&argv[0], None));
@@ -236,6 +244,7 @@ fn measure_elapsed(
 
 fn measure_reported(
     dir: &Path,
+    id: &str,
     argv: &[String],
     timeout: Option<Duration>,
     declared: &BTreeMap<String, String>,
@@ -246,7 +255,9 @@ fn measure_reported(
         .tempfile()
         .map_err(|error| format!("cannot create the result file: {error}"))?;
     let mut command = command(dir, argv);
-    command.env(RESULT_ENV, result_file.path());
+    command
+        .env(BUDGET_ID_ENV, id)
+        .env(RESULT_ENV, result_file.path());
     let finished = run(&mut command, &argv[0], timeout)?;
     if !finished.status.success() {
         return Err(finished.failure(&argv[0], None));

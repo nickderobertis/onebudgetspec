@@ -767,6 +767,7 @@ version = "0.1.2"
 dependencies = [
  "chrono",
  "jsonschema",
+ "onebudgetspec-core",
  "regex",
  "serde_json",
  "serde_norway",

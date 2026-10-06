@@ -88,8 +88,10 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 - `crates/onebudgetspec-e2e/tests/journeys/measurement_order.rs` — once each, one at a time, in file order; unselected never run.
 - `crates/onebudgetspec-e2e/tests/journeys/conditions.rs` — declared conditions run once per file and reach only that file's results.
 - `crates/onebudgetspec-e2e/tests/journeys/returned_conditions.rs` — returned conditions stay in their result; collisions and malformed ones are errors.
+- `crates/onebudgetspec-e2e/tests/journeys/budget_id.rs` — `ONEBUDGETSPEC_BUDGET_ID` reaches every budget's command and no condition's; one generic runner serves two budgets.
 - `crates/onebudgetspec-e2e/tests/journeys/command_environment.rs` — working directory, a relative program found from the file's directory, inherited environment, empty result file, no shell.
 - `crates/onebudgetspec-e2e/tests/journeys/command_stderr.rs` — a failed or unreadable measurement's `error` keeps its exit status and bounded stderr tail, in JSON and text; a failing condition's diagnostic line too; success unchanged.
+- `crates/onebudgetspec-e2e/tests/journeys/rust_report.rs` — a Rust measurement's `report` under a check gives `actual` and `detail`; outside one it writes nothing; a non-finite value or a failed write is an error.
 - `crates/onebudgetspec-e2e/tests/journeys/output_streams.rs` — command output on stderr only; an unwritable report exits 3.
 - `crates/onebudgetspec-e2e/tests/journeys/host.rs` — host values each platform supplies (load on Linux and macOS, available memory on Linux and Windows), `unknown` conditions, the file path and ordered times.
 - `crates/onebudgetspec-e2e/tests/journeys/files.rs` — the default file, several files, a missing file refused.
