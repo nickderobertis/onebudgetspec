@@ -29,6 +29,8 @@ npm install --save-dev @onebudgetspec/cli
 cargo install onebudgetspec
 ```
 
+Each installs a native binary for Linux, macOS and Windows, on x86_64 and aarch64.
+
 ## The budgets file
 
 A file named `budgets.yaml`:
@@ -37,13 +39,13 @@ A file named `budgets.yaml`:
 schema_version: 1
 conditions:            # optional; recorded beside every result measured from this file
   - name: dispatches   # ^[a-z][a-z0-9_]*$, unique, never load1, cpus or mem_available_mib
-    command: ["scripts/count-dispatches.sh"]  # run once per file per check; trimmed stdout recorded
+    command: ["bash", "scripts/count-dispatches.sh"]  # run once per file per check; trimmed stdout recorded
 budgets:
   - id: gate-time      # ^[a-z][a-z0-9-]*$, unique across every file one discovery finds
     description: "Wall clock of the full gate"  # optional
     labels: [ci]       # optional free tags, for selecting a subset
     measure: reported  # elapsed | reported
-    command: ["scripts/budget-gate-time.sh"]  # argv, no shell, run from this file's directory
+    command: ["bash", "scripts/budget-gate-time.sh"]  # argv, no shell, run from this file's directory
     unit: seconds      # a free label; `elapsed` requires seconds
     direction: max     # max: within when actual <= threshold; min: within when actual >= threshold
     threshold: 1800    # finite and non-negative
@@ -51,6 +53,19 @@ budgets:
 ```
 
 Unknown keys are refused at every level, naming the key and the file.
+
+A `command` is an argv run with no shell, from the directory holding its file; a program
+named by a relative path with more than one component is found from that directory too. On
+Linux and macOS an executable script may be named directly, by its `#!` line. Windows reads
+no `#!` line, and a bare name there resolves only to `<name>.exe`, so a script measured
+on Windows names its interpreter in the command, as in
+`["bash", "scripts/budget-gate-time.sh"]`, `["node", "measure.js"]` or
+`["python", "measure.py"]`; that form runs on every platform. A `timeout_seconds` ends
+everything the command started: its process group on Linux and macOS, its Job Object on
+Windows. A failed command is described by its exit status, which on Windows is the exit code
+(in hexadecimal, such as `0xC0000005`, when it is a crash's NTSTATUS); on Linux and macOS a
+command ended by a signal is described by that signal. `load1` is unknown (`null`) on
+Windows, which has no load average, and `mem_available_mib` is unknown on macOS.
 
 **`elapsed`** times the command's wall clock; a non-zero exit is an error. **`reported`**
 sets `ONEBUDGETSPEC_RESULT` to the path of a fresh, empty file, and the command writes one
@@ -117,7 +132,7 @@ from it.
 | Package | `onebudgetspec-core` (crates.io) | `onebudgetspec-sdk` (PyPI), imported as `onebudgetspec_sdk` | `@onebudgetspec/sdk` (npm) |
 | Install | `cargo add onebudgetspec-core` | `pip install onebudgetspec-sdk`, which installs `onebudgetspec-cli` at the same version | `npm install @onebudgetspec/sdk`, which installs its optional dependency `@onebudgetspec/cli` at the same version |
 | Calls | `load(paths, recursive)`, then `.select(&Selection)` and `.check()` or `.list_report()`, or `.all().list_report()` to validate; `schema_bundle()` | `check(paths=None, ids=None, labels=None, exclude_labels=None, recursive=False, cwd=None) -> CheckReport`, `validate(paths=None, recursive=False, cwd=None) -> ListReport`, `list_budgets(...)` with `check`'s arguments `-> ListReport`, `schema() -> dict` | `check({paths, ids, labels, excludeLabels, recursive, cwd})`, `validate({paths, recursive, cwd})`, `listBudgets({paths, ids, labels, excludeLabels, recursive, cwd})`, `schema()`, each a promise of the generated type |
-| Binary | none: it measures in process | the `binary=` argument, then `ONEBUDGETSPEC_BIN`, then the `onebudgetspec` the `onebudgetspec-cli` wheel installed, then `onebudgetspec` on `PATH` | the `binary` option, then `ONEBUDGETSPEC_BIN`, then the launcher of the resolved `@onebudgetspec/cli` package |
+| Binary | none: it measures in process | the `binary=` argument, then `ONEBUDGETSPEC_BIN`, then the `onebudgetspec` the `onebudgetspec-cli` wheel installed (`Scripts\onebudgetspec.exe` on Windows), then `onebudgetspec` on `PATH` (`onebudgetspec.exe` on Windows) | the `binary` option, then `ONEBUDGETSPEC_BIN`, then the launcher of the resolved `@onebudgetspec/cli` package |
 | Tests and journeys it owes | `crates/onebudgetspec-core/tests/api.rs`, `crates/onebudgetspec-core/tests/schema.rs`, and every CLI journey and conformance case, which drive it through the binary | `sdks/python/tests/test_conformance.py` (every conformance case through `check`, `list_budgets` and `validate`), `sdks/python/tests/test_binary.py` (resolution order and refusals), `sdks/python/tests/test_generate.py` (the model generator), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` | `sdks/typescript/tests/conformance.test.ts`, `sdks/typescript/tests/binary.test.ts`, `sdks/typescript/tests/errors.test.ts` and `sdks/typescript/tests/generator.test.ts` (the same concerns), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` |
 
 In Python and TypeScript, exit statuses `0`, `1` and `3` return the report, since the
@@ -162,14 +177,14 @@ budgets:
   - id: api-cold-start
     description: "Seconds from process start to the first healthy response"
     measure: elapsed
-    command: ["scripts/start-and-probe.sh"]
+    command: ["bash", "scripts/start-and-probe.sh"]
     unit: seconds
     direction: max
     threshold: 2
     timeout_seconds: 30
   - id: api-requests-per-second
     measure: reported
-    command: ["scripts/load-test.sh"]
+    command: ["bash", "scripts/load-test.sh"]
     unit: requests/s
     direction: min
     threshold: 500
@@ -200,7 +215,7 @@ The root file holds what every change must stay within:
 schema_version: 1
 conditions:
   - name: runner
-    command: ["uname", "-m"]
+    command: ["node", "-p", "process.arch"]
 budgets:
   - id: gate-time
     description: "Wall clock of the full gate"
