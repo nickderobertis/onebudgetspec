@@ -1,0 +1,548 @@
+//! A command that fails, or whose result cannot be read, has the tail of its stderr in its
+//! reason; a command that succeeds is reported as if it had written nothing there.
+
+use serde_json::{Value, json};
+
+use crate::common::{Fixture, file, reported, result};
+
+fn budget(id: &str, measure: &str, command: &Value) -> Value {
+    json!({
+        "id": id,
+        "measure": measure,
+        "command": command,
+        "unit": "seconds",
+        "direction": "max",
+        "threshold": 60,
+    })
+}
+
+/// A measurement script that explains on stderr why it cannot measure, the way a script
+/// with no telemetry to read does.
+fn explaining(fixture: &Fixture) {
+    fixture.script(
+        "explain.sh",
+        "printf 'telemetry is absent\\n\\n   run the collector first  \\n' >&2\nexit 1",
+    );
+}
+
+const EXPLAINED: &str =
+    "./explain.sh exited with status 1; its stderr: telemetry is absent | run the collector first";
+
+fn error(report: &Value, id: &str) -> String {
+    let errored = result(report, id);
+    assert_eq!(errored["verdict"], "error", "{errored:#}");
+    errored["error"].as_str().unwrap_or_default().to_owned()
+}
+
+#[test]
+fn a_failing_command_names_its_exit_status_and_its_stderr() {
+    let fixture = Fixture::new();
+    explaining(&fixture);
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[
+            budget("reported", "reported", &json!(["./explain.sh"])),
+            budget("elapsed", "elapsed", &json!(["./explain.sh"])),
+            budget("silent", "elapsed", &json!(["sh", "-c", "exit 4"])),
+        ]),
+    );
+    let run = fixture.run(["check", "--json"]);
+    let report = run.expect_status(3).check_report();
+    assert_eq!(error(&report, "reported"), EXPLAINED);
+    assert_eq!(error(&report, "elapsed"), EXPLAINED);
+    // A command that wrote nothing to stderr is reported as before.
+    assert_eq!(error(&report, "silent"), "sh exited with status 4");
+    // Its stderr still reaches the binary's stderr as written.
+    assert!(
+        run.stderr.contains("   run the collector first  \n"),
+        "{}",
+        run.stderr
+    );
+}
+
+#[test]
+fn the_text_line_carries_the_same_reason() {
+    let fixture = Fixture::new();
+    explaining(&fixture);
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget("explained", "reported", &json!(["./explain.sh"]))]),
+    );
+    let run = fixture.run(["check"]);
+    run.expect_status(3);
+    let lines: Vec<&str> = run.stdout.lines().collect();
+    assert_eq!(lines.len(), 1, "{}", run.stdout);
+    assert!(
+        lines[0].starts_with(&format!("budget explained: error — {EXPLAINED}; host: ")),
+        "{}",
+        lines[0]
+    );
+}
+
+#[test]
+fn only_the_bounded_tail_of_a_long_stderr_is_kept() {
+    let fixture = Fixture::new();
+    fixture.script(
+        "verbose.sh",
+        "echo FIRST-LINE >&2\n\
+         i=0\n\
+         while [ $i -lt 500 ]; do echo \"progress line $i of the noise\" >&2; i=$((i+1)); done\n\
+         echo LAST-LINE >&2\n\
+         exit 1",
+    );
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget("verbose", "elapsed", &json!(["./verbose.sh"]))]),
+    );
+    let run = fixture.run(["check", "--json"]);
+    let report = run.expect_status(3).check_report();
+    let error = error(&report, "verbose");
+    let (exit, tail) = error
+        .split_once("; its stderr: ")
+        .unwrap_or_else(|| panic!("{error}"));
+    assert_eq!(exit, "./verbose.sh exited with status 1");
+    assert!(tail.starts_with('…'), "{tail}");
+    assert!(
+        tail.ends_with("progress line 499 of the noise | LAST-LINE"),
+        "{tail}"
+    );
+    assert!(!tail.contains("FIRST-LINE"), "{tail}");
+    // The bound README states: at most the last 1000 characters, after the leading `…`.
+    let kept = tail.chars().count() - 1;
+    assert!(
+        (990..=1000).contains(&kept),
+        "{kept} characters kept: {tail}"
+    );
+    // Only the report is bounded; the binary's stderr still has every line.
+    assert!(run.stderr.contains("FIRST-LINE"), "{}", run.stderr);
+}
+
+#[test]
+fn stderr_that_is_not_utf8_is_kept_with_replacement_characters() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget(
+            "raw",
+            "elapsed",
+            &json!(["sh", "-c", "printf 'bad \\377 byte\\n' >&2; exit 2"]),
+        )]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert_eq!(
+        error(&report, "raw"),
+        "sh exited with status 2; its stderr: bad \u{FFFD} byte"
+    );
+}
+
+#[test]
+fn an_unreadable_result_names_the_exit_status_and_the_stderr() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[
+            budget(
+                "not-json",
+                "reported",
+                &json!([
+                    "sh",
+                    "-c",
+                    "echo 'could not reach the database' >&2; printf nope > \"$ONEBUDGETSPEC_RESULT\""
+                ]),
+            ),
+            budget(
+                "empty",
+                "reported",
+                &json!(["sh", "-c", "echo 'no samples today' >&2"]),
+            ),
+        ]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    let not_json = error(&report, "not-json");
+    assert!(
+        not_json.starts_with("the result file is not valid JSON"),
+        "{not_json}"
+    );
+    assert!(
+        not_json.ends_with("; sh exited with status 0; its stderr: could not reach the database"),
+        "{not_json}"
+    );
+    let empty = error(&report, "empty");
+    assert!(
+        empty.starts_with("the command left its result file empty"),
+        "{empty}"
+    );
+    assert!(
+        empty.ends_with("; sh exited with status 0; its stderr: no samples today"),
+        "{empty}"
+    );
+}
+
+#[test]
+fn a_timed_out_command_keeps_what_it_wrote_to_stderr() {
+    let fixture = Fixture::new();
+    let mut slow = budget(
+        "slow",
+        "elapsed",
+        &json!(["sh", "-c", "echo 'waiting on the lock' >&2; sleep 30"]),
+    );
+    slow["timeout_seconds"] = json!(1);
+    fixture.budgets("budgets.yaml", &file(&[slow]));
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert_eq!(
+        error(&report, "slow"),
+        "sh timed out after 1 seconds and was killed; its stderr: waiting on the lock"
+    );
+}
+
+#[test]
+fn a_succeeding_command_is_reported_as_if_it_wrote_nothing_to_stderr() {
+    let fixture = Fixture::new();
+    let quiet = reported("quiet", 3.0, "max", 10.0);
+    let mut noisy = quiet.clone();
+    noisy["id"] = json!("noisy");
+    noisy["command"] = json!([
+        "sh",
+        "-c",
+        "echo 'warning: cache cold' >&2; printf '{\"value\": 3}' > \"$ONEBUDGETSPEC_RESULT\""
+    ]);
+    fixture.budgets("budgets.yaml", &file(&[quiet, noisy]));
+    let run = fixture.run(["check", "--json"]);
+    let report = run.expect_status(0).check_report();
+    let comparable = |id: &str| {
+        let mut result = result(&report, id).clone();
+        for varies in ["id", "started_at", "ended_at", "host"] {
+            result.as_object_mut().unwrap().remove(varies);
+        }
+        result
+    };
+    assert_eq!(comparable("noisy"), comparable("quiet"));
+    assert!(result(&report, "noisy")["error"].is_null());
+    assert!(!report.to_string().contains("cache cold"), "{report:#}");
+    assert!(run.stderr.contains("warning: cache cold"), "{}", run.stderr);
+}
+
+#[test]
+fn a_failing_condition_states_its_stderr_on_the_diagnostic_line_and_stays_unknown() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &json!({
+            "schema_version": 1,
+            "conditions": [{
+                "name": "commit",
+                "command": ["sh", "-c", "echo 'fatal: not a git repository' >&2; exit 128"],
+            }],
+            "budgets": [reported("only", 1.0, "max", 2.0)],
+        }),
+    );
+    let run = fixture.run(["check", "--json"]);
+    let report = run.expect_status(0).check_report();
+    let only = result(&report, "only");
+    assert_eq!(only["verdict"], "within");
+    assert!(only["error"].is_null());
+    assert_eq!(only["host"]["conditions"], json!({ "commit": "unknown" }));
+    assert!(
+        run.stderr.contains(
+            "onebudgetspec: condition commit in budgets.yaml: sh exited with status 128; \
+             its stderr: fatal: not a git repository; recorded as unknown"
+        ),
+        "{}",
+        run.stderr
+    );
+}
+
+#[test]
+fn a_removed_result_file_names_the_exit_status_and_the_stderr() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget(
+            "removed",
+            "reported",
+            &json!([
+                "sh",
+                "-c",
+                "echo 'cleaned up too eagerly' >&2; rm \"$ONEBUDGETSPEC_RESULT\""
+            ]),
+        )]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    let removed = error(&report, "removed");
+    assert!(
+        removed.starts_with("cannot read the result file ONEBUDGETSPEC_RESULT names: "),
+        "{removed}"
+    );
+    assert!(
+        removed.ends_with("; sh exited with status 0; its stderr: cleaned up too eagerly"),
+        "{removed}"
+    );
+}
+
+#[test]
+fn a_command_killed_by_a_signal_keeps_its_stderr() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget(
+            "killed",
+            "elapsed",
+            &json!(["sh", "-c", "echo 'out of memory' >&2; kill -9 $$"]),
+        )]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert_eq!(
+        error(&report, "killed"),
+        "sh was terminated by signal 9; its stderr: out of memory"
+    );
+}
+
+#[test]
+fn a_process_left_holding_stderr_does_not_hold_up_the_check() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget(
+            "orphaned",
+            "elapsed",
+            // The sleeper keeps only the command's stderr open: its stdout is the binary's
+            // stderr, which this test reads to the end.
+            &json!([
+                "sh",
+                "-c",
+                "sleep 30 >/dev/null & echo 'left a sleeper behind' >&2; exit 1"
+            ]),
+        )]),
+    );
+    let started = std::time::Instant::now();
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert!(
+        started.elapsed().as_secs() < 20,
+        "the check waited for the process its command left running"
+    );
+    assert_eq!(
+        error(&report, "orphaned"),
+        "sh exited with status 1; its stderr: left a sleeper behind"
+    );
+}
+
+#[test]
+fn control_characters_become_spaces_and_whitespace_alone_adds_nothing() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[
+            budget(
+                "controls",
+                "elapsed",
+                &json!(["sh", "-c", "printf 'a\\tb\\033c\\r\\n' >&2; exit 1"]),
+            ),
+            budget(
+                "blank",
+                "elapsed",
+                &json!(["sh", "-c", "printf '  \\n\\n\\t\\n' >&2; exit 1"]),
+            ),
+            budget(
+                "blank-and-long",
+                "elapsed",
+                &json!(["sh", "-c", "printf '%5000s\\n' '' >&2; exit 1"]),
+            ),
+        ]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert_eq!(
+        error(&report, "controls"),
+        "sh exited with status 1; its stderr: a b c"
+    );
+    assert_eq!(error(&report, "blank"), "sh exited with status 1");
+    assert_eq!(error(&report, "blank-and-long"), "sh exited with status 1");
+}
+
+#[test]
+fn the_bound_counts_characters_whatever_their_bytes() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[
+            // 1000 characters exactly is kept whole; one more is cut to the last 1000.
+            budget(
+                "at-the-bound",
+                "elapsed",
+                &json!(["sh", "-c", "printf '%01000d' 0 >&2; exit 1"]),
+            ),
+            budget(
+                "past-the-bound",
+                "elapsed",
+                &json!(["sh", "-c", "printf '1%01000d' 0 >&2; exit 1"]),
+            ),
+            // 4001 bytes: the 4000 kept start inside `€`, whose remaining bytes are dropped
+            // rather than decoded as replacement characters; the blank lines after it are
+            // dropped too, so nothing else pushes them out of the tail.
+            budget(
+                "split",
+                "elapsed",
+                &json!([
+                    "sh",
+                    "-c",
+                    "{ printf '€'; printf '%3995s' '' | tr ' ' '\\n'; printf END; } >&2; exit 1"
+                ]),
+            ),
+            // Three bytes a character, past the 4000 bytes kept, so the cut splits one.
+            budget(
+                "multibyte",
+                "elapsed",
+                &json!([
+                    "sh",
+                    "-c",
+                    "i=0; while [ $i -lt 3001 ]; do printf '€' >&2; i=$((i+1)); done; exit 1"
+                ]),
+            ),
+        ]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    let tail = |id: &str| {
+        let error = error(&report, id);
+        error
+            .split_once("; its stderr: ")
+            .unwrap_or_else(|| panic!("{error}"))
+            .1
+            .to_owned()
+    };
+    assert_eq!(tail("at-the-bound"), "0".repeat(1000));
+    assert_eq!(tail("past-the-bound"), format!("…{}", "0".repeat(1000)));
+    assert_eq!(tail("split"), "…END");
+    assert_eq!(tail("multibyte"), format!("…{}", "€".repeat(1000)));
+}
+
+#[test]
+fn a_refused_result_shape_or_returned_condition_names_the_exit_status_and_the_stderr() {
+    let fixture = Fixture::new();
+    let writes = |id: &str, result: &str| {
+        budget(
+            id,
+            "reported",
+            &json!([
+                "sh",
+                "-c",
+                format!(
+                    "echo 'schema drifted; update the script' >&2; printf '%s' '{result}' > \"$ONEBUDGETSPEC_RESULT\""
+                )
+            ]),
+        )
+    };
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[
+            writes("unknown-key", r#"{"value": 3, "unit": "ms"}"#),
+            writes("string-value", r#"{"value": "3"}"#),
+            writes("collides", r#"{"value": 3, "conditions": {"load1": "9"}}"#),
+        ]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    for (id, reason) in [
+        ("unknown-key", "the result file has an unknown key \"unit\""),
+        (
+            "string-value",
+            "the result's \"value\" is a string rather than a number",
+        ),
+        ("collides", "the result returns a condition named \"load1\""),
+    ] {
+        let error = error(&report, id);
+        assert!(error.starts_with(reason), "{id}: {error}");
+        assert!(
+            error.ends_with(
+                "; sh exited with status 0; its stderr: schema drifted; update the script"
+            ),
+            "{id}: {error}"
+        );
+    }
+}
+
+/// The binary's own stderr failing does not stop a command's stderr being read, so the
+/// command still finishes and its reason still reaches the report.
+#[cfg(target_os = "linux")]
+#[test]
+fn an_unwritable_stderr_still_leaves_the_reason_in_the_report() {
+    let fixture = Fixture::new();
+    explaining(&fixture);
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget("explained", "reported", &json!(["./explain.sh"]))]),
+    );
+    let full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .expect("/dev/full opens for writing");
+    let output = crate::common::spawn(
+        std::process::Command::new(crate::common::binary())
+            .args(["check", "--json"])
+            .current_dir(fixture.path())
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(full),
+    )
+    .wait_with_output()
+    .expect("onebudgetspec's output is read");
+    assert_eq!(output.status.code(), Some(3));
+    let report: Value = serde_json::from_slice(&output.stdout).expect("stdout is one report");
+    crate::common::validate("check-report", &report);
+    assert_eq!(error(&report, "explained"), EXPLAINED);
+}
+
+/// A budget with a timeout is waited on another way; one that finishes in time is
+/// reported exactly as one without a timeout.
+#[test]
+fn a_command_finishing_within_its_timeout_is_reported_the_same_way() {
+    let fixture = Fixture::new();
+    explaining(&fixture);
+    let mut failing = budget("failing", "reported", &json!(["./explain.sh"]));
+    failing["timeout_seconds"] = json!(30);
+    let mut succeeding = budget(
+        "succeeding",
+        "reported",
+        &json!([
+            "sh",
+            "-c",
+            "echo 'warning: cache cold' >&2; printf '{\"value\": 3}' > \"$ONEBUDGETSPEC_RESULT\""
+        ]),
+    );
+    succeeding["timeout_seconds"] = json!(30);
+    fixture.budgets("budgets.yaml", &file(&[failing, succeeding]));
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert_eq!(error(&report, "failing"), EXPLAINED);
+    let succeeding = result(&report, "succeeding");
+    assert_eq!(succeeding["verdict"], "within", "{succeeding:#}");
+    assert_eq!(succeeding["actual"], 3.0);
+    assert!(succeeding["error"].is_null(), "{succeeding:#}");
+    assert!(!report.to_string().contains("cache cold"), "{report:#}");
+}
