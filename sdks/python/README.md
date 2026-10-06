@@ -30,6 +30,13 @@ bundle = schema()  # the JSON Schema bundle, as a dict
 - `validate(paths=None, recursive=False, cwd=None) -> ListReport`
 - `list_budgets(paths=None, ids=None, labels=None, exclude_labels=None, recursive=False, cwd=None) -> ListReport`
 - `schema() -> dict`
+- `report(value: float, detail: str | None = None) -> bool`, which runs no binary: a
+  `reported` budget's command calls it to write its result to the file
+  `ONEBUDGETSPEC_RESULT` names, replacing it, and gets `True`. With that variable unset or
+  empty it writes nothing and returns `False`, so a test that measures behaves the same
+  outside a check. A non-finite value raises `ValueError` and a failed write `OSError`, and
+  neither writes anything. It never reads a budgets file or judges the value; `onebudgetspec
+  check` does. Every budget's command also gets its id in `ONEBUDGETSPEC_BUDGET_ID`.
 
 Exit statuses `0` (within), `1` (over) and `3` (a measurement errored) all return the
 report, since the verdicts are in it. Status `2`, an invalid invocation or budgets file,
