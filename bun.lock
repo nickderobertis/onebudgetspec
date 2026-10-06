@@ -13,7 +13,7 @@
     },
     "npm/cli": {
       "name": "@onebudgetspec/cli",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "bin": {
         "onebudgetspec": "bin/onebudgetspec.js",
       },
@@ -26,23 +26,23 @@
     },
     "npm/platforms/darwin-arm64": {
       "name": "@onebudgetspec/cli-darwin-arm64",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "npm/platforms/darwin-x64": {
       "name": "@onebudgetspec/cli-darwin-x64",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "npm/platforms/linux-arm64": {
       "name": "@onebudgetspec/cli-linux-arm64",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "npm/platforms/linux-x64": {
       "name": "@onebudgetspec/cli-linux-x64",
-      "version": "0.1.0",
+      "version": "0.1.1",
     },
     "sdks/typescript": {
       "name": "@onebudgetspec/sdk",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "devDependencies": {
         "ajv": "8.20.0",
         "json-schema-to-typescript": "16.0.0",

@@ -1,6 +1,6 @@
 {
   "name": "@onebudgetspec/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The onebudgetspec command line: check, validate and list the budgets registered in budgets.yaml files.",
   "license": "MIT",
   "repository": {
