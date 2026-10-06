@@ -7,7 +7,12 @@ use crate::common::{Fixture, write_result};
 
 /// A valid file whose condition and budget commands each record their invocation.
 fn base(fixture: &Fixture) -> Value {
-    fixture.counted("condition.js", "ran.log", "condition", "console.log(1);");
+    fixture.counted(
+        "condition.js",
+        "ran.log",
+        "condition",
+        "console.log(\"1\");",
+    );
     fixture.counted(
         "budget.js",
         "ran.log",

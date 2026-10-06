@@ -163,7 +163,7 @@ fn commands_see_end_of_input_whatever_the_caller_pipes_in() {
         "budgets.yaml",
         &json!({
             "schema_version": 1,
-            "conditions": [{ "name": "stdin_bytes", "command": counting("console.log(n);") }],
+            "conditions": [{ "name": "stdin_bytes", "command": counting("console.log(String(n));") }],
             "budgets": [{
                 "id": "stdin-bytes",
                 "measure": "reported",

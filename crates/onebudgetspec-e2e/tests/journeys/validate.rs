@@ -7,7 +7,12 @@ use crate::common::{Fixture, write_result};
 #[test]
 fn validate_accepts_a_well_formed_file_without_running_anything() {
     let fixture = Fixture::new();
-    fixture.counted("condition.js", "ran.log", "condition", "console.log(1);");
+    fixture.counted(
+        "condition.js",
+        "ran.log",
+        "condition",
+        "console.log(\"1\");",
+    );
     fixture.counted(
         "budget.js",
         "ran.log",

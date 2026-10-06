@@ -1,7 +1,7 @@
 schema_version: 1
 conditions:
   - name: dispatches
-    command: ["node", "-e", "console.log(3)"]
+    command: ["node", "-e", "console.log('3')"]
 budgets:
   - id: collides
     measure: reported

@@ -25,7 +25,7 @@ fn declaring(fixture: &Fixture, budgets: &[Value]) {
         "dispatches.js",
         "conditions.log",
         "dispatches",
-        "console.log(3);",
+        "console.log(\"3\");",
     );
     fixture.budgets(
         "budgets.yaml",

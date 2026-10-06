@@ -154,7 +154,7 @@ fn conditions_run_in_order_before_their_file_is_measured_and_not_for_an_unselect
                 &format!("{dir}/{name}.js"),
                 "order.log",
                 name,
-                "console.log(1);",
+                "console.log(\"1\");",
             );
         }
         for id in budgets {

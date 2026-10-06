@@ -18,7 +18,7 @@ fn mixed(fixture: &Fixture) {
         &json!({
             "schema_version": 1,
             "conditions": [
-                { "name": "dispatches", "command": node("console.log(3);", &[]) },
+                { "name": "dispatches", "command": node("console.log(\"3\");", &[]) },
                 { "name": "flaky", "command": exits(1) },
             ],
             "budgets": [

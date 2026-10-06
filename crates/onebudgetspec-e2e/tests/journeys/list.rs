@@ -5,7 +5,12 @@ use serde_json::{Value, json};
 use crate::common::{Fixture, ids};
 
 fn registered(fixture: &Fixture) {
-    fixture.counted("condition.js", "ran.log", "condition", "console.log(1);");
+    fixture.counted(
+        "condition.js",
+        "ran.log",
+        "condition",
+        "console.log(\"1\");",
+    );
     fixture.counted("measure.js", "ran.log", "budget", "");
     let budget = |id: &str, labels: Value| {
         json!({
