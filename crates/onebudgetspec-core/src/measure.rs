@@ -82,7 +82,7 @@ fn run_condition(dir: &Path, argv: &[String]) -> Result<String, String> {
     let mut child = command
         .spawn()
         .map_err(|error| format!("cannot run {}: {error}", argv[0]))?;
-    let tee = StderrTee::start(&mut child, &argv[0])?;
+    let tee = StderrTee::start(&mut child, &Tree::Alone, &argv[0])?;
     let output = child
         .wait_with_output()
         .map_err(|error| format!("cannot wait for {}: {error}", argv[0]))?;
@@ -388,19 +388,24 @@ fn run(
     program: &str,
     timeout: Option<Duration>,
 ) -> Result<Finished, String> {
-    // A budget with a timeout runs in a process group of its own, so the timeout ends
+    // A budget with a timeout runs its command in a tree of its own, so the timeout ends
     // everything the command started rather than only the command itself.
-    #[cfg(unix)]
-    if timeout.is_some() {
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
-    }
+    let processes = if timeout.is_some() {
+        Tree::prepare(command).map_err(|error| format!("cannot run {program}: {error}"))?
+    } else {
+        Tree::Alone
+    };
     let started = Instant::now();
     let mut child = command
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("cannot run {program}: {error}"))?;
-    let tee = StderrTee::start(&mut child, program)?;
+    if let Err(error) = processes.adopt(&child) {
+        // llmlint: ignore[changed_behavior_has_e2e] adopting fails only when Windows refuses to place a process it just created in a job, which no journey can bring about; the command is ended and the OS's reason recorded.
+        processes.kill(&mut child);
+        return Err(format!("cannot run {program} under its timeout: {error}"));
+    }
+    let tee = StderrTee::start(&mut child, &processes, program)?;
     let Some(timeout) = timeout else {
         let status = child
             .wait()
@@ -428,7 +433,7 @@ fn run(
         }
         let waited = started.elapsed();
         if waited >= timeout {
-            kill(&mut child);
+            processes.kill(&mut child);
             let reason = format!(
                 "{program} timed out after {} seconds and was killed",
                 timeout.as_secs()
@@ -440,17 +445,190 @@ fn run(
     }
 }
 
-fn kill(child: &mut Child) {
+/// Where a command runs, and so what ending it ends.
+enum Tree {
+    /// On its own: ending it ends the command alone.
+    Alone,
+    /// In a process group of its own, which ending it signals as a whole.
     #[cfg(unix)]
-    if let Ok(group) = i32::try_from(child.id()) {
-        // SAFETY: kill(2) with a negative pid signals the process group the child leads,
-        // which `run` created for it; it touches no memory of this process.
-        unsafe {
-            libc::kill(-group, libc::SIGKILL);
+    Group,
+    /// In a Job Object of its own, which ending it terminates as a whole: every process
+    /// the command starts joins its job.
+    #[cfg(windows)]
+    Job(job::Job),
+}
+
+impl Tree {
+    /// Set `command` up to run in a tree of its own.
+    #[cfg(unix)]
+    #[allow(clippy::unnecessary_wraps)] // Windows' preparation can fail; this one cannot.
+    fn prepare(command: &mut Command) -> io::Result<Self> {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+        Ok(Self::Group)
+    }
+
+    /// Set `command` up to run in a tree of its own: it starts suspended, so it starts
+    /// nothing before [`Tree::adopt`] has placed it in the job.
+    #[cfg(windows)]
+    fn prepare(command: &mut Command) -> io::Result<Self> {
+        use std::os::windows::process::CommandExt;
+        let job = job::Job::new()?;
+        command.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+        Ok(Self::Job(job))
+    }
+
+    /// Place `child`, just spawned from the prepared command, in this tree and let it run.
+    #[allow(clippy::unused_self, clippy::unnecessary_wraps)] // Only Windows has a step here.
+    fn adopt(&self, child: &Child) -> io::Result<()> {
+        #[cfg(windows)]
+        if let Self::Job(job) = self {
+            return job.adopt(child);
+        }
+        let _ = child;
+        Ok(())
+    }
+
+    /// End `child` and everything in its tree, and reap it.
+    fn kill(&self, child: &mut Child) {
+        match self {
+            Self::Alone => {}
+            #[cfg(unix)]
+            Self::Group => {
+                if let Ok(group) = i32::try_from(child.id()) {
+                    // SAFETY: kill(2) with a negative pid signals the process group the
+                    // child leads, which `prepare` created for it; it touches no memory of
+                    // this process.
+                    unsafe {
+                        libc::kill(-group, libc::SIGKILL);
+                    }
+                }
+            }
+            #[cfg(windows)]
+            Self::Job(job) => job.terminate(),
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
+/// The Job Object a budget with a timeout runs its command in on Windows, where there are
+/// no process groups to signal.
+#[cfg(windows)]
+mod job {
+    use std::io;
+    use std::os::windows::io::AsRawHandle;
+    use std::process::Child;
+
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, TH32CS_SNAPTHREAD, THREADENTRY32, Thread32First, Thread32Next,
+    };
+    use windows_sys::Win32::System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, TerminateJobObject,
+    };
+    use windows_sys::Win32::System::Threading::{OpenThread, ResumeThread, THREAD_SUSPEND_RESUME};
+
+    /// The exit code every process in a terminated job ends with.
+    const TERMINATED: u32 = 1;
+
+    /// An unnamed job, closed when dropped. Closing it ends nothing: like a process group,
+    /// what a command left running when it finished keeps running.
+    pub(super) struct Job(HANDLE);
+
+    impl Job {
+        pub(super) fn new() -> io::Result<Self> {
+            // SAFETY: both arguments may be null: default security, no name. The handle
+            // returned is owned by the `Job` and closed once, on drop.
+            let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+            if handle.is_null() {
+                return Err(io::Error::last_os_error());
+            }
+            Ok(Self(handle))
+        }
+
+        /// Place `child`, spawned suspended, in this job, then resume it: anything it
+        /// starts from then on is in the job too.
+        pub(super) fn adopt(&self, child: &Child) -> io::Result<()> {
+            // SAFETY: both handles are open for the call: the job's by `self`, the
+            // process's by `child`.
+            if unsafe { AssignProcessToJobObject(self.0, child.as_raw_handle()) } == 0 {
+                return Err(io::Error::last_os_error());
+            }
+            resume(child.id())
+        }
+
+        pub(super) fn terminate(&self) {
+            // SAFETY: the job's handle is open for the call. A failure leaves the command
+            // to `Child::kill`, which follows.
+            unsafe {
+                TerminateJobObject(self.0, TERMINATED);
+            }
         }
     }
-    let _ = child.kill();
-    let _ = child.wait();
+
+    impl Drop for Job {
+        fn drop(&mut self) {
+            // SAFETY: the handle is open and owned by this `Job`, and closed only here.
+            unsafe {
+                CloseHandle(self.0);
+            }
+        }
+    }
+
+    /// Resume every thread of process `pid`: the one a suspended process starts with.
+    fn resume(pid: u32) -> io::Result<()> {
+        // SAFETY: a snapshot of every thread on the host; the handle is closed below.
+        let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0) };
+        if snapshot == INVALID_HANDLE_VALUE {
+            return Err(io::Error::last_os_error());
+        }
+        let mut entry = THREADENTRY32 {
+            dwSize: u32::try_from(size_of::<THREADENTRY32>()).unwrap_or(u32::MAX),
+            cntUsage: 0,
+            th32ThreadID: 0,
+            th32OwnerProcessID: 0,
+            tpBasePri: 0,
+            tpDeltaPri: 0,
+            dwFlags: 0,
+        };
+        let mut resumed = 0;
+        let mut failure = None;
+        // SAFETY: `entry` is a THREADENTRY32 whose dwSize is its own size, as both calls
+        // require, and the snapshot handle is open.
+        let mut more = unsafe { Thread32First(snapshot, &raw mut entry) } != 0;
+        while more {
+            if entry.th32OwnerProcessID == pid {
+                // SAFETY: OpenThread takes a thread id and returns an owned handle or null;
+                // a non-null one is resumed and then closed.
+                let thread = unsafe { OpenThread(THREAD_SUSPEND_RESUME, 0, entry.th32ThreadID) };
+                if thread.is_null() || unsafe { ResumeThread(thread) } == u32::MAX {
+                    failure = Some(io::Error::last_os_error());
+                } else {
+                    resumed += 1;
+                }
+                if !thread.is_null() {
+                    // SAFETY: the thread handle was opened above and is closed once.
+                    unsafe {
+                        CloseHandle(thread);
+                    }
+                }
+            }
+            // SAFETY: as for Thread32First.
+            more = unsafe { Thread32Next(snapshot, &raw mut entry) } != 0;
+        }
+        // SAFETY: the snapshot handle was opened above and is closed once.
+        unsafe {
+            CloseHandle(snapshot);
+        }
+        match (resumed, failure) {
+            (0, Some(error)) => Err(error),
+            (0, None) => Err(io::Error::other(format!(
+                "process {pid} has no thread to resume"
+            ))),
+            _ => Ok(()),
+        }
+    }
 }
 
 /// How many characters of a command's stderr a failure's reason keeps, from its end.
@@ -474,7 +652,7 @@ struct StderrTee {
 impl StderrTee {
     /// Start reading `child`'s piped stderr. When no thread can be started to read it,
     /// `child` is killed, since nothing would drain the pipe, and the reason is returned.
-    fn start(child: &mut Child, program: &str) -> Result<Self, String> {
+    fn start(child: &mut Child, tree: &Tree, program: &str) -> Result<Self, String> {
         let tail = Arc::new(Mutex::new(StderrTail::default()));
         // With no pipe the sender is dropped here, so `finish` does not wait.
         let (sender, closed) = mpsc::channel();
@@ -487,7 +665,7 @@ impl StderrTee {
             });
             // llmlint: ignore[changed_behavior_has_e2e] a thread fails to start only when the OS is out of threads or memory, which no journey can bring about without destabilising the run around it; this path kills the command and records the OS's reason.
             if let Err(error) = reader {
-                kill(child);
+                tree.kill(child);
                 return Err(format!("cannot read the stderr of {program}: {error}"));
             }
         }
@@ -592,7 +770,7 @@ fn with_stderr(reason: String, stderr: &str) -> String {
 
 fn describe_exit(program: &str, status: ExitStatus) -> String {
     if let Some(code) = status.code() {
-        return format!("{program} exited with status {code}");
+        return format!("{program} exited with status {}", exit_code(code));
     }
     #[cfg(unix)]
     {
@@ -603,15 +781,27 @@ fn describe_exit(program: &str, status: ExitStatus) -> String {
             status.signal().unwrap_or_default()
         )
     }
+    // Windows gives every process that has exited an exit code.
     #[cfg(not(unix))]
-    format!("{program} exited abnormally")
+    format!("{program} exited without an exit code")
+}
+
+/// An exit code as its platform writes it. Only Windows has negative ones: a code with the
+/// top bit set is an NTSTATUS, such as `0xC0000005` for an access violation, and reads in
+/// hexadecimal. Every other code reads in decimal.
+fn exit_code(code: i32) -> String {
+    if code < 0 {
+        format!("0x{:08X}", code.cast_unsigned())
+    } else {
+        code.to_string()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::{judge, parse_result};
+    use super::{exit_code, judge, parse_result};
     use crate::model::Direction;
     use crate::report::Verdict;
 
@@ -624,6 +814,14 @@ mod tests {
     #[test]
     fn zero_threshold_has_no_percentage() {
         assert_eq!(judge(Direction::Max, 0.0, 1.0), (Verdict::Over, -1.0, None));
+    }
+
+    #[test]
+    fn a_windows_failure_code_reads_in_hexadecimal_and_any_other_in_decimal() {
+        assert_eq!(exit_code(4), "4");
+        assert_eq!(exit_code(255), "255");
+        assert_eq!(exit_code(-1_073_741_819), "0xC0000005");
+        assert_eq!(exit_code(-1_073_740_791), "0xC0000409");
     }
 
     #[test]
