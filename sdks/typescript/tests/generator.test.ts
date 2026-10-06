@@ -2,7 +2,7 @@
 // package: the generator, the committed generated files and the formatter configuration
 // laid out as in the workspace, with the installed tools linked in, so nothing in the tree
 // is written.
-import { afterAll, expect, test } from "bun:test";
+import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
@@ -28,6 +28,10 @@ import {
 } from "./helpers.ts";
 
 afterAll(cleanScratch);
+
+// A test here runs the generator up to three times, and each run starts the binary and the
+// formatter: seconds apiece on a Windows runner, past the 5-second default.
+setDefaultTimeout(60_000);
 
 const PACKAGE = join(ROOT, "sdks", "typescript");
 

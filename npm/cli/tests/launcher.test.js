@@ -45,6 +45,18 @@ function runScript(source) {
   return spawnSync(process.execPath, ["-e", source]);
 }
 
+/**
+ * A resolver that finds no package, as `require.resolve` does for one not installed.
+ * @param {string} request
+ * @returns {string}
+ */
+function notInstalled(request) {
+  /** @type {NodeJS.ErrnoException} */
+  const error = new Error(`Cannot find module '${request}'`);
+  error.code = "MODULE_NOT_FOUND";
+  throw error;
+}
+
 test("every published platform is a carrier, and nothing else is", () => {
   expect(CARRIERS).toEqual([
     "linux-x64",
@@ -59,11 +71,8 @@ test("every published platform is a carrier, and nothing else is", () => {
     ["linux", "ia32"],
     ["freebsd", "x64"],
   ]) {
-    const found = refused(
-      locate(platform, arch, () => {
-        throw new Error("an unsupported platform resolves nothing");
-      }),
-    );
+    // Resolving would refuse with 69; 64 shows nothing was resolved.
+    const found = refused(locate(platform, arch, notInstalled));
     expect(found.status).toBe(64);
     expect(found.message).toContain(`no build for ${platform}-${arch}`);
     expect(found.message).toContain("cargo install onebudgetspec");
@@ -104,14 +113,7 @@ test("a carrier holding only the other platforms' binary name is refused", () =>
 });
 
 test("a missing carrier, or one without its binary, is refused with 69", () => {
-  const missing = refused(
-    locate("darwin", "arm64", (request) => {
-      /** @type {NodeJS.ErrnoException} */
-      const error = new Error(`Cannot find module '${request}'`);
-      error.code = "MODULE_NOT_FOUND";
-      throw error;
-    }),
-  );
+  const missing = refused(locate("darwin", "arm64", notInstalled));
   expect(missing.status).toBe(69);
   expect(missing.message).toContain(
     "@onebudgetspec/cli-darwin-arm64 is not installed (MODULE_NOT_FOUND)",
