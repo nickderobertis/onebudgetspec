@@ -1,0 +1,32 @@
+schema_version: 1
+budgets:
+  - id: explained
+    measure: reported
+    command: ["sh", "explain.sh"]
+    unit: items
+    direction: max
+    threshold: 10
+  - id: raw
+    measure: reported
+    command: ["sh", "raw.sh"]
+    unit: items
+    direction: max
+    threshold: 10
+  - id: verbose
+    measure: reported
+    command: ["sh", "verbose.sh"]
+    unit: items
+    direction: max
+    threshold: 10
+  - id: unreadable
+    measure: reported
+    command: ["sh", "unreadable.sh"]
+    unit: items
+    direction: max
+    threshold: 10
+  - id: noisy-success
+    measure: reported
+    command: ["sh", "noisy.sh"]
+    unit: items
+    direction: max
+    threshold: 10
