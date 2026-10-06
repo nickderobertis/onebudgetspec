@@ -3,24 +3,30 @@
 
 use serde_json::{Value, json};
 
-use crate::common::{Fixture, file, ids};
+use crate::common::{Fixture, file, ids, js, write_result};
 
-/// A budget whose command records `start <id>` and `end <id>` around a short sleep.
+/// A budget whose command records `start <id>` and `end <id>` around a short wait.
 fn marked(fixture: &Fixture, id: &str) -> Value {
-    let script = format!("{id}.sh");
-    let log = fixture.path().join("marks.log");
+    let script = format!("{id}.js");
+    let log = js(&fixture.path().join("marks.log").to_string_lossy());
+    let (start, end) = (js(&format!("start {id}\n")), js(&format!("end {id}\n")));
     fixture.script(
         &script,
         &format!(
-            "echo start {id} >> '{log}'\nsleep 0.2\necho end {id} >> '{log}'\nprintf '{{\"value\": 1}}' > \"$ONEBUDGETSPEC_RESULT\"",
-            log = log.display()
+            "const fs = require(\"fs\");\n\
+             fs.appendFileSync({log}, {start});\n\
+             setTimeout(() => {{\n\
+             fs.appendFileSync({log}, {end});\n\
+             {}\n\
+             }}, 200);",
+            write_result(r#"{"value": 1}"#)
         ),
     );
     json!({
         "id": id,
         "labels": [if id == "skipped" { "manual" } else { "auto" }],
         "measure": "reported",
-        "command": [format!("./{script}")],
+        "command": ["node", script],
         "unit": "runs",
         "direction": "max",
         "threshold": 5,

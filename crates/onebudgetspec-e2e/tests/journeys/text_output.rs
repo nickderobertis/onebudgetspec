@@ -4,7 +4,7 @@
 use regex::Regex;
 use serde_json::{Value, json};
 
-use crate::common::{Fixture, reported, result};
+use crate::common::{Fixture, exits, node, reported, result};
 
 fn figure(value: &Value) -> String {
     value
@@ -18,8 +18,8 @@ fn mixed(fixture: &Fixture) {
         &json!({
             "schema_version": 1,
             "conditions": [
-                { "name": "dispatches", "command": ["echo", "3"] },
-                { "name": "flaky", "command": ["false"] },
+                { "name": "dispatches", "command": node("console.log(3);", &[]) },
+                { "name": "flaky", "command": exits(1) },
             ],
             "budgets": [
                 reported("gate-time", 1395.0, "max", 1800.0),
@@ -28,7 +28,7 @@ fn mixed(fixture: &Fixture) {
                 {
                     "id": "broken",
                     "measure": "reported",
-                    "command": ["sh", "-c", "exit 5"],
+                    "command": exits(5),
                     "unit": "requests",
                     "direction": "max",
                     "threshold": 1,
@@ -47,7 +47,16 @@ fn the_text_line_matches_the_contract_for_within_over_and_error() {
     let json = fixture.run(["check", "--json"]);
     let report = json.expect_status(3).check_report();
 
-    let host = r"host: load=(?:[0-9.]+|unknown)/[0-9]+ mem_available=(?:[0-9]+|unknown)MiB dispatches=3 flaky=unknown";
+    // Linux and macOS have a load average and Windows has none; Linux and Windows report
+    // available memory and macOS does not.
+    let load = if cfg!(unix) { "[0-9.]+" } else { "unknown" };
+    let mem = if cfg!(any(target_os = "linux", windows)) {
+        "[0-9]+"
+    } else {
+        "unknown"
+    };
+    let host =
+        format!("host: load={load}/[0-9]+ mem_available={mem}MiB dispatches=3 flaky=unknown");
     let measured = Regex::new(&format!(
         r"^budget (?P<id>[a-z0-9-]+): actual (?P<actual>\S+) (?P<unit>\S+), budget (?P<threshold>\S+) (?P<unit2>\S+), headroom (?P<headroom>\S+) (?P<unit3>\S+) \((?P<percent>\S+)%\) — (?P<verdict>within|over); {host}$"
     ))

@@ -3,20 +3,20 @@
 
 use serde_json::{Value, json};
 
-use crate::common::{Fixture, ids, reported, result, results};
+use crate::common::{Fixture, ids, js, node, reported, result, results, write_result};
 
 fn with_condition(fixture: &Fixture, dir: &str, name: &str, value: &str, ids: &[&str]) -> Value {
     let log = format!("{dir}-{name}.log");
     fixture.counted(
-        &format!("{dir}/{name}.sh"),
+        &format!("{dir}/{name}.js"),
         &log,
         name,
-        &format!("printf '  {value}\\n\\n'"),
+        &format!("process.stdout.write({});", js(&format!("  {value}\n\n"))),
     );
     let budgets: Vec<Value> = ids.iter().map(|id| reported(id, 1.0, "max", 2.0)).collect();
     json!({
         "schema_version": 1,
-        "conditions": [{ "name": name, "command": [format!("./{name}.sh")] }],
+        "conditions": [{ "name": name, "command": ["node", format!("{name}.js")] }],
         "budgets": budgets,
     })
 }
@@ -87,11 +87,11 @@ fn a_failing_condition_is_recorded_as_unknown() {
         &json!({
             "schema_version": 1,
             "conditions": [
-                { "name": "broken", "command": ["sh", "-c", "echo partial; exit 1"] },
+                { "name": "broken", "command": node("console.log(\"partial\"); process.exitCode = 1;", &[]) },
                 { "name": "missing", "command": ["./no-such-program"] },
                 { "name": "empty_program", "command": [""] },
-                { "name": "nul_argument", "command": ["echo", "a\u{0}b"] },
-                { "name": "fine", "command": ["echo", "ok"] },
+                { "name": "nul_argument", "command": ["node", "a\u{0}b"] },
+                { "name": "fine", "command": node("console.log(\"ok\");", &[]) },
             ],
             "budgets": [reported("only", 1.0, "max", 2.0)],
         }),
@@ -118,7 +118,10 @@ fn condition_output_that_is_not_utf8_is_recorded_with_replacement_characters() {
         "budgets.yaml",
         &json!({
             "schema_version": 1,
-            "conditions": [{ "name": "raw", "command": ["printf", "ok\\377ok"] }],
+            "conditions": [{
+                "name": "raw",
+                "command": node("process.stdout.write(Buffer.from(\"6f6bff6f6b\", \"hex\"));", &[]),
+            }],
             "budgets": [reported("only", 1.0, "max", 2.0)],
         }),
     );
@@ -147,19 +150,24 @@ fn conditions_run_in_order_before_their_file_is_measured_and_not_for_an_unselect
         ("second", &["gamma"][..], &["second-one"][..]),
     ] {
         for name in conditions {
-            fixture.counted(&format!("{dir}/{name}.sh"), "order.log", name, "echo 1");
+            fixture.counted(
+                &format!("{dir}/{name}.js"),
+                "order.log",
+                name,
+                "console.log(1);",
+            );
         }
         for id in budgets {
             fixture.counted(
-                &format!("{dir}/{id}.sh"),
+                &format!("{dir}/{id}.js"),
                 "order.log",
                 id,
-                "printf '{\"value\": 1}' > \"$ONEBUDGETSPEC_RESULT\"",
+                &write_result(r#"{"value": 1}"#),
             );
         }
         let conditions: Vec<Value> = conditions
             .iter()
-            .map(|name| json!({ "name": name, "command": [format!("./{name}.sh")] }))
+            .map(|name| json!({ "name": name, "command": ["node", format!("{name}.js")] }))
             .collect();
         let budgets: Vec<Value> = budgets
             .iter()
@@ -168,7 +176,7 @@ fn conditions_run_in_order_before_their_file_is_measured_and_not_for_an_unselect
                     "id": id,
                     "labels": [dir],
                     "measure": "reported",
-                    "command": [format!("./{id}.sh")],
+                    "command": ["node", format!("{id}.js")],
                     "unit": "runs",
                     "direction": "max",
                     "threshold": 1,

@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use crate::common::{Fixture, results};
+use crate::common::{Fixture, node, results, write_result};
 
 fn noisy(fixture: &Fixture) {
     fixture.budgets(
@@ -11,12 +11,18 @@ fn noisy(fixture: &Fixture) {
             "schema_version": 1,
             "conditions": [{
                 "name": "noisy_condition",
-                "command": ["sh", "-c", "echo CONDITION-OUT; echo CONDITION-ERR >&2"],
+                "command": node("console.log(\"CONDITION-OUT\"); console.error(\"CONDITION-ERR\");", &[]),
             }],
             "budgets": [{
                 "id": "noisy",
                 "measure": "reported",
-                "command": ["sh", "-c", "echo BUDGET-OUT; echo BUDGET-ERR >&2; printf '{\"value\": 1}' > \"$ONEBUDGETSPEC_RESULT\""],
+                "command": node(
+                    &format!(
+                        "console.log(\"BUDGET-OUT\"); console.error(\"BUDGET-ERR\"); {}",
+                        write_result(r#"{"value": 1}"#)
+                    ),
+                    &[],
+                ),
                 "unit": "runs",
                 "direction": "max",
                 "threshold": 2,
@@ -84,6 +90,7 @@ fn text_stdout_holds_none_of_the_command_output_beyond_recorded_conditions() {
 
 /// A report that cannot be written is an error: exit status 3 and the reason on stderr,
 /// for every verb that writes one, even when every budget is within.
+// Linux only: /dev/full, a device that refuses every write, exists only there.
 #[cfg(target_os = "linux")]
 #[test]
 fn an_unwritable_stdout_is_reported_on_stderr() {

@@ -5,7 +5,7 @@ use std::fs;
 
 use serde_json::json;
 
-use crate::common::{Fixture, file, result, run_in};
+use crate::common::{Fixture, binary, file, js, node, result, run_in, write_result};
 
 #[test]
 fn a_relative_command_runs_from_the_directory_holding_its_file() {
@@ -13,22 +13,37 @@ fn a_relative_command_runs_from_the_directory_holding_its_file() {
     let project = fixture.path().join("services/api");
     let recorded = fixture.path().join("cwd.txt");
     fixture.script(
-        "services/api/scripts/where.sh",
+        "services/api/scripts/where.js",
         &format!(
-            "pwd -P > '{}'\nprintf '{{\"value\": 1}}' > \"$ONEBUDGETSPEC_RESULT\"",
-            recorded.display()
+            "const fs = require(\"fs\");\nfs.writeFileSync({}, process.cwd());\n{}",
+            js(&recorded.to_string_lossy()),
+            write_result(r#"{"value": 1}"#)
         ),
     );
+    // A program named by a relative path is found from the file's directory too: here a
+    // copy of this binary, validating the file beside it.
+    let tool = format!("tools/onebudgetspec{}", std::env::consts::EXE_SUFFIX);
+    fixture.copy(&format!("services/api/{tool}"), &binary());
     fixture.budgets(
         "services/api/budgets.yaml",
-        &file(&[json!({
-            "id": "where",
-            "measure": "reported",
-            "command": ["scripts/where.sh"],
-            "unit": "runs",
-            "direction": "max",
-            "threshold": 1,
-        })]),
+        &file(&[
+            json!({
+                "id": "where",
+                "measure": "reported",
+                "command": ["node", "scripts/where.js"],
+                "unit": "runs",
+                "direction": "max",
+                "threshold": 1,
+            }),
+            json!({
+                "id": "tool",
+                "measure": "elapsed",
+                "command": [tool, "validate"],
+                "unit": "seconds",
+                "direction": "max",
+                "threshold": 60,
+            }),
+        ]),
     );
     let elsewhere = fixture.path().join("somewhere/else");
     fs::create_dir_all(&elsewhere).unwrap();
@@ -39,11 +54,12 @@ fn a_relative_command_runs_from_the_directory_holding_its_file() {
         ["check".as_ref(), "--json".as_ref(), file_arg.as_os_str()],
         &[],
     );
-    run.expect_status(0).check_report();
+    let report = run.expect_status(0).check_report();
+    assert_eq!(result(&report, "tool")["verdict"], "within");
     let cwd = fs::read_to_string(recorded).unwrap();
     assert_eq!(
-        cwd.trim(),
-        fs::canonicalize(&project).unwrap().to_string_lossy(),
+        fs::canonicalize(cwd.trim()).unwrap(),
+        fs::canonicalize(&project).unwrap(),
         "the command ran from the wrong directory"
     );
 }
@@ -52,16 +68,18 @@ fn a_relative_command_runs_from_the_directory_holding_its_file() {
 fn the_environment_is_inherited_and_the_result_file_starts_empty() {
     let fixture = Fixture::new();
     fixture.script(
-        "probe.sh",
-        r#"if [ -f "$ONEBUDGETSPEC_RESULT" ] && [ ! -s "$ONEBUDGETSPEC_RESULT" ]; then fresh=yes; else fresh=no; fi
-printf '{"value": %s, "detail": "fresh=%s"}' "$JOURNEY_WORKERS" "$fresh" > "$ONEBUDGETSPEC_RESULT""#,
+        "probe.js",
+        r#"const fs = require("fs");
+const path = process.env.ONEBUDGETSPEC_RESULT;
+const fresh = fs.existsSync(path) && fs.statSync(path).isFile() && fs.statSync(path).size === 0 ? "yes" : "no";
+fs.writeFileSync(path, `{"value": ${process.env.JOURNEY_WORKERS}, "detail": "fresh=${fresh}"}`);"#,
     );
     fixture.budgets(
         "budgets.yaml",
         &file(&[json!({
             "id": "probe",
             "measure": "reported",
-            "command": ["./probe.sh"],
+            "command": ["node", "probe.js"],
             "unit": "workers",
             "direction": "max",
             "threshold": 100,
@@ -81,16 +99,28 @@ printf '{"value": %s, "detail": "fresh=%s"}' "$JOURNEY_WORKERS" "$fresh" > "$ONE
 #[test]
 fn arguments_reach_the_command_byte_for_byte_with_no_shell() {
     let fixture = Fixture::new();
-    let tricky = ["two words", "$HOME", "a;b", "*", "'quoted'", "$(echo no)"];
+    let tricky = [
+        "two words",
+        "$HOME",
+        "%PATH%",
+        "a;b",
+        "a&b",
+        "*",
+        "'quoted'",
+        "\"double\"",
+        "$(echo no)",
+    ];
     let recorded = fixture.path().join("args.txt");
     fixture.script(
-        "args.sh",
+        "args.js",
         &format!(
-            "for arg in \"$@\"; do printf '%s\\n' \"$arg\"; done > '{}'\nprintf '{{\"value\": 1}}' > \"$ONEBUDGETSPEC_RESULT\"",
-            recorded.display()
+            "const fs = require(\"fs\");\n\
+             fs.writeFileSync({}, process.argv.slice(2).map((arg) => arg + \"\\n\").join(\"\"));\n{}",
+            js(&recorded.to_string_lossy()),
+            write_result(r#"{"value": 1}"#)
         ),
     );
-    let mut command = vec![json!("./args.sh")];
+    let mut command = vec![json!("node"), json!("args.js")];
     command.extend(tricky.iter().map(|arg| json!(arg)));
     fixture.budgets(
         "budgets.yaml",
@@ -119,17 +149,27 @@ fn commands_see_end_of_input_whatever_the_caller_pipes_in() {
     use std::process::{Command, Stdio};
 
     let fixture = Fixture::new();
-    let counts =
-        "n=$(wc -c | tr -d ' '); printf '{\"value\": %s}' \"$n\" > \"$ONEBUDGETSPEC_RESULT\"";
+    // Counts the bytes on stdin until its end, then reports them through `then`.
+    let counting = |then: &str| {
+        node(
+            &format!(
+                "let n = 0; process.stdin.on(\"data\", (chunk) => {{ n += chunk.length; }}); \
+                 process.stdin.on(\"end\", () => {{ {then} }});"
+            ),
+            &[],
+        )
+    };
     fixture.budgets(
         "budgets.yaml",
         &json!({
             "schema_version": 1,
-            "conditions": [{ "name": "stdin_bytes", "command": ["sh", "-c", "wc -c | tr -d ' '"] }],
+            "conditions": [{ "name": "stdin_bytes", "command": counting("console.log(n);") }],
             "budgets": [{
                 "id": "stdin-bytes",
                 "measure": "reported",
-                "command": ["sh", "-c", counts],
+                "command": counting(
+                    "require(\"fs\").writeFileSync(process.env.ONEBUDGETSPEC_RESULT, `{\"value\": ${n}}`);"
+                ),
                 "unit": "bytes",
                 "direction": "max",
                 "threshold": 0,

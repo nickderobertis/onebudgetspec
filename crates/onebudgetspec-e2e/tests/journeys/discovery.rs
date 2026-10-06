@@ -3,7 +3,7 @@
 
 use serde_json::json;
 
-use crate::common::{Fixture, file, ids, reported, result};
+use crate::common::{Fixture, file, ids, reported, result, write_result};
 
 fn nested(fixture: &Fixture) {
     fixture.budgets("budgets.yaml", &file(&[reported("root", 1.0, "max", 2.0)]));
@@ -59,16 +59,11 @@ fn recursive_check_finds_nested_files_in_path_order_and_skips_gitignored_ones() 
 #[test]
 fn an_id_repeated_across_two_files_is_refused() {
     let fixture = Fixture::new();
-    fixture.counted(
-        "ran.sh",
-        "ran.log",
-        "ran",
-        "printf '{\"value\": 1}' > \"$ONEBUDGETSPEC_RESULT\"",
-    );
+    fixture.counted("ran.js", "ran.log", "ran", &write_result(r#"{"value": 1}"#));
     let counted = json!({
         "id": "shared",
         "measure": "reported",
-        "command": ["../ran.sh"],
+        "command": ["node", "../ran.js"],
         "unit": "runs",
         "direction": "max",
         "threshold": 2,
@@ -106,6 +101,7 @@ fn validate_recursive_refuses_an_invalid_nested_file() {
     fixture.run(["validate", "--recursive"]).expect_status(0);
 }
 
+// Unix only: it locks the directory with POSIX permission bits.
 #[cfg(unix)]
 #[test]
 fn a_directory_recursive_discovery_cannot_read_is_refused() {
@@ -126,7 +122,7 @@ fn a_directory_recursive_discovery_cannot_read_is_refused() {
     assert!(run.stderr.contains("cannot search"), "{}", run.stderr);
 }
 
-/// Discovery reads `.gitignore` alone: a budgets file in a hidden directory is found, and
+/// Discovery reads `.gitignore` alone: a budgets file in a hidden directory is and
 /// neither an `.ignore` file nor the user's global git excludes can hide one, while the
 /// repository's own `.git` directory is never searched.
 #[test]

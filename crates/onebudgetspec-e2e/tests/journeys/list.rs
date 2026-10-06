@@ -5,14 +5,14 @@ use serde_json::{Value, json};
 use crate::common::{Fixture, ids};
 
 fn registered(fixture: &Fixture) {
-    fixture.counted("condition.sh", "ran.log", "condition", "echo 1");
-    fixture.counted("measure.sh", "ran.log", "budget", "true");
+    fixture.counted("condition.js", "ran.log", "condition", "console.log(1);");
+    fixture.counted("measure.js", "ran.log", "budget", "");
     let budget = |id: &str, labels: Value| {
         json!({
             "id": id,
             "labels": labels,
             "measure": "elapsed",
-            "command": ["../measure.sh", "--fast"],
+            "command": ["node", "../measure.js", "--fast"],
             "unit": "seconds",
             "direction": "max",
             "threshold": 30,
@@ -24,7 +24,7 @@ fn registered(fixture: &Fixture) {
     detailed["measure"] = json!("reported");
     detailed["unit"] = json!("ms");
     detailed["direction"] = json!("min");
-    let conditions = json!([{ "name": "probe", "command": ["../condition.sh"] }]);
+    let conditions = json!([{ "name": "probe", "command": ["node", "../condition.js"] }]);
     fixture.budgets(
         "api/budgets.yaml",
         &json!({
@@ -64,7 +64,7 @@ fn list_reports_every_field_of_the_selected_budgets() {
             "description": "p95 of the smoke run",
             "labels": ["api"],
             "measure": "reported",
-            "command": ["../measure.sh", "--fast"],
+            "command": ["node", "../measure.js", "--fast"],
             "unit": "ms",
             "direction": "min",
             "threshold": 30.0,

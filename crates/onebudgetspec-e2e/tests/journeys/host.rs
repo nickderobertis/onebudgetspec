@@ -3,7 +3,7 @@
 use chrono::DateTime;
 use serde_json::json;
 
-use crate::common::{Fixture, reported, results};
+use crate::common::{Fixture, exits, node, reported, results};
 
 #[test]
 fn every_result_records_host_values_of_the_contract_types_and_ordered_times() {
@@ -13,15 +13,15 @@ fn every_result_records_host_values_of_the_contract_types_and_ordered_times() {
         &json!({
             "schema_version": 1,
             "conditions": [
-                { "name": "region", "command": ["echo", "eu-west"] },
-                { "name": "flaky", "command": ["false"] },
+                { "name": "region", "command": node("console.log(\"eu-west\");", &[]) },
+                { "name": "flaky", "command": exits(1) },
             ],
             "budgets": [
                 reported("first", 1.0, "max", 2.0),
                 {
                     "id": "second",
                     "measure": "elapsed",
-                    "command": ["sleep", "0.05"],
+                    "command": node("setTimeout(() => {}, 50);", &[]),
                     "unit": "seconds",
                     "direction": "max",
                     "threshold": 10,
@@ -64,9 +64,9 @@ fn every_result_records_host_values_of_the_contract_types_and_ordered_times() {
     let started = DateTime::parse_from_rfc3339(second["started_at"].as_str().unwrap()).unwrap();
     let ended = DateTime::parse_from_rfc3339(second["ended_at"].as_str().unwrap()).unwrap();
     assert!((ended - started).num_milliseconds() >= 50, "{second:#}");
+    let host = &second["host"];
     #[cfg(target_os = "linux")]
     {
-        let host = &second["host"];
         assert!(
             host["load1"].is_f64(),
             "Linux reads the load average: {host:#}"
@@ -74,6 +74,28 @@ fn every_result_records_host_values_of_the_contract_types_and_ordered_times() {
         assert!(
             host["mem_available_mib"].is_u64(),
             "Linux reads MemAvailable: {host:#}"
+        );
+    }
+    #[cfg(target_os = "macos")]
+    {
+        assert!(
+            host["load1"].is_f64(),
+            "macOS reads the load average: {host:#}"
+        );
+        assert!(
+            host["mem_available_mib"].is_null(),
+            "macOS reports no available memory: {host:#}"
+        );
+    }
+    #[cfg(windows)]
+    {
+        assert!(
+            host["load1"].is_null(),
+            "Windows has no load average: {host:#}"
+        );
+        assert!(
+            host["mem_available_mib"].is_u64(),
+            "Windows reads its available memory: {host:#}"
         );
     }
 }

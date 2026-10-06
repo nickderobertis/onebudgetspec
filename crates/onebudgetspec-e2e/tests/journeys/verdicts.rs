@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 
-use crate::common::{Fixture, file, reported, result, results};
+use crate::common::{Fixture, exits, file, reported, result, results};
 
 /// The headroom and percentage the contract defines, computed here independently.
 fn expected(direction: &str, threshold: f64, actual: f64) -> (f64, Option<f64>) {
@@ -97,7 +97,7 @@ fn within_and_over_exits_one_and_an_added_error_exits_three() {
     let broken = json!({
         "id": "broken",
         "measure": "reported",
-        "command": ["sh", "-c", "exit 1"],
+        "command": exits(1),
         "unit": "requests",
         "direction": "max",
         "threshold": 2,

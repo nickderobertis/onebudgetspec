@@ -2,7 +2,7 @@
 
 use serde_json::{Value, json};
 
-use crate::common::{Fixture, file, ids};
+use crate::common::{Fixture, file, ids, write_result};
 
 /// Five budgets whose commands each record their own invocation in `runs.log`.
 fn labelled(fixture: &Fixture) {
@@ -16,16 +16,16 @@ fn labelled(fixture: &Fixture) {
     .into_iter()
     .map(|(id, labels)| {
         fixture.counted(
-            &format!("{id}.sh"),
+            &format!("{id}.js"),
             "runs.log",
             id,
-            "printf '{\"value\": 1}' > \"$ONEBUDGETSPEC_RESULT\"",
+            &write_result(r#"{"value": 1}"#),
         );
         json!({
             "id": id,
             "labels": labels,
             "measure": "reported",
-            "command": [format!("./{id}.sh")],
+            "command": ["node", format!("{id}.js")],
             "unit": "ms",
             "direction": "max",
             "threshold": 5,
