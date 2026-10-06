@@ -13,6 +13,7 @@ from typing import NamedTuple, NewType, NotRequired, TypedDict, cast
 
 import yaml
 
+from repo_checks import versions
 from repo_checks.paths import ROOT
 
 #: A registry-qualified target id, ``<registry>:<name>``.
@@ -148,7 +149,12 @@ def target_problems(root: Path = ROOT) -> list[str]:
 
 
 def platform_problems(root: Path = ROOT) -> list[str]:
-    """Every place the shipped platforms are listed that disagrees with the carriers."""
+    """Every place the shipped platforms are listed that disagrees with the carriers.
+
+    The places: the launcher, its manifest, the build script's target mapping and the host
+    targets it detects, the release matrix, the pinned toolchain, the packaging journeys'
+    project and their host mapping, and the version check's own list.
+    """
     carriers = sorted(carrier_platforms(root))
     launcher = (root / "npm/cli/lib/launcher.js").read_text()
     listed = re.search(r"const CARRIERS = \[([^\]]*)\]", launcher)
@@ -163,12 +169,35 @@ def platform_problems(root: Path = ROOT) -> list[str]:
         re.findall(r"^\s+([a-z0-9_]+-[a-z0-9_-]+)\) echo ([a-z0-9]+-[a-z0-9]+) ;;$", build, re.M)
     )
     in_build = sorted(mapping.values())
+    detected = re.search(r"^host_target\(\) \{\n(.*?)^\}", build, re.M | re.S)
+    in_hosts = (
+        sorted(
+            mapping.get(target, f"unmapped {target}")
+            for target in re.findall(
+                r"\) echo ([a-z0-9_]+-[a-z0-9_-]+) ;;$", detected.group(1), re.M
+            )
+        )
+        if detected
+        else []
+    )
     release = yaml.safe_load((root / ".github/workflows/release.yml").read_text())
     matrix = release["jobs"]["native"]["strategy"]["matrix"]["include"]
     in_release = sorted(mapping.get(row["target"], f"unmapped {row['target']}") for row in matrix)
     toolchain = tomllib.loads((root / "rust-toolchain.toml").read_text())["toolchain"]
     in_toolchain = sorted(
         mapping.get(target, f"unmapped {target}") for target in toolchain.get("targets", [])
+    )
+    packaging = json.loads((root / "crates/onebudgetspec-packaging-e2e/project.json").read_text())
+    in_packaging = sorted(
+        name.removeprefix("npm-cli-")
+        for name in packaging.get("implicitDependencies", [])
+        if name.startswith("npm-cli-")
+    )
+    journey = (
+        root / "crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs"
+    ).read_text()
+    in_journey = sorted(
+        re.findall(r'^\s+\("[a-z]+", "[a-z0-9_]+"\) => "([a-z0-9]+-[a-z0-9]+)",$', journey, re.M)
     )
     problems = []
     for platform in carriers:
@@ -185,8 +214,12 @@ def platform_problems(root: Path = ROOT) -> list[str]:
         ("npm/cli/lib/launcher.js", in_launcher),
         ("npm/cli/package.json", in_manifest),
         ("scripts/build-dist.sh", in_build),
+        ("scripts/build-dist.sh's host_target", in_hosts),
         (".github/workflows/release.yml", in_release),
         ("rust-toolchain.toml", in_toolchain),
+        ("crates/onebudgetspec-packaging-e2e/project.json", in_packaging),
+        ("crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs", in_journey),
+        ("tools/src/repo_checks/versions.py", sorted(versions.PLATFORMS)),
     ):
         if found != carriers:
             problems.append(f"{where} lists {found}; npm/platforms holds {carriers}")

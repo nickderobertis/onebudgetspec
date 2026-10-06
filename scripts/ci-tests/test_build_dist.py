@@ -61,12 +61,12 @@ def test_a_wheel_target_the_release_does_not_ship_is_refused(tmp_path: Path) -> 
             str(ROOT / "scripts/build-dist.sh"),
             "cli-wheel",
             str(tmp_path),
-            "x86_64-pc-windows-msvc",
+            "i686-pc-windows-msvc",
         ],
         capture_output=True,
         text=True,
         check=False,
     )
     assert refused.returncode == 64
-    assert "x86_64-pc-windows-msvc is not a Rust target the release ships" in refused.stderr
+    assert "i686-pc-windows-msvc is not a Rust target the release ships" in refused.stderr
     assert list(tmp_path.iterdir()) == []

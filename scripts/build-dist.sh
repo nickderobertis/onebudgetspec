@@ -30,7 +30,9 @@ fi
 readonly ARTIFACT="$1"
 TARGET="${3:-}"
 mkdir -p "$2"
-OUT="$(cd "$2" && pwd)"
+# The path printed must be one the caller can open: on Windows that is C:/..., which
+# Git Bash's `pwd -W` gives, rather than its own /c/....
+OUT="$(cd "$2" && { pwd -W 2>/dev/null || pwd; })"
 readonly OUT
 
 # Build output is noise unless a step fails, which is when all of it matters.
@@ -44,11 +46,15 @@ quietly() {
 }
 
 host_target() {
+  # Git Bash and MSYS2 name Windows MINGW64_NT-<version> or MSYS_NT-<version>, by the shell's
+  # environment rather than the host, so only the prefix is matched.
   case "$(uname -s)-$(uname -m)" in
     Linux-x86_64) echo x86_64-unknown-linux-gnu ;;
     Linux-aarch64 | Linux-arm64) echo aarch64-unknown-linux-gnu ;;
     Darwin-x86_64) echo x86_64-apple-darwin ;;
     Darwin-arm64) echo aarch64-apple-darwin ;;
+    MINGW*-x86_64 | MSYS*-x86_64 | CYGWIN*-x86_64) echo x86_64-pc-windows-msvc ;;
+    MINGW*-aarch64 | MSYS*-aarch64 | CYGWIN*-aarch64 | MINGW*-arm64 | MSYS*-arm64 | CYGWIN*-arm64) echo aarch64-pc-windows-msvc ;;
     *) usage "this host ($(uname -s)-$(uname -m)) is not a platform the release ships" ;;
   esac
 }
@@ -59,7 +65,17 @@ npm_platform() {
     aarch64-unknown-linux-gnu) echo linux-arm64 ;;
     x86_64-apple-darwin) echo darwin-x64 ;;
     aarch64-apple-darwin) echo darwin-arm64 ;;
+    x86_64-pc-windows-msvc) echo win32-x64 ;;
+    aarch64-pc-windows-msvc) echo win32-arm64 ;;
     *) usage "$1 is not a Rust target the release ships" ;;
+  esac
+}
+
+# The binary's file name on the target: Windows executables end in .exe.
+binary_name() {
+  case "$1" in
+    *-windows-*) echo onebudgetspec.exe ;;
+    *) echo onebudgetspec ;;
   esac
 }
 
@@ -84,12 +100,13 @@ case "$ARTIFACT" in
   npm-carrier)
     [ -n "$TARGET" ] || TARGET="$(host_target)"
     platform="$(npm_platform "$TARGET")"
+    binary="$(binary_name "$TARGET")"
     quietly cargo build --release --locked --quiet -p onebudgetspec --target "$TARGET" \
       --manifest-path "$ROOT/Cargo.toml"
     stage="$(mktemp -d)"
     mkdir -p "$stage/bin"
     cp "$ROOT/npm/platforms/$platform/package.json" "$stage/package.json"
-    cp "$ROOT/target/$TARGET/release/onebudgetspec" "$stage/bin/onebudgetspec"
+    cp "$ROOT/target/$TARGET/release/$binary" "$stage/bin/$binary"
     quietly npm pack "$stage" --silent --pack-destination "$OUT"
     rm -rf "$stage"
     written_since_start "$OUT" '*.tgz'

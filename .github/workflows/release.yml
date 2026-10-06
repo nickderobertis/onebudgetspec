@@ -23,7 +23,13 @@ jobs:
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
           - { os: macos-latest, target: aarch64-apple-darwin }
           - { os: macos-latest, target: x86_64-apple-darwin }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
+    # Git Bash on the Windows rows, so every row runs the one build script the same way.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       # rust-toolchain.toml pins the toolchain and every release target.
@@ -178,8 +184,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Every registry published this release
         env:
@@ -198,9 +207,12 @@ jobs:
           TAG: ${{ github.event.release.tag_name }}
         run: |
           expected="onebudgetspec ${TAG#v}"
-          python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install onebudgetspec-cli
-          [ "$("$RUNNER_TEMP/venv/bin/onebudgetspec" --version)" = "$expected" ]
+          # A Windows virtual environment keeps its programs in Scripts, and its Python is
+          # `python`.
+          if [ "$RUNNER_OS" = Windows ]; then python=python bin=Scripts; else python=python3 bin=bin; fi
+          "$python" -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/$bin/pip" install onebudgetspec-cli
+          [ "$("$RUNNER_TEMP/venv/$bin/onebudgetspec" --version)" = "$expected" ]
           mkdir "$RUNNER_TEMP/project" && cd "$RUNNER_TEMP/project" && npm init -y >/dev/null
           npm install --save-dev @onebudgetspec/cli
           [ "$(npx onebudgetspec --version)" = "$expected" ]

@@ -28,7 +28,14 @@ def test_the_release_declaration_matches_the_workflow() -> None:
 
 def test_the_platform_lists_agree() -> None:
     assert release.platform_problems() == []
-    assert release.carrier_platforms() == {"linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"}
+    assert release.carrier_platforms() == {
+        "linux-x64",
+        "linux-arm64",
+        "darwin-x64",
+        "darwin-arm64",
+        "win32-x64",
+        "win32-arm64",
+    }
 
 
 def test_a_renamed_target_and_a_wrong_manifest_are_named(tmp_path: Path) -> None:
@@ -84,8 +91,81 @@ def test_a_release_target_missing_from_the_toolchain_is_named(tmp_path: Path) ->
     toolchain = root / "rust-toolchain.toml"
     toolchain.write_text(toolchain.read_text().replace('    "x86_64-apple-darwin",\n', ""))
     assert release.platform_problems(root) == [
-        "rust-toolchain.toml lists ['darwin-arm64', 'linux-arm64', 'linux-x64']; "
-        "npm/platforms holds ['darwin-arm64', 'darwin-x64', 'linux-arm64', 'linux-x64']"
+        "rust-toolchain.toml lists ['darwin-arm64', 'linux-arm64', 'linux-x64', 'win32-arm64', "
+        "'win32-x64']; npm/platforms holds ['darwin-arm64', 'darwin-x64', 'linux-arm64', "
+        "'linux-x64', 'win32-arm64', 'win32-x64']"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("path", "line", "where"),
+    [
+        (
+            "rust-toolchain.toml",
+            '    "aarch64-pc-windows-msvc",\n',
+            "rust-toolchain.toml",
+        ),
+        (
+            "scripts/build-dist.sh",
+            "    aarch64-pc-windows-msvc) echo win32-arm64 ;;\n",
+            "scripts/build-dist.sh",
+        ),
+        (
+            "scripts/build-dist.sh",
+            "    MINGW*-aarch64 | MSYS*-aarch64 | CYGWIN*-aarch64 | MINGW*-arm64 | MSYS*-arm64 "
+            "| CYGWIN*-arm64) echo aarch64-pc-windows-msvc ;;\n",
+            "scripts/build-dist.sh's host_target",
+        ),
+        (
+            ".github/workflows/release.yml",
+            "          - { os: windows-11-arm, target: aarch64-pc-windows-msvc }\n",
+            ".github/workflows/release.yml",
+        ),
+        (
+            "npm/cli/package.json",
+            '    "@onebudgetspec/cli-win32-x64": "workspace:*",\n',
+            "npm/cli/package.json",
+        ),
+        (
+            "crates/onebudgetspec-packaging-e2e/project.json",
+            '    "npm-cli-win32-arm64",\n',
+            "crates/onebudgetspec-packaging-e2e/project.json",
+        ),
+        (
+            "crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs",
+            '        ("windows", "aarch64") => "win32-arm64",\n',
+            "crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs",
+        ),
+    ],
+)
+def test_a_windows_platform_missing_from_one_place_is_named(
+    tmp_path: Path, path: str, line: str, where: str
+) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    listing = root / path
+    text = listing.read_text()
+    assert line in text, f"{path} no longer holds {line!r}; update this test"
+    listing.write_text(text.replace(line, ""))
+    problems = release.platform_problems(root)
+    named = [problem for problem in problems if problem.startswith(f"{where} lists")]
+    assert named, problems
+    # The listing named lacks the dropped platform, which npm/platforms still holds.
+    dropped = "win32-x64" if "win32-x64" in line else "win32-arm64"
+    assert all(f"'{dropped}'" not in problem.split(";")[0] for problem in named), named
+
+
+def test_a_windows_platform_missing_from_the_version_check_is_named(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        release.versions,
+        "PLATFORMS",
+        tuple(p for p in release.versions.PLATFORMS if p != "win32-x64"),
+    )
+    assert release.platform_problems() == [
+        "tools/src/repo_checks/versions.py lists ['darwin-arm64', 'darwin-x64', 'linux-arm64', "
+        "'linux-x64', 'win32-arm64']; npm/platforms holds ['darwin-arm64', 'darwin-x64', "
+        "'linux-arm64', 'linux-x64', 'win32-arm64', 'win32-x64']"
     ]
 
 

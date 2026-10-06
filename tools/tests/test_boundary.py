@@ -68,7 +68,14 @@ def test_it_reads_every_shipped_part_and_resolves_dependencies() -> None:
     assert {"onebudgetspec-cli", "onebudgetspec-sdk"} <= boundary.uv_dependencies()
     assert boundary.launcher_dependencies() == {
         f"@onebudgetspec/cli-{platform}"
-        for platform in ("linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64")
+        for platform in (
+            "linux-x64",
+            "linux-arm64",
+            "darwin-x64",
+            "darwin-arm64",
+            "win32-x64",
+            "win32-arm64",
+        )
     }
 
 

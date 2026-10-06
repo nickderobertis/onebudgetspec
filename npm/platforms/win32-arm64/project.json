@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "npm-cli-win32-arm64",
+  "projectType": "library",
+  "tags": ["lang:javascript", "type:distribution"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "js"]
+  },
+  "//": "The @onebudgetspec/cli-win32-arm64 carrier: this manifest plus the binary scripts/build-dist.sh builds for aarch64-pc-windows-msvc. `build` needs a host that can build that target, which is why it is not part of any gate.",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash scripts/build-dist.sh npm-carrier dist/carriers aarch64-pc-windows-msvc"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format --write npm/platforms/win32-arm64"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format npm/platforms/win32-arm64"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome lint --error-on-warnings npm/platforms/win32-arm64"
+      }
+    }
+  }
+}
