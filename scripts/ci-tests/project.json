@@ -6,7 +6,7 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "python"]
   },
-  "//": "The gate's scripts driven for real: ci-base.sh over real git histories, and build-dist.sh naming the artifact it built beside earlier builds. Its test target's inputs are those two scripts alone, so no other script's change selects it.",
+  "//": "The gate's and the release's scripts driven for real: ci-base.sh over real git histories, build-dist.sh naming the artifact it built beside earlier builds, and sync-release-pr.sh bumping a release branch pushed to a local origin. Its test target's inputs are those scripts and what sync-release-pr.sh reads and writes, so no other script's change selects it.",
   "targets": {
     "format": {
       "executor": "nx:run-commands",
@@ -41,7 +41,14 @@
       "inputs": [
         "default",
         "{workspaceRoot}/scripts/ci-base.sh",
-        "{workspaceRoot}/scripts/build-dist.sh"
+        "{workspaceRoot}/scripts/build-dist.sh",
+        "{workspaceRoot}/scripts/sync-release-pr.sh",
+        "{workspaceRoot}/tools/src/repo_checks/versions.py",
+        "{workspaceRoot}/justfile",
+        "{workspaceRoot}/bun.lock",
+        "{workspaceRoot}/uv.lock",
+        "{workspaceRoot}/Cargo.toml",
+        "{workspaceRoot}/Cargo.lock"
       ]
     }
   }
