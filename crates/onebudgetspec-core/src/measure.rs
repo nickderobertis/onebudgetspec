@@ -1,12 +1,12 @@
 //! Measuring the selected budgets: each once, in file order, one at a time.
 //!
 //! Every command runs from the directory holding its budgets file, with the environment
-//! inherited, no shell, and its stdout and stderr sent to this process's stderr so they
+//! inherited, no shell, and its stdout and stderr copied to this process's stderr so they
 //! never mix with a report on stdout. A command that fails, or whose result cannot be
 //! read, has the tail of its stderr kept in the reason recorded for it.
 
 use std::collections::{BTreeMap, VecDeque};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
@@ -34,8 +34,15 @@ impl SelectedBudgets<'_> {
     /// Each file's condition commands run once, just before the first of its budgets is
     /// measured, and their values are recorded beside every result from that file and no
     /// other.
+    ///
+    /// On Windows this process's standard handles are first made uninheritable, so that a
+    /// process a command leaves running cannot hold this process's own output open; a child
+    /// this process starts later is still handed them, as `std::process` and the like
+    /// hand a child its streams, explicitly.
     #[must_use]
     pub fn check(&self) -> CheckReport {
+        #[cfg(windows)]
+        keep_standard_handles();
         let mut declared: Vec<(&Path, BTreeMap<String, String>)> = Vec::new();
         let mut results = Vec::with_capacity(self.entries.len());
         for selected in &self.entries {
@@ -51,6 +58,29 @@ impl SelectedBudgets<'_> {
         CheckReport {
             schema_version: SCHEMA_VERSION,
             results,
+        }
+    }
+}
+
+/// Make this process's standard handles uninheritable. Windows hands a new process every
+/// inheritable handle of its parent's, not only the streams it is given, and a command
+/// passes them on in turn to whatever it starts: a process left running would otherwise
+/// hold this process's stdout and stderr open after it exits, and whoever reads them to
+/// their end would wait for it.
+#[cfg(windows)]
+fn keep_standard_handles() {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::{HANDLE_FLAG_INHERIT, SetHandleInformation};
+    for handle in [
+        io::stdin().as_raw_handle(),
+        io::stdout().as_raw_handle(),
+        io::stderr().as_raw_handle(),
+    ] {
+        // SAFETY: the handle is this process's own standard handle, or null when it has
+        // none, which the call refuses without touching anything. A refusal leaves the
+        // handle as it was: inheritable only if it already was.
+        unsafe {
+            SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0);
         }
     }
 }
@@ -77,23 +107,30 @@ fn run_conditions(file: &LoadedFile) -> BTreeMap<String, String> {
 }
 
 fn run_condition(dir: &Path, argv: &[String]) -> Result<String, String> {
-    let mut command = command(dir, argv);
-    command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = command
+    let mut child = command(dir, argv)
         .spawn()
         .map_err(|error| format!("cannot run {}: {error}", argv[0]))?;
+    // The value is the command's stdout, read here rather than passed through.
+    let value_pipe = child.stdout.take();
     let tee = StderrTee::start(&mut child, &Tree::Alone, &argv[0])?;
-    let output = child
-        .wait_with_output()
+    let mut value = Vec::new();
+    if let Some(mut pipe) = value_pipe {
+        // llmlint: ignore[changed_behavior_has_e2e] reading a pipe this process holds fails only when the OS fails the read, which no journey can bring about; the command is reaped and the OS's reason recorded.
+        if let Err(error) = pipe.read_to_end(&mut value) {
+            Tree::Alone.kill(&mut child);
+            return Err(format!("cannot read the stdout of {}: {error}", argv[0]));
+        }
+    }
+    let status = child
+        .wait()
         .map_err(|error| format!("cannot wait for {}: {error}", argv[0]))?;
     let stderr = tee.finish();
-    // The value is the command's stdout, and like every command's output it reaches this
-    // process's stderr too.
-    let _ = io::stderr().write_all(&output.stdout);
-    if !output.status.success() {
-        return Err(with_stderr(describe_exit(&argv[0], output.status), &stderr));
+    // Like every command's output, the value reaches this process's stderr too.
+    let _ = io::stderr().write_all(&value);
+    if !status.success() {
+        return Err(with_stderr(describe_exit(&argv[0], status), &stderr));
     }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+    Ok(String::from_utf8_lossy(&value).trim().to_owned())
 }
 
 /// What a successful measurement found.
@@ -342,6 +379,11 @@ fn kind(value: &Value) -> &'static str {
 /// The command for `argv`, run from `dir` with no shell. A program named by a relative
 /// path with more than one component is resolved against `dir`, the directory holding the
 /// budgets file, so it means the same thing wherever `onebudgetspec` is invoked from.
+///
+/// Its stdout and stderr are pipes of this process's, never this process's own streams:
+/// a process the command leaves running then holds only those pipes, which are not waited
+/// for past [`STDERR_DRAIN`], rather than holding this process's output open after it
+/// exits for whoever reads it to its end.
 fn command(dir: &Path, argv: &[String]) -> Command {
     let program = Path::new(&argv[0]);
     let program = if program.is_relative() && program.components().count() > 1 {
@@ -354,13 +396,9 @@ fn command(dir: &Path, argv: &[String]) -> Command {
         .args(&argv[1..])
         .current_dir(dir)
         .stdin(Stdio::null())
-        .stdout(stderr())
-        .stderr(stderr());
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     command
-}
-
-fn stderr() -> Stdio {
-    Stdio::from(io::stderr())
 }
 
 /// A command that ran to completion.
@@ -381,7 +419,7 @@ impl Finished {
     }
 }
 
-/// Run `command` to completion, killing it once `timeout` passes, with its stderr passed
+/// Run `command` to completion, killing it once `timeout` passes, with its output passed
 /// through a [`StderrTee`].
 fn run(
     command: &mut Command,
@@ -397,7 +435,6 @@ fn run(
     };
     let started = Instant::now();
     let mut child = command
-        .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("cannot run {program}: {error}"))?;
     if let Err(error) = processes.adopt(&child) {
@@ -637,39 +674,52 @@ const STDERR_TAIL_CHARS: usize = 1000;
 /// The raw bytes kept to make that tail: enough for every character to take four.
 const STDERR_TAIL_BYTES: usize = STDERR_TAIL_CHARS * 4;
 
-/// How long a command's stderr is still read once the command has exited. The pipe closes
-/// as soon as nothing holds it open; a process the command left running may hold it for
-/// ever, and is not waited for.
+/// How long a command's stdout and stderr are still read once the command has exited. A
+/// pipe closes as soon as nothing holds it open; a process the command left running may
+/// hold it for ever, and is not waited for.
 const STDERR_DRAIN: Duration = Duration::from_millis(250);
 
 /// A command's stderr, written through to this process's stderr as it arrives, with its
-/// tail kept for the reason a failure records.
+/// tail kept for the reason a failure records; and its stdout, when piped and not taken
+/// first, written through the same way.
 struct StderrTee {
     tail: Arc<Mutex<StderrTail>>,
     closed: mpsc::Receiver<()>,
+    /// How many pipes are being read: each sends on `closed` once it closes.
+    reading: usize,
 }
 
 impl StderrTee {
-    /// Start reading `child`'s piped stderr. When no thread can be started to read it,
-    /// `child` is killed, since nothing would drain the pipe, and the reason is returned.
+    /// Start reading `child`'s piped stdout and stderr. When no thread can be started to
+    /// read one, `child` is killed, since nothing would drain the pipe, and the reason is
+    /// returned.
     fn start(child: &mut Child, tree: &Tree, program: &str) -> Result<Self, String> {
         let tail = Arc::new(Mutex::new(StderrTail::default()));
-        // With no pipe the sender is dropped here, so `finish` does not wait.
         let (sender, closed) = mpsc::channel();
-        if let Some(mut pipe) = child.stderr.take() {
-            let mut through = StderrThrough(Arc::clone(&tail));
-            let reader = std::thread::Builder::new().spawn(move || {
-                // A pipe that cannot be read further ends the reading like its close does.
-                let _ = io::copy(&mut pipe, &mut through);
-                let _ = sender.send(());
-            });
+        let mut reading = 0;
+        let started = [
+            child
+                .stdout
+                .take()
+                .map(|pipe| ("stdout", read_through(pipe, None, &sender))),
+            child
+                .stderr
+                .take()
+                .map(|pipe| ("stderr", read_through(pipe, Some(&tail), &sender))),
+        ];
+        for (stream, reader) in started.into_iter().flatten() {
             // llmlint: ignore[changed_behavior_has_e2e] a thread fails to start only when the OS is out of threads or memory, which no journey can bring about without destabilising the run around it; this path kills the command and records the OS's reason.
             if let Err(error) = reader {
                 tree.kill(child);
-                return Err(format!("cannot read the stderr of {program}: {error}"));
+                return Err(format!("cannot read the {stream} of {program}: {error}"));
             }
+            reading += 1;
         }
-        Ok(Self { tail, closed })
+        Ok(Self {
+            tail,
+            closed,
+            reading,
+        })
     }
 
     /// The tail of what the command wrote to stderr, once it has exited: decoded lossily,
@@ -677,7 +727,13 @@ impl StderrTee {
     /// control character made a space. Past [`STDERR_TAIL_CHARS`] characters only the last
     /// that many are kept, after a leading `…`. Empty when it wrote nothing but whitespace.
     fn finish(self) -> String {
-        let _ = self.closed.recv_timeout(STDERR_DRAIN);
+        let deadline = Instant::now() + STDERR_DRAIN;
+        for _ in 0..self.reading {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if self.closed.recv_timeout(left).is_err() {
+                break;
+            }
+        }
         self.tail
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
@@ -685,17 +741,37 @@ impl StderrTee {
     }
 }
 
-/// Where a [`StderrTee`] copies the pipe to: this process's stderr and the tail.
-struct StderrThrough(Arc<Mutex<StderrTail>>);
+/// Copy `pipe` to this process's stderr, and into `tail` when given, on a thread of its own
+/// that sends on `closed` once the pipe closes.
+fn read_through(
+    mut pipe: impl Read + Send + 'static,
+    tail: Option<&Arc<Mutex<StderrTail>>>,
+    closed: &mpsc::Sender<()>,
+) -> io::Result<()> {
+    let mut through = StderrThrough(tail.map(Arc::clone));
+    let closed = closed.clone();
+    std::thread::Builder::new()
+        .spawn(move || {
+            // A pipe that cannot be read further ends the reading like its close does.
+            let _ = io::copy(&mut pipe, &mut through);
+            let _ = closed.send(());
+        })
+        .map(drop)
+}
+
+/// Where a [`StderrTee`] copies a pipe to: this process's stderr, and for the command's
+/// stderr the tail.
+struct StderrThrough(Option<Arc<Mutex<StderrTail>>>);
 
 impl Write for StderrThrough {
     fn write(&mut self, chunk: &[u8]) -> io::Result<usize> {
         // This process's stderr failing must not stop the tail being kept.
         let _ = io::stderr().write_all(chunk);
-        self.0
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .push(chunk);
+        if let Some(tail) = &self.0 {
+            tail.lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .push(chunk);
+        }
         Ok(chunk.len())
     }
 
