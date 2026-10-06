@@ -6,8 +6,8 @@
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "rust"]
   },
-  "//": "The journeys: the built binary driven over real budgets files. Behind its own edge, so only a change that can reach the binary runs them.",
-  "implicitDependencies": ["onebudgetspec"],
+  "//": "The journeys: the built binary driven over real budgets files, and a program of its own that reports through the Rust SDK under it. Behind its own edge, so only a change that can reach the binary or the SDK runs them.",
+  "implicitDependencies": ["onebudgetspec", "onebudgetspec-core"],
   "targets": {
     "format": {
       "executor": "nx:run-commands",
