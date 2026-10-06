@@ -350,3 +350,47 @@ def artifact_problems(root: Path = ROOT) -> list[str]:
                         f"({', '.join(sorted(packages[artifact]))}), not {sorted(publishes)}"
                     )
     return problems
+
+
+#: The file pinning the Node a release job packs npm packages with.
+NODE_VERSION_FILE = ".node-version"
+
+
+def node_setup_problems(root: Path = ROOT) -> list[str]:
+    """Every release.yml job that packs an npm carrier without first setting up pinned Node.
+
+    The carrier is packed with npm, which a runner image need not carry, so the job must run
+    ``actions/setup-node`` reading :data:`NODE_VERSION_FILE` before the step that builds it.
+    """
+    if not (root / NODE_VERSION_FILE).is_file():
+        return [f"{NODE_VERSION_FILE} does not exist, so no release job can set Node up from it"]
+    document = yaml.safe_load((root / ".github/workflows/release.yml").read_text())
+    jobs = document.get("jobs") if isinstance(document, dict) else None
+    if not isinstance(jobs, dict):
+        return [".github/workflows/release.yml: `jobs` is not a mapping of jobs"]
+    problems: list[str] = []
+    for name, body in jobs.items():
+        steps = body.get("steps", []) if isinstance(body, dict) else []
+        steps = (
+            [step for step in steps if isinstance(step, dict)] if isinstance(steps, list) else []
+        )
+        builds = [
+            index
+            for index, step in enumerate(steps)
+            if "build-dist.sh npm-carrier" in str(step.get("run", ""))
+        ]
+        if not builds:
+            continue
+        setups = [
+            index
+            for index, step in enumerate(steps)
+            if str(step.get("uses", "")).startswith("actions/setup-node@")
+            and isinstance(step.get("with"), dict)
+            and step["with"].get("node-version-file") == NODE_VERSION_FILE
+        ]
+        if not setups or setups[0] > builds[0]:
+            problems.append(
+                f"release.yml job {name} packs an npm carrier without first running "
+                f"actions/setup-node with node-version-file: {NODE_VERSION_FILE}"
+            )
+    return problems

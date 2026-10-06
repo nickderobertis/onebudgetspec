@@ -1,14 +1,17 @@
 """release-targets.toml and every platform list agree with what actually releases."""
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+import yaml
 from conftest import copy_tree
 
 from repo_checks import release
 
 FILES = (
+    ".node-version",
     "release-targets.toml",
     "rust-toolchain.toml",
     "README.md",
@@ -296,3 +299,59 @@ def test_a_job_or_step_of_another_shape_publishes_nothing(tmp_path: Path) -> Non
         "  publish:\n    steps:\n      - bash scripts/release/publish.sh sdk-npm dist/sdk-npm\n"
     )
     assert release.artifact_problems(root) == []
+
+
+def test_the_carrier_build_sets_up_pinned_node() -> None:
+    assert release.node_setup_problems() == []
+
+
+@pytest.mark.parametrize(
+    ("change", "reason"),
+    [
+        (
+            lambda text: text.replace(
+                "      - uses: actions/setup-node@v6\n"
+                "        with:\n"
+                "          node-version-file: .node-version\n",
+                "",
+            ),
+            "release.yml job native packs an npm carrier without first running actions/setup-node",
+        ),
+        (
+            lambda text: text.replace("node-version-file: .node-version", "node-version: latest"),
+            "release.yml job native packs an npm carrier without first running actions/setup-node",
+        ),
+    ],
+)
+def test_a_carrier_build_without_pinned_node_is_named(
+    tmp_path: Path, change: Callable[[str], str], reason: str
+) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    workflow = root / ".github/workflows/release.yml"
+    before = workflow.read_text()
+    after = change(before)
+    assert after != before, "the release workflow no longer has the step this test removes"
+    workflow.write_text(after)
+    problems = release.node_setup_problems(root)
+    assert len(problems) == 1, problems
+    assert problems[0].startswith(reason), problems
+
+
+def test_a_setup_after_the_carrier_build_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    workflow = root / ".github/workflows/release.yml"
+    document = yaml.safe_load(workflow.read_text())
+    steps = document["jobs"]["native"]["steps"]
+    setup = next(s for s in steps if str(s.get("uses", "")).startswith("actions/setup-node@"))
+    steps.remove(setup)
+    steps.append(setup)
+    workflow.write_text(yaml.safe_dump(document))
+    assert len(release.node_setup_problems(root)) == 1
+
+
+def test_a_missing_node_version_file_is_named(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, *FILES)
+    (root / ".node-version").unlink()
+    assert release.node_setup_problems(root) == [
+        ".node-version does not exist, so no release job can set Node up from it"
+    ]

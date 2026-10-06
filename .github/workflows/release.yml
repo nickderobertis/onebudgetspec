@@ -35,6 +35,11 @@ jobs:
       # rust-toolchain.toml pins the toolchain and every release target.
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - uses: astral-sh/setup-uv@v7
+      # The carrier is packed with npm, set up from the pinned version rather than whatever
+      # a runner image carries (windows-11-arm documents no Node).
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
       - name: Build the wheel and the npm carrier
         env:
           TARGET: ${{ matrix.target }}
