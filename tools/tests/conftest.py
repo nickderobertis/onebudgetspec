@@ -1,5 +1,6 @@
 """Shared fixtures: the built binary and temporary copies of the repository."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -12,7 +13,7 @@ from repo_checks.paths import ROOT
 @pytest.fixture(scope="session")
 def binary() -> Path:
     """The cargo-built ``onebudgetspec``; Nx's repo-checks:test depends on that build."""
-    path = ROOT / "target" / "debug" / "onebudgetspec"
+    path = ROOT / "target" / "debug" / ("onebudgetspec.exe" if os.name == "nt" else "onebudgetspec")
     assert path.is_file(), f"{path} is missing; build it with `cargo build -p onebudgetspec`"
     return path
 

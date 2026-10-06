@@ -1,0 +1,4 @@
+# LF in the index and in every working tree, on every platform. Git for Windows defaults to
+# `core.autocrlf=true`, which would check the tree out as CRLF there: biome formats to LF,
+# so `just format-check` would fail, and bash cannot run a script with CRLF line endings.
+* text=auto eol=lf
