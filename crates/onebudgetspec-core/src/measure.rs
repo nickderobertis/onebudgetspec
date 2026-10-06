@@ -6,7 +6,7 @@
 //! read, has the tail of its stderr kept in the reason recorded for it.
 
 use std::collections::{BTreeMap, VecDeque};
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
@@ -479,25 +479,13 @@ impl StderrTee {
         // With no pipe the sender is dropped here, so `finish` does not wait.
         let (sender, closed) = mpsc::channel();
         if let Some(mut pipe) = child.stderr.take() {
-            let kept = Arc::clone(&tail);
+            let mut through = StderrThrough(Arc::clone(&tail));
             let reader = std::thread::Builder::new().spawn(move || {
-                let mut buffer = [0_u8; 8192];
-                loop {
-                    match pipe.read(&mut buffer) {
-                        Ok(0) => break,
-                        Ok(read) => {
-                            let chunk = &buffer[..read];
-                            let _ = io::stderr().write_all(chunk);
-                            kept.lock()
-                                .unwrap_or_else(PoisonError::into_inner)
-                                .push(chunk);
-                        }
-                        Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
-                        Err(_) => break,
-                    }
-                }
+                // A pipe that cannot be read further ends the reading like its close does.
+                let _ = io::copy(&mut pipe, &mut through);
                 let _ = sender.send(());
             });
+            // llmlint: ignore[changed_behavior_has_e2e] a thread fails to start only when the OS is out of threads or memory, which no journey can bring about without destabilising the run around it; this path kills the command and records the OS's reason.
             if let Err(error) = reader {
                 kill(child);
                 return Err(format!("cannot read the stderr of {program}: {error}"));
@@ -516,6 +504,25 @@ impl StderrTee {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .text()
+    }
+}
+
+/// Where a [`StderrTee`] copies the pipe to: this process's stderr and the tail.
+struct StderrThrough(Arc<Mutex<StderrTail>>);
+
+impl Write for StderrThrough {
+    fn write(&mut self, chunk: &[u8]) -> io::Result<usize> {
+        // This process's stderr failing must not stop the tail being kept.
+        let _ = io::stderr().write_all(chunk);
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .push(chunk);
+        Ok(chunk.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }
 

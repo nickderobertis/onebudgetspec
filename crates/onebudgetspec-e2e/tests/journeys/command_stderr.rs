@@ -396,14 +396,26 @@ fn the_bound_counts_characters_whatever_their_bytes() {
                 "elapsed",
                 &json!(["sh", "-c", "printf '1%01000d' 0 >&2; exit 1"]),
             ),
-            // Two bytes a character, past the bytes kept, so the cut splits one.
+            // 4001 bytes: the 4000 kept start inside `€`, whose remaining bytes are dropped
+            // rather than decoded as replacement characters; the blank lines after it are
+            // dropped too, so nothing else pushes them out of the tail.
+            budget(
+                "split",
+                "elapsed",
+                &json!([
+                    "sh",
+                    "-c",
+                    "{ printf '€'; printf '%3995s' '' | tr ' ' '\\n'; printf END; } >&2; exit 1"
+                ]),
+            ),
+            // Three bytes a character, past the 4000 bytes kept, so the cut splits one.
             budget(
                 "multibyte",
                 "elapsed",
                 &json!([
                     "sh",
                     "-c",
-                    "i=0; while [ $i -lt 3001 ]; do printf 'é' >&2; i=$((i+1)); done; exit 1"
+                    "i=0; while [ $i -lt 3001 ]; do printf '€' >&2; i=$((i+1)); done; exit 1"
                 ]),
             ),
         ]),
@@ -422,5 +434,6 @@ fn the_bound_counts_characters_whatever_their_bytes() {
     };
     assert_eq!(tail("at-the-bound"), "0".repeat(1000));
     assert_eq!(tail("past-the-bound"), format!("…{}", "0".repeat(1000)));
-    assert_eq!(tail("multibyte"), format!("…{}", "é".repeat(1000)));
+    assert_eq!(tail("split"), "…END");
+    assert_eq!(tail("multibyte"), format!("…{}", "€".repeat(1000)));
 }
