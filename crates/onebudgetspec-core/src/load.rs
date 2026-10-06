@@ -32,7 +32,8 @@ pub(crate) fn matches_condition_name_pattern(name: &str) -> bool {
 pub struct LoadedFile {
     /// Where the file is, as the caller gave it or discovery found it.
     pub path: PathBuf,
-    /// The path as discovered or given; what results report as `file`.
+    /// The path as given, or as discovered with `/` between the components the search
+    /// added; what results report as `file`.
     pub display: String,
     /// The directory holding the file, which every command it names runs from.
     pub dir: PathBuf,
@@ -148,19 +149,32 @@ fn search(root: &Path) -> Result<Vec<Discovered>, String> {
     found.sort();
     Ok(found
         .into_iter()
-        .map(|path| {
-            let shown = if root == Path::new(".") {
-                path.strip_prefix(root)
-                    .map_or(path.clone(), Path::to_path_buf)
-            } else {
-                path.clone()
-            };
-            Discovered {
-                display: shown.to_string_lossy().into_owned(),
-                path,
-            }
+        .map(|path| Discovered {
+            display: shown(root, &path),
+            path,
         })
         .collect())
+}
+
+/// How a file discovery found under `root` is shown: the root as given (dropped when it is
+/// `.`), then the components the search added, joined by `/` on every platform so a report
+/// reads the same wherever it was made.
+fn shown(root: &Path, path: &Path) -> String {
+    let added: Vec<_> = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect();
+    let added = added.join("/");
+    if root == Path::new(".") {
+        return added;
+    }
+    let root = root.to_string_lossy();
+    format!(
+        "{}/{added}",
+        root.trim_end_matches(['/', std::path::MAIN_SEPARATOR])
+    )
 }
 
 /// Discover the files `paths` name, read each, and validate them all.
@@ -397,5 +411,27 @@ fn validate_budget<'a>(
             format!("{key}.timeout_seconds"),
             "must be a positive integer, not 0".into(),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::shown;
+
+    #[test]
+    fn a_discovered_file_reads_with_forward_slashes_after_its_root() {
+        // Joined by the platform, so on Windows the components arrive separated by `\`.
+        let found = Path::new("services").join("api").join("budgets.yaml");
+        assert_eq!(
+            shown(Path::new("services"), &found),
+            "services/api/budgets.yaml"
+        );
+        let below_dot = Path::new(".").join("web").join("budgets.yaml");
+        assert_eq!(shown(Path::new("."), &below_dot), "web/budgets.yaml");
+        let trailing = format!("services{}", std::path::MAIN_SEPARATOR);
+        let found = Path::new(&trailing).join("budgets.yaml");
+        assert_eq!(shown(Path::new(&trailing), &found), "services/budgets.yaml");
     }
 }

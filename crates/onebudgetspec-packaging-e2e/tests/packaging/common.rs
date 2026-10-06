@@ -11,11 +11,84 @@ use serde_json::Value;
 /// The workspace version every distribution releases at.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// The workspace root, two directories above this crate's. Not canonicalized: on Windows
+/// that makes a `\\?\` path, which bash and npm do not read as a path.
 pub fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("the workspace root exists")
+        .ancestors()
+        .nth(2)
+        .expect("the crate is two directories below the workspace root")
+        .to_path_buf()
+}
+
+/// `path` as an argument to bash: with `/` separators, which bash on Windows reads as it
+/// reads its own, where a `\` may be taken as an escape.
+fn bash_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+/// `name` as this platform names a program file: with `.exe` on Windows.
+pub fn exe(name: &str) -> String {
+    format!("{name}{}", std::env::consts::EXE_SUFFIX)
+}
+
+/// The program a shell would run for the bare name `name`: the first match on `PATH`, in
+/// `PATH`'s order, and on Windows as `name.exe` or else `name.cmd` (which is how npm ships).
+fn on_path(name: &str) -> Option<PathBuf> {
+    let suffixes: &[&str] = if cfg!(windows) {
+        &[".exe", ".cmd"]
+    } else {
+        &[""]
+    };
+    std::env::split_paths(&std::env::var_os("PATH")?).find_map(|dir| {
+        suffixes
+            .iter()
+            .map(|suffix| dir.join(format!("{name}{suffix}")))
+            .find(|candidate| candidate.is_file())
+    })
+}
+
+/// The bash `scripts/build-dist.sh` is written for: on Windows, Git's, two directories
+/// above its exec path under `bin`. A bare `bash` there finds the WSL launcher in Windows'
+/// system directory first, which runs nothing without a Linux distribution.
+fn bash() -> PathBuf {
+    if !cfg!(windows) {
+        return PathBuf::from("bash");
+    }
+    let exec_path = succeed("git", &["--exec-path"], Path::new("."));
+    let bash = Path::new(exec_path.trim())
+        .ancestors()
+        .nth(3)
+        .expect("git's exec path is three directories into its installation")
+        .join("bin")
+        .join("bash.exe");
+    assert!(
+        bash.is_file(),
+        "Git for Windows keeps no bash at {}; install Git for Windows, whose bash runs scripts/build-dist.sh",
+        bash.display()
+    );
+    bash
+}
+
+/// A program installed under `node_modules/.bin`: npm links a `.cmd` there on Windows.
+pub fn npm_bin(project: &Path, name: &str) -> PathBuf {
+    let suffix = if cfg!(windows) { ".cmd" } else { "" };
+    project.join(format!("node_modules/.bin/{name}{suffix}"))
+}
+
+/// Where a virtual environment keeps its programs: `Scripts` on Windows, `bin` elsewhere.
+pub fn venv_bin(venv: &Path) -> PathBuf {
+    venv.join(if cfg!(windows) { "Scripts" } else { "bin" })
+}
+
+/// The directory holding the `node` that runs the cases' measuring commands, for a journey
+/// that runs an SDK with a `PATH` of its own.
+pub fn node_dir() -> PathBuf {
+    let node = succeed("node", &["-p", "process.execPath"], Path::new("."));
+    Path::new(node.trim())
+        .parent()
+        .expect("node is in a directory")
+        .to_path_buf()
 }
 
 /// Where the artifacts of this test run are built, shared by every journey in it.
@@ -35,10 +108,10 @@ pub fn artifact(artifact: &str) -> PathBuf {
         return path.clone();
     }
     let out = dist().join(artifact);
-    let output = Command::new("bash")
-        .arg(root().join("scripts/build-dist.sh"))
+    let output = Command::new(bash())
+        .arg(bash_path(&root().join("scripts/build-dist.sh")))
         .arg(artifact)
-        .arg(&out)
+        .arg(bash_path(&out))
         .output()
         .expect("bash runs scripts/build-dist.sh");
     assert!(
@@ -69,9 +142,15 @@ pub fn succeed(program: impl AsRef<std::ffi::OsStr>, args: &[&str], cwd: &Path) 
     String::from_utf8(output.stdout).expect("stdout is UTF-8")
 }
 
+/// Run `program` with `args` from `cwd`. A bare name is found on `PATH` as a shell would.
 pub fn run(program: impl AsRef<std::ffi::OsStr>, args: &[&str], cwd: &Path) -> Output {
     let program = program.as_ref();
-    Command::new(program)
+    let bare = Path::new(program).components().count() == 1;
+    let resolved = bare
+        .then(|| program.to_str().and_then(on_path))
+        .flatten()
+        .map_or_else(|| program.to_owned(), PathBuf::into_os_string);
+    Command::new(&resolved)
         .args(args)
         .current_dir(cwd)
         .output()
@@ -84,11 +163,11 @@ pub fn run(program: impl AsRef<std::ffi::OsStr>, args: &[&str], cwd: &Path) -> O
 }
 
 /// A fresh virtual environment under `dir`, with `wheel` installed from the local file.
-/// Returns the environment's `bin` directory.
+/// Returns the environment's [`venv_bin`] directory.
 pub fn venv_with(dir: &Path, wheel: &Path) -> PathBuf {
     let venv = dir.join("venv");
     succeed("uv", &["venv", "--quiet", venv.to_str().unwrap()], dir);
-    let python = venv.join("bin/python");
+    let python = venv_bin(&venv).join(exe("python"));
     succeed(
         "uv",
         &[
@@ -103,7 +182,7 @@ pub fn venv_with(dir: &Path, wheel: &Path) -> PathBuf {
         ],
         dir,
     );
-    venv.join("bin")
+    venv_bin(&venv)
 }
 
 /// A fresh npm project under `dir` with `tarballs` installed from the local files and no
@@ -135,7 +214,7 @@ pub fn npm_project_with(dir: &Path, tarballs: &[&Path]) -> PathBuf {
 
 /// The cargo-built binary, which an installed entry point must behave exactly like.
 pub fn direct_binary() -> PathBuf {
-    let binary = root().join("target/debug/onebudgetspec");
+    let binary = root().join("target/debug").join(exe("onebudgetspec"));
     assert!(
         binary.is_file(),
         "{} is missing; build it with `cargo build -p onebudgetspec` (Nx's test target depends on that build)",
@@ -155,13 +234,13 @@ pub fn case(dir: &Path) -> PathBuf {
 budgets:
   - id: fast
     measure: reported
-    command: ["sh", "-c", "echo '{\"value\": 2}' > \"$ONEBUDGETSPEC_RESULT\""]
+    command: ["node", "-e", "require('fs').writeFileSync(process.env.ONEBUDGETSPEC_RESULT, '{\"value\": 2}')"]
     unit: ms
     direction: max
     threshold: 5
   - id: slow
     measure: reported
-    command: ["sh", "-c", "echo '{\"value\": 9, \"detail\": \"too slow\"}' > \"$ONEBUDGETSPEC_RESULT\""]
+    command: ["node", "-e", "require('fs').writeFileSync(process.env.ONEBUDGETSPEC_RESULT, '{\"value\": 9, \"detail\": \"too slow\"}')"]
     unit: ms
     direction: max
     threshold: 5

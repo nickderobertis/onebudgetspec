@@ -1,0 +1,23 @@
+{
+  "name": "@onebudgetspec/cli-win32-arm64",
+  "version": "0.1.1",
+  "description": "The onebudgetspec binary for win32-arm64, installed by @onebudgetspec/cli.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nickderobertis/onebudgetspec.git",
+    "directory": "npm/platforms/win32-arm64"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

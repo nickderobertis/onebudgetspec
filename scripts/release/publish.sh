@@ -67,7 +67,8 @@ PY
 
 npm_publish() {
   local target="$1" tarball="$2" identity name version
-  identity="$(tar -xOzf "$tarball" package/package.json | python3 -c 'import json, sys; m = json.load(sys.stdin); print(m["name"], m["version"])')" \
+  # Read from stdin: GNU tar takes a `C:` in a Windows path given as -f for a remote host.
+  identity="$(tar -xOzf - package/package.json <"$tarball" | python3 -c 'import json, sys; m = json.load(sys.stdin); print(m["name"], m["version"])')" \
     || fail "$tarball holds no readable package/package.json" "rebuild it with scripts/build-dist.sh"
   name="${identity% *}"
   version="${identity#* }"

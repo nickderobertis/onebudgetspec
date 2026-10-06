@@ -4,9 +4,7 @@
     {
       "id": "api-latency",
       "file": "budgets.yaml",
-      "labels": [
-        "api"
-      ],
+      "labels": ["api"],
       "unit": "ms",
       "direction": "max",
       "threshold": 200.0,
@@ -28,9 +26,7 @@
     {
       "id": "web-bundle",
       "file": "budgets.yaml",
-      "labels": [
-        "web"
-      ],
+      "labels": ["web"],
       "unit": "kib",
       "direction": "max",
       "threshold": 250.0,

@@ -56,6 +56,26 @@ def test_an_untyped_project_an_unknown_edge_and_a_missing_cargo_edge_are_refused
     )
 
 
+def test_a_command_with_a_glob_outside_bash_is_refused(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, "scripts/project.json", "npm/cli/project.json")
+    _edit(
+        root,
+        "scripts",
+        {"targets": {"lint": {"options": {"command": "shellcheck scripts/*.sh"}}}},
+    )
+    _edit(
+        root,
+        "npm/cli",
+        {"targets": {"lint": {"options": {"commands": [{"command": 'bash -c "ls *.ts"'}]}}}},
+    )
+    found = graph.problems(root)
+    assert (
+        "scripts: `shellcheck scripts/*.sh` has a glob cmd.exe will not expand; "
+        "run it under `bash -c`" in found
+    )
+    assert not any(problem.startswith("npm-cli:") and "glob" in problem for problem in found)
+
+
 def test_a_malformed_or_repeated_project_is_refused(tmp_path: Path) -> None:
     (tmp_path / "a").mkdir()
     (tmp_path / "a/project.json").write_text(json.dumps({"name": "x", "tags": "type:sdk"}))
@@ -64,6 +84,17 @@ def test_a_malformed_or_repeated_project_is_refused(tmp_path: Path) -> None:
     (tmp_path / "a/project.json").write_text(json.dumps({"tags": []}))
     with pytest.raises(graph.InvalidProject, match="no string `name`"):
         graph.projects(tmp_path)
+    for targets, refusal in (
+        ([], "`targets` is not an object"),
+        ({"lint": None}, "target lint is not an object"),
+        ({"lint": {"options": "x"}}, "target lint's `options` is not an object"),
+        ({"lint": {"options": {"commands": "ls *"}}}, "target lint's command\\(s\\) are malformed"),
+        ({"lint": {"options": {"command": 1}}}, "target lint's command\\(s\\) are malformed"),
+        ({"lint": {"options": {"commands": [{"command": 1}]}}}, "a command that is not a string"),
+    ):
+        (tmp_path / "a/project.json").write_text(json.dumps({"name": "x", "targets": targets}))
+        with pytest.raises(graph.InvalidProject, match=refusal):
+            graph.projects(tmp_path)
     (tmp_path / "a/project.json").write_text(json.dumps({"name": "x", "tags": ["type:sdk"]}))
     (tmp_path / "b").mkdir()
     (tmp_path / "b/project.json").write_text(json.dumps({"name": "x", "tags": ["type:sdk"]}))

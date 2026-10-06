@@ -19,6 +19,7 @@ from typing import NamedTuple
 from urllib.parse import unquote
 
 import pytest
+from repo_checks.programs import bash, program
 
 ROOT = Path(__file__).resolve().parents[3]
 
@@ -164,7 +165,7 @@ def test_an_unreachable_registry_is_not_answered() -> None:
 
 def publish(*args: str, **env: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(ROOT / "scripts/release/publish.sh"), *args],
+        [bash(), (ROOT / "scripts/release/publish.sh").as_posix(), *args],
         env={"PATH": os.environ["PATH"], "HOME": os.environ.get("HOME", "/tmp"), **env},
         capture_output=True,
         text=True,
@@ -180,7 +181,7 @@ def pack(tmp_path: Path, name: str, version: str) -> Path:
     out = tmp_path / "packed"
     out.mkdir()
     subprocess.run(
-        ["npm", "pack", str(source), "--silent", "--pack-destination", str(out)],
+        [program("npm"), "pack", str(source), "--silent", "--pack-destination", str(out)],
         check=True,
         capture_output=True,
     )

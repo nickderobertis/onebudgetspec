@@ -5,7 +5,12 @@ binary by `crates/onebudgetspec-conformance/tests/conformance.rs` and runnable u
 runner. The Python and TypeScript SDKs run every case through their own calls
 (`sdks/python/tests/test_conformance.py`, `sdks/typescript/tests/conformance.test.ts`), so a
 case's `args` may use only `--json`, `--id`, `--label`, `--exclude-label`, `--recursive` and
-paths. The cases are data and POSIX shell scripts only.
+paths, a restriction that stays whatever else changes. The cases are data and Node.js scripts
+only: every measuring command (a budget's or a condition's `command`) runs `node`, either
+`["node", "-e", "<js>"]` or `["node", "<script>.cjs", ...]` beside the case, and none needs a
+shell or Unix utilities, so the cases run unchanged on Linux, macOS and Windows. A runner
+needs Node.js on `PATH`. Scripts are `.cjs` so Node reads them as CommonJS wherever the case
+is copied, whatever `package.json` sits above it.
 
 ## A case
 
@@ -18,7 +23,7 @@ Each directory under `cases/` is one case:
   - `timed` (optional): ids whose `actual`, `headroom` and `headroom_percent` are wall-clock
     timings, normalized as below.
   - `error_contains` (optional): for an id, a substring its result's `error` must contain.
-- `budgets.yaml` and any scripts its commands run.
+- `budgets.yaml` and any `.cjs` scripts its commands run with `node`.
 - `expected.json` — present when the case expects a check report on stdout: the report,
   normalized. When absent, stdout must be empty.
 

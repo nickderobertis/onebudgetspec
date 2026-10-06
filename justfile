@@ -6,6 +6,9 @@
 set shell := ["bash", "-uc"]
 # Recipe arguments reach the shell as "$1", "$@", never spliced into its source.
 set positional-arguments
+# Python reads and writes text as UTF-8 on every platform, as it does by default from 3.15;
+# on Windows it would otherwise use the ANSI code page, and fail on this repository's text.
+export PYTHONUTF8 := "1"
 
 
 # List available recipes.

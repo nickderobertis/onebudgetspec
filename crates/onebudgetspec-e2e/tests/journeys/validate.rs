@@ -2,25 +2,35 @@
 
 use serde_json::json;
 
-use crate::common::Fixture;
+use crate::common::{Fixture, write_result};
 
 #[test]
 fn validate_accepts_a_well_formed_file_without_running_anything() {
     let fixture = Fixture::new();
-    fixture.counted("condition.sh", "ran.log", "condition", "echo 1");
-    fixture.counted("budget.sh", "ran.log", "budget", "true");
+    fixture.counted(
+        "condition.js",
+        "ran.log",
+        "condition",
+        "console.log(\"1\");",
+    );
+    fixture.counted(
+        "budget.js",
+        "ran.log",
+        "budget",
+        &write_result(r#"{"value": 1}"#),
+    );
     fixture.budgets(
         "budgets.yaml",
         &json!({
             "schema_version": 1,
-            "conditions": [{ "name": "probe", "command": ["./condition.sh"] }],
+            "conditions": [{ "name": "probe", "command": ["node", "condition.js"] }],
             "budgets": [
                 {
                     "id": "startup",
                     "description": "Cold start of the service.",
                     "labels": ["service"],
                     "measure": "elapsed",
-                    "command": ["./budget.sh"],
+                    "command": ["node", "budget.js"],
                     "unit": "seconds",
                     "direction": "max",
                     "threshold": 2.5,
@@ -29,7 +39,7 @@ fn validate_accepts_a_well_formed_file_without_running_anything() {
                 {
                     "id": "throughput",
                     "measure": "reported",
-                    "command": ["./budget.sh"],
+                    "command": ["node", "budget.js"],
                     "unit": "requests/s",
                     "direction": "min",
                     "threshold": 0,

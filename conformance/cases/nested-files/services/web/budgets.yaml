@@ -3,7 +3,7 @@ budgets:
   - id: web-bundle
     labels: [web]
     measure: reported
-    command: ["sh", "-c", "printf '{\"value\": 300, \"detail\": \"vendor chunk\"}' > \"$ONEBUDGETSPEC_RESULT\""]
+    command: ["node", "-e", "require('node:fs').writeFileSync(process.env.ONEBUDGETSPEC_RESULT, JSON.stringify({ value: 300, detail: 'vendor chunk' }))"]
     unit: kib
     direction: max
     threshold: 250

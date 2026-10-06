@@ -11,13 +11,25 @@
 # The journey and conformance crates spawn the binary, so their runs build the instrumented
 # onebudgetspec beside them and what they cover counts. Quiet on success; on failure the
 # reason and what to do.
+#
+# On Windows a crate's tests run uninstrumented and the floor is not held: LLVM
+# instrumentation there does not attribute coverage from the binary the journeys spawn, so
+# the number would understate it and mean nothing. The tests themselves gate Windows; the
+# Linux and macOS lanes hold the floor over the same code.
 set -euo pipefail
 
 readonly REQUEST="${1:?usage: scripts/rust-coverage.sh --clear | <crate> | --report}"
 readonly MIN_LINES=95
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-for tool in llvm-cov nextest; do
+case "${OS:-}${OSTYPE:-}" in
+  *Windows_NT* | *msys* | *cygwin* | *win32*) windows=true ;;
+  *) windows=false ;;
+esac
+
+tools=(llvm-cov nextest)
+[ "$windows" = false ] || tools=(nextest)
+for tool in "${tools[@]}"; do
   if ! probe="$(cargo "$tool" --version 2>&1)"; then
     printf '%s\n' "$probe" >&2
     echo "rust-coverage: 'cargo $tool' did not run (above); install it with 'cargo binstall cargo-$tool', or fix the error shown, then re-run." >&2
@@ -33,6 +45,11 @@ quietly() {
     return 1
   fi
 }
+
+if [ "$windows" = true ] && { [ "$REQUEST" = --clear ] || [ "$REQUEST" = --report ]; }; then
+  echo "rust-coverage: $REQUEST skipped on Windows (instrumentation there does not attribute the spawned binary's coverage); the Linux and macOS lanes hold the floor" >&2
+  exit 0
+fi
 
 case "$REQUEST" in
   --clear)
@@ -52,6 +69,20 @@ case "$REQUEST" in
     fi
     ;;
   onebudgetspec-core | onebudgetspec | onebudgetspec-e2e | onebudgetspec-conformance)
+    if [ "$windows" = true ]; then
+      if [ "$REQUEST" != onebudgetspec-core ] \
+        && ! build="$(cargo build --locked --quiet -p onebudgetspec 2>&1)"; then
+        printf '%s\n' "$build" >&2
+        echo "rust-coverage: onebudgetspec did not build; fix the error above, then re-run." >&2
+        exit 1
+      fi
+      if ! run="$(cargo nextest run --locked --no-tests=pass --package "$REQUEST" 2>&1)"; then
+        printf '%s\n' "$run" >&2
+        echo "rust-coverage: $REQUEST's tests failed; fix the failures above, then re-run." >&2
+        exit 1
+      fi
+      exit 0
+    fi
     # The binary the journeys and the conformance cases spawn, built instrumented where
     # they look for it (beside their own test executables).
     if [ "$REQUEST" != onebudgetspec-core ] \

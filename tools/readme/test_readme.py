@@ -1,5 +1,6 @@
 """The README's example budgets files are valid, as the built binary reads them."""
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from examples import ROOT
 @pytest.fixture(scope="session")
 def binary() -> Path:
     """The cargo-built onebudgetspec; Nx's readme-examples:test depends on that build."""
-    path = ROOT / "target" / "debug" / "onebudgetspec"
+    path = ROOT / "target" / "debug" / ("onebudgetspec.exe" if os.name == "nt" else "onebudgetspec")
     assert path.is_file(), f"{path} is missing; build it with `cargo build -p onebudgetspec`"
     return path
 

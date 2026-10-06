@@ -28,6 +28,7 @@ fn load1() -> Option<f64> {
     (written >= 1 && averages[0].is_finite()).then_some(averages[0])
 }
 
+// Windows has no load average, so it stays unknown there.
 #[cfg(not(unix))]
 fn load1() -> Option<f64> {
     None
@@ -38,7 +39,28 @@ fn mem_available_mib() -> Option<u64> {
     parse_mem_available(&std::fs::read_to_string("/proc/meminfo").ok()?)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+fn mem_available_mib() -> Option<u64> {
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    let mut status = MEMORYSTATUSEX {
+        dwLength: u32::try_from(size_of::<MEMORYSTATUSEX>()).ok()?,
+        dwMemoryLoad: 0,
+        ullTotalPhys: 0,
+        ullAvailPhys: 0,
+        ullTotalPageFile: 0,
+        ullAvailPageFile: 0,
+        ullTotalVirtual: 0,
+        ullAvailVirtual: 0,
+        ullAvailExtendedVirtual: 0,
+    };
+    // SAFETY: GlobalMemoryStatusEx fills the MEMORYSTATUSEX it is given, whose dwLength is
+    // its own size as the call requires.
+    let filled = unsafe { GlobalMemoryStatusEx(&raw mut status) };
+    (filled != 0).then_some(status.ullAvailPhys / (1024 * 1024))
+}
+
+// macOS reports no available-memory figure this library reads, so it stays unknown there.
+#[cfg(not(any(target_os = "linux", windows)))]
 fn mem_available_mib() -> Option<u64> {
     None
 }

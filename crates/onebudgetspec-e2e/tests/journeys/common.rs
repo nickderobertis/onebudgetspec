@@ -1,6 +1,9 @@
 //! What every journey shares: a temporary directory holding a real `budgets.yaml` and
 //! real commands, the built binary run over it as a subprocess, and the schema every
 //! report it prints must validate against. Nothing is doubled.
+//!
+//! Measuring commands run Node.js, as `node` from `PATH`, or a built program, never a shell
+//! or a Unix utility, so the same journey runs on Linux, macOS and Windows.
 
 use std::ffi::OsStr;
 use std::fs;
@@ -11,8 +14,8 @@ use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 use serde_json::Value;
 
 /// Held while a file is written and while a process is spawned, so the two never overlap.
-/// A process forked while another test thread has a script open for writing inherits that
-/// descriptor until it execs, and running the script meanwhile fails with "text file busy".
+/// A process forked while another test thread has a program open for writing inherits that
+/// descriptor until it execs, and running the program meanwhile fails with "text file busy".
 fn fork_lock() -> MutexGuard<'static, ()> {
     static LOCK: Mutex<()> = Mutex::new(());
     LOCK.lock().unwrap_or_else(PoisonError::into_inner)
@@ -158,22 +161,22 @@ impl Fixture {
         self.dir.path()
     }
 
-    /// Write `text` to `relative`, creating its directories.
+    /// Write `text` to `relative`, creating its directories, under the fork lock.
     pub fn write(&self, relative: &str, text: &str) -> PathBuf {
-        self.write_mode(relative, text, false)
-    }
-
-    /// Write `text` to `relative`, executable when `executable`, under the fork lock.
-    fn write_mode(&self, relative: &str, text: &str, executable: bool) -> PathBuf {
         let path = self.path().join(relative);
         let _writing = fork_lock();
         fs::create_dir_all(path.parent().expect("a file has a directory")).unwrap();
         fs::write(&path, text).unwrap();
-        #[cfg(unix)]
-        if executable {
-            use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        path
+    }
+
+    /// Copy the file at `from` to `relative`, creating its directories, under the fork
+    /// lock, since the copy may be run as a program.
+    pub fn copy(&self, relative: &str, from: &Path) -> PathBuf {
+        let path = self.path().join(relative);
+        let _writing = fork_lock();
+        fs::create_dir_all(path.parent().expect("a file has a directory")).unwrap();
+        fs::copy(from, &path).unwrap();
         path
     }
 
@@ -183,18 +186,22 @@ impl Fixture {
         self.write(relative, &yaml)
     }
 
-    /// Write an executable POSIX shell script.
+    /// Write a Node.js script, run by a command such as `["node", "<relative>"]`.
     pub fn script(&self, relative: &str, body: &str) -> PathBuf {
-        self.write_mode(relative, &format!("#!/bin/sh\n{body}\n"), true)
+        self.write(relative, &format!("\"use strict\";\n{body}\n"))
     }
 
-    /// A script that records each invocation by appending `label` to `log`, then runs
-    /// `body`. Returns its path.
+    /// A Node.js script that records each invocation by appending `label` to `log`, then
+    /// runs `body`. Returns its path.
     pub fn counted(&self, relative: &str, log: &str, label: &str, body: &str) -> PathBuf {
         let log = self.path().join(log);
         self.script(
             relative,
-            &format!("echo {label} >> '{}'\n{body}", log.display()),
+            &format!(
+                "require(\"fs\").appendFileSync({}, {});\n{body}",
+                js(&log.to_string_lossy()),
+                js(&format!("{label}\n"))
+            ),
         )
     }
 
@@ -229,13 +236,37 @@ where
     Run::from(output(&mut command))
 }
 
+/// `text` as a JavaScript string literal.
+pub fn js(text: &str) -> String {
+    serde_json::to_string(text).expect("a string renders as JSON")
+}
+
+/// The argv running `script` with Node.js, `args` following as `process.argv[1..]`.
+pub fn node(script: &str, args: &[&str]) -> Value {
+    let mut command = vec![Value::from("node"), Value::from("-e"), Value::from(script)];
+    command.extend(args.iter().map(|arg| Value::from(*arg)));
+    Value::Array(command)
+}
+
+/// JavaScript that writes `result` (a JSON text) to the file `ONEBUDGETSPEC_RESULT` names.
+pub fn write_result(result: &str) -> String {
+    format!(
+        "require(\"fs\").writeFileSync(process.env.ONEBUDGETSPEC_RESULT, {});",
+        js(result)
+    )
+}
+
 /// The argv of a `reported` command that writes `result` (a JSON text) and exits 0.
 pub fn reports(result: &str) -> Value {
-    serde_json::json!([
-        "sh",
-        "-c",
-        format!("printf '%s' '{result}' > \"$ONEBUDGETSPEC_RESULT\"")
-    ])
+    node(
+        "require(\"fs\").writeFileSync(process.env.ONEBUDGETSPEC_RESULT, process.argv[1]);",
+        &[result],
+    )
+}
+
+/// The argv of a command that writes nothing and exits with `status`.
+pub fn exits(status: i32) -> Value {
+    node(&format!("process.exitCode = {status};"), &[])
 }
 
 /// A `reported` budget writing `value` under `direction` against `threshold`.

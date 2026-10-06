@@ -4,14 +4,26 @@
   "projectType": "library",
   "tags": ["type:contract"],
   "namedInputs": {
-    "default": ["{projectRoot}/**/*", "python"]
+    "default": ["{projectRoot}/**/*", "js"]
   },
-  "//": "The data-only conformance cases: a case is a budgets file, its scripts and the report it must produce, referencing no implementation. onebudgetspec-conformance runs them against the binary, so a change here selects it, and any other runner can take them unchanged.",
+  "//": "The data-only conformance cases: a case is a budgets file, the Node.js scripts its commands run and the report it must produce, referencing no implementation. onebudgetspec-conformance runs them against the binary, so a change here selects it, and any other runner can take them unchanged.",
   "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format --write conformance"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun run biome format conformance"
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync shellcheck conformance/cases/*/*.sh"
+        "command": "bun run biome lint --error-on-warnings conformance"
       }
     }
   }

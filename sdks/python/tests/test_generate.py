@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import ROOT
+from conftest import ROOT, printing, require_symlinks, stand_in
 
 PACKAGE = ROOT / "sdks" / "python"
 GENERATED = Path("src") / "onebudgetspec_sdk" / "_generated"
@@ -92,15 +92,11 @@ def test_check_names_stale_missing_and_extra_files_and_generate_repairs_them(
 
     assert generate(package, built_binary).returncode == 0
     assert contents(package) == committed
+    # Read as bytes, which no platform's newline translation touches: what was rewritten
+    # ends its lines in LF, as committed, on Windows too.
+    for name in ("check_report.py", "list_report.py"):
+        assert b"\r\n" not in (package / GENERATED / name).read_bytes(), name
     assert generate(package, built_binary, "--check").returncode == 0
-
-
-def fake_binary(directory: Path, printed: str) -> Path:
-    """An executable that prints ``printed`` as its schema."""
-    program = directory / "onebudgetspec"
-    program.write_text(f"#!/bin/sh\nprintf '%s' '{printed}'\n")
-    program.chmod(0o755)
-    return program
 
 
 @pytest.mark.parametrize(
@@ -117,7 +113,7 @@ def test_a_bundle_of_another_shape_is_refused_with_a_next_step(
 ) -> None:
     """A binary printing no usable bundle fails generation, naming what to do."""
     before = contents(package)
-    refused = generate(package, fake_binary(tmp_path, printed))
+    refused = generate(package, printing(tmp_path, printed))
     assert refused.returncode == 1
     assert reason in refused.stderr
     assert "run 'just generate'" in refused.stderr
@@ -134,9 +130,7 @@ def test_a_missing_binary_is_refused_with_a_next_step(package: Path, tmp_path: P
 
 def test_a_binary_that_fails_is_refused_with_its_message(package: Path, tmp_path: Path) -> None:
     """A binary exiting non-zero fails generation with its own stderr."""
-    program = tmp_path / "onebudgetspec"
-    program.write_text("#!/bin/sh\necho 'schema: broken' >&2\nexit 3\n")
-    program.chmod(0o755)
+    program = stand_in(tmp_path, "import sys\nsys.stderr.write('schema: broken\\n')\nsys.exit(3)\n")
     refused = generate(package, program)
     assert refused.returncode == 1
     assert "schema: broken" in refused.stderr
@@ -189,6 +183,7 @@ def test_check_names_unexpected_entries_of_any_kind_and_generate_removes_them(
     package: Path, built_binary: Path, tmp_path: Path
 ) -> None:
     """Extras of any kind are named and removed; a link's target and the cache are kept."""
+    require_symlinks(tmp_path)
     committed = contents(package)
     generated = package / GENERATED
     (generated / "stray.json").write_text("{}\n")
@@ -222,6 +217,7 @@ def test_a_directory_or_link_where_a_model_belongs_is_stale_and_replaced(
     package: Path, built_binary: Path, tmp_path: Path
 ) -> None:
     """A model's name held by a directory or a symlink is named stale, never read through."""
+    require_symlinks(tmp_path)
     committed = contents(package)
     generated = package / GENERATED
     (generated / "check_report.py").unlink()

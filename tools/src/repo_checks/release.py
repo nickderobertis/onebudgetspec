@@ -13,6 +13,7 @@ from typing import NamedTuple, NewType, NotRequired, TypedDict, cast
 
 import yaml
 
+from repo_checks import versions
 from repo_checks.paths import ROOT
 
 #: A registry-qualified target id, ``<registry>:<name>``.
@@ -148,7 +149,12 @@ def target_problems(root: Path = ROOT) -> list[str]:
 
 
 def platform_problems(root: Path = ROOT) -> list[str]:
-    """Every place the shipped platforms are listed that disagrees with the carriers."""
+    """Every place the shipped platforms are listed that disagrees with the carriers.
+
+    The places: the launcher, its manifest, the build script's target mapping and the host
+    targets it detects, the release matrix, the pinned toolchain, the packaging journeys'
+    project and their host mapping, and the version check's own list.
+    """
     carriers = sorted(carrier_platforms(root))
     launcher = (root / "npm/cli/lib/launcher.js").read_text()
     listed = re.search(r"const CARRIERS = \[([^\]]*)\]", launcher)
@@ -163,12 +169,35 @@ def platform_problems(root: Path = ROOT) -> list[str]:
         re.findall(r"^\s+([a-z0-9_]+-[a-z0-9_-]+)\) echo ([a-z0-9]+-[a-z0-9]+) ;;$", build, re.M)
     )
     in_build = sorted(mapping.values())
+    detected = re.search(r"^host_target\(\) \{\n(.*?)^\}", build, re.M | re.S)
+    in_hosts = (
+        sorted(
+            mapping.get(target, f"unmapped {target}")
+            for target in re.findall(
+                r"\) echo ([a-z0-9_]+-[a-z0-9_-]+) ;;$", detected.group(1), re.M
+            )
+        )
+        if detected
+        else []
+    )
     release = yaml.safe_load((root / ".github/workflows/release.yml").read_text())
     matrix = release["jobs"]["native"]["strategy"]["matrix"]["include"]
     in_release = sorted(mapping.get(row["target"], f"unmapped {row['target']}") for row in matrix)
     toolchain = tomllib.loads((root / "rust-toolchain.toml").read_text())["toolchain"]
     in_toolchain = sorted(
         mapping.get(target, f"unmapped {target}") for target in toolchain.get("targets", [])
+    )
+    packaging = json.loads((root / "crates/onebudgetspec-packaging-e2e/project.json").read_text())
+    in_packaging = sorted(
+        name.removeprefix("npm-cli-")
+        for name in packaging.get("implicitDependencies", [])
+        if name.startswith("npm-cli-")
+    )
+    journey = (
+        root / "crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs"
+    ).read_text()
+    in_journey = sorted(
+        re.findall(r'^\s+\("[a-z]+", "[a-z0-9_]+"\) => "([a-z0-9]+-[a-z0-9]+)",$', journey, re.M)
     )
     problems = []
     for platform in carriers:
@@ -185,8 +214,12 @@ def platform_problems(root: Path = ROOT) -> list[str]:
         ("npm/cli/lib/launcher.js", in_launcher),
         ("npm/cli/package.json", in_manifest),
         ("scripts/build-dist.sh", in_build),
+        ("scripts/build-dist.sh's host_target", in_hosts),
         (".github/workflows/release.yml", in_release),
         ("rust-toolchain.toml", in_toolchain),
+        ("crates/onebudgetspec-packaging-e2e/project.json", in_packaging),
+        ("crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs", in_journey),
+        ("tools/src/repo_checks/versions.py", sorted(versions.PLATFORMS)),
     ):
         if found != carriers:
             problems.append(f"{where} lists {found}; npm/platforms holds {carriers}")
@@ -316,4 +349,48 @@ def artifact_problems(root: Path = ROOT) -> list[str]:
                         f"{target['name']}: publishes {directory}, built as {artifact} "
                         f"({', '.join(sorted(packages[artifact]))}), not {sorted(publishes)}"
                     )
+    return problems
+
+
+#: The file pinning the Node a release job packs npm packages with.
+NODE_VERSION_FILE = ".node-version"
+
+
+def node_setup_problems(root: Path = ROOT) -> list[str]:
+    """Every release.yml job that packs an npm carrier without first setting up pinned Node.
+
+    The carrier is packed with npm, which a runner image need not carry, so the job must run
+    ``actions/setup-node`` reading :data:`NODE_VERSION_FILE` before the step that builds it.
+    """
+    if not (root / NODE_VERSION_FILE).is_file():
+        return [f"{NODE_VERSION_FILE} does not exist, so no release job can set Node up from it"]
+    document = yaml.safe_load((root / ".github/workflows/release.yml").read_text())
+    jobs = document.get("jobs") if isinstance(document, dict) else None
+    if not isinstance(jobs, dict):
+        return [".github/workflows/release.yml: `jobs` is not a mapping of jobs"]
+    problems: list[str] = []
+    for name, body in jobs.items():
+        steps = body.get("steps", []) if isinstance(body, dict) else []
+        steps = (
+            [step for step in steps if isinstance(step, dict)] if isinstance(steps, list) else []
+        )
+        builds = [
+            index
+            for index, step in enumerate(steps)
+            if "build-dist.sh npm-carrier" in str(step.get("run", ""))
+        ]
+        if not builds:
+            continue
+        setups = [
+            index
+            for index, step in enumerate(steps)
+            if str(step.get("uses", "")).startswith("actions/setup-node@")
+            and isinstance(step.get("with"), dict)
+            and step["with"].get("node-version-file") == NODE_VERSION_FILE
+        ]
+        if not setups or setups[0] > builds[0]:
+            problems.append(
+                f"release.yml job {name} packs an npm carrier without first running "
+                f"actions/setup-node with node-version-file: {NODE_VERSION_FILE}"
+            )
     return problems

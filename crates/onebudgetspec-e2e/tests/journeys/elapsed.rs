@@ -2,7 +2,7 @@
 
 use serde_json::json;
 
-use crate::common::{Fixture, file, result};
+use crate::common::{Fixture, exits, file, node, result};
 
 #[test]
 fn elapsed_times_a_sleeping_command() {
@@ -12,7 +12,7 @@ fn elapsed_times_a_sleeping_command() {
         &file(&[json!({
             "id": "nap",
             "measure": "elapsed",
-            "command": ["sleep", "0.3"],
+            "command": node("setTimeout(() => {}, 300);", &[]),
             "unit": "seconds",
             "direction": "max",
             "threshold": 60,
@@ -39,7 +39,7 @@ fn an_elapsed_command_exiting_non_zero_is_an_error_not_a_measurement() {
         &file(&[json!({
             "id": "fails-fast",
             "measure": "elapsed",
-            "command": ["sh", "-c", "exit 7"],
+            "command": exits(7),
             "unit": "seconds",
             "direction": "max",
             "threshold": 60,

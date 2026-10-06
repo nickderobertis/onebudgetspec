@@ -1,19 +1,19 @@
 schema_version: 1
 conditions:
   - name: region
-    command: ["sh", "-c", "echo '  eu-west  '"]
+    command: ["node", "-e", "console.log('  eu-west  ')"]
   - name: broken
-    command: ["false"]
+    command: ["node", "-e", "process.exit(1)"]
 budgets:
   - id: first
     measure: reported
-    command: ["sh", "report.sh", '{"value": 1}']
+    command: ["node", "report.cjs", '{"value": 1}']
     unit: items
     direction: max
     threshold: 10
   - id: second
     measure: reported
-    command: ["sh", "report.sh", '{"value": 2}']
+    command: ["node", "report.cjs", '{"value": 2}']
     unit: items
     direction: max
     threshold: 10

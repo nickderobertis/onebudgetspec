@@ -14,7 +14,14 @@ from pathlib import Path
 
 from repo_checks.paths import ROOT
 
-PLATFORMS = ("linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64")
+PLATFORMS = (
+    "linux-x64",
+    "linux-arm64",
+    "darwin-x64",
+    "darwin-arm64",
+    "win32-x64",
+    "win32-arm64",
+)
 #: A release version (Semantic Versioning 2.0.0), matched whole; scripts/release/release-probe.py
 #: carries the same pattern, which tests/test_versions.py holds identical.
 VERSION = re.compile(

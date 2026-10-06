@@ -14,6 +14,7 @@ from pathlib import Path
 
 from repo_checks import versions
 from repo_checks.paths import ROOT
+from repo_checks.programs import bash
 
 BRANCH = "release-plz-2026-01-01T00-00-00Z"
 #: release-plz's bump of the workspace's own crates in Cargo.lock.
@@ -103,7 +104,7 @@ def release(tmp_path: Path, branch: str) -> Release:
 
 def sync(release: Release) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["bash", str(release.work / "scripts/sync-release-pr.sh")],
+        [bash(), (release.work / "scripts/sync-release-pr.sh").as_posix()],
         cwd=release.work,
         env=release.env,
         capture_output=True,

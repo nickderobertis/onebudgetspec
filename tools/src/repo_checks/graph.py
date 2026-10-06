@@ -3,7 +3,9 @@
 Every project carries one ``type:`` tag, and each type may depend only on the types listed
 for it below, so an edge drawn back toward a contract or into a shipped package from a
 test tier fails here. Rust crates must also declare, as Nx dependencies, every workspace
-crate their Cargo manifest depends on, or affected selection would miss them.
+crate their Cargo manifest depends on, or affected selection would miss them. Nx runs a
+target's command through cmd.exe on Windows, which expands no glob, so a command with one
+runs it under ``bash -c``.
 """
 
 import json
@@ -55,6 +57,7 @@ class Project:
     root: Path
     tags: tuple[str, ...]
     dependencies: tuple[ProjectName, ...]
+    commands: tuple[str, ...] = ()
 
     @classmethod
     def read(cls, path: Path) -> "Project":
@@ -74,11 +77,44 @@ class Project:
             path.parent,
             tuple(tags),
             tuple(ProjectName(dependency) for dependency in dependencies),
+            _commands(path, rest.get("targets", {})),
         )
 
     def kinds(self) -> list[str]:
         """The values of this project's ``type:`` tags."""
         return [tag.removeprefix("type:") for tag in self.tags if tag.startswith("type:")]
+
+
+def _commands(path: Path, targets: object) -> tuple[str, ...]:
+    """Every ``nx:run-commands`` command line of ``targets``, refusing any other shape."""
+    if not isinstance(targets, dict):
+        raise InvalidProject(f"{path}: `targets` is not an object")
+    found: list[str] = []
+    for name, target in targets.items():
+        match target:
+            case {"options": {"command": str(command)}}:
+                entries: list[object] = [command]
+            case {"options": {"commands": list(entries)}}:
+                pass
+            case {"options": {"command": _}} | {"options": {"commands": _}}:
+                raise InvalidProject(f"{path}: target {name}'s command(s) are malformed")
+            case {"options": dict()}:
+                entries = []
+            case {"options": _}:
+                raise InvalidProject(f"{path}: target {name}'s `options` is not an object")
+            case dict():
+                entries = []
+            case _:
+                raise InvalidProject(f"{path}: target {name} is not an object")
+        for entry in entries:
+            match entry:
+                case str(command) | {"command": str(command)}:
+                    found.append(command)
+                case _:
+                    raise InvalidProject(
+                        f"{path}: target {name} has a command that is not a string"
+                    )
+    return tuple(found)
 
 
 def projects(root: Path = ROOT) -> dict[ProjectName, Project]:
@@ -134,6 +170,11 @@ def problems(root: Path = ROOT) -> list[str]:
                 issues.append(
                     f"{name} ({kinds[name]}) may not depend on {dependency} ({kinds[dependency]})"
                 )
+        issues.extend(
+            f"{name}: `{command}` has a glob cmd.exe will not expand; run it under `bash -c`"
+            for command in project.commands
+            if any(c in command for c in "*?[") and not command.startswith("bash -c ")
+        )
         manifest = project.root / "Cargo.toml"
         if manifest.is_file():
             cargo = tomllib.loads(manifest.read_text())

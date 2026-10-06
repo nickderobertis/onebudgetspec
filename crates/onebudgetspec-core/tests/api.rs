@@ -1,5 +1,6 @@
 //! The library's public API, called the way a Rust consumer calls it: real files in a
-//! temporary directory and real commands, with nothing doubled.
+//! temporary directory and real commands, with nothing doubled. Every command runs `node`,
+//! so the tests need no shell or Unix utilities and run alike on Linux, macOS and Windows.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -14,32 +15,23 @@ fn write(path: &Path, text: &str) {
     fs::write(path, text).unwrap();
 }
 
-fn script(path: &Path, body: &str) {
-    write(path, &format!("#!/bin/sh\n{body}\n"));
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
-    }
-}
-
 const TWO_BUDGETS: &str = r#"schema_version: 1
 conditions:
   - name: runners
-    command: ["sh", "-c", "echo '  4  '"]
+    command: ["node", "-e", "console.log('  4  ')"]
 budgets:
   - id: gate-time
     description: How long the gate takes.
     labels: [gate, slow]
     measure: reported
-    command: ["./report.sh", "1395"]
+    command: ["node", "report.cjs", "1395"]
     unit: seconds
     direction: max
     threshold: 1800
     timeout_seconds: 60
   - id: startup
     measure: elapsed
-    command: ["sleep", "0.1"]
+    command: ["node", "-e", "setTimeout(() => {}, 100)"]
     unit: seconds
     direction: max
     threshold: 30
@@ -48,9 +40,13 @@ budgets:
 fn two_budgets(dir: &Path) -> PathBuf {
     let file = dir.join("budgets.yaml");
     write(&file, TWO_BUDGETS);
-    script(
-        &dir.join("report.sh"),
-        r#"printf '{"value": %s, "detail": "from the api test"}' "$1" > "$ONEBUDGETSPEC_RESULT""#,
+    write(
+        &dir.join("report.cjs"),
+        r#"require("node:fs").writeFileSync(
+  process.env.ONEBUDGETSPEC_RESULT,
+  `{"value": ${process.argv[2]}, "detail": "from the api test"}`,
+);
+"#,
     );
     file
 }
@@ -76,7 +72,7 @@ fn loads_validates_and_lists_a_file() {
     );
     assert_eq!(gate.labels, ["gate", "slow"]);
     assert_eq!(gate.measure, Measure::Reported);
-    assert_eq!(gate.command, ["./report.sh", "1395"]);
+    assert_eq!(gate.command, ["node", "report.cjs", "1395"]);
     assert_eq!(gate.unit, "seconds");
     assert_eq!(gate.direction, Direction::Max);
     assert!((gate.threshold - 1800.0).abs() < f64::EPSILON);
@@ -91,7 +87,7 @@ fn refuses_an_invalid_file_naming_the_file_and_the_key() {
     let file = dir.path().join("budgets.yaml");
     write(
         &file,
-        "schema_version: 1\nbudgets:\n  - id: Bad\n    measure: elapsed\n    command: [true]\n    unit: ms\n    direction: max\n    threshold: -1\n",
+        "schema_version: 1\nbudgets:\n  - id: Bad\n    measure: elapsed\n    command: [node, -e, \"\"]\n    unit: ms\n    direction: max\n    threshold: -1\n",
     );
     let Err(Error::Invalid { problems }) = load(&[file], false) else {
         panic!("an invalid file must be refused");
@@ -112,7 +108,7 @@ fn discovers_nested_files_in_path_order_honouring_gitignore() {
     let root = dir.path();
     let entry = |id: &str| {
         format!(
-            "schema_version: 1\nbudgets:\n  - id: {id}\n    measure: elapsed\n    command: [\"true\"]\n    unit: seconds\n    direction: max\n    threshold: 5\n"
+            "schema_version: 1\nbudgets:\n  - id: {id}\n    measure: elapsed\n    command: [\"node\", \"-e\", \"\"]\n    unit: seconds\n    direction: max\n    threshold: 5\n"
         )
     };
     write(&root.join("budgets.yaml"), &entry("root"));
@@ -149,7 +145,7 @@ fn selects_by_id_label_and_excluded_label() {
     let file = dir.path().join("budgets.yaml");
     let budget = |id: &str, labels: &str| {
         format!(
-            "  - id: {id}\n    labels: {labels}\n    measure: elapsed\n    command: [\"true\"]\n    unit: seconds\n    direction: max\n    threshold: 5\n"
+            "  - id: {id}\n    labels: {labels}\n    measure: elapsed\n    command: [\"node\", \"-e\", \"\"]\n    unit: seconds\n    direction: max\n    threshold: 5\n"
         )
     };
     write(
@@ -260,13 +256,13 @@ fn an_over_budget_and_an_error_set_the_exit_status() {
 budgets:
   - id: slow
     measure: elapsed
-    command: ["sleep", "0.05"]
+    command: ["node", "-e", "setTimeout(() => {}, 50)"]
     unit: seconds
     direction: max
     threshold: 0
   - id: broken
     measure: reported
-    command: ["sh", "-c", "exit 4"]
+    command: ["node", "-e", "process.exit(4)"]
     unit: count
     direction: min
     threshold: 1

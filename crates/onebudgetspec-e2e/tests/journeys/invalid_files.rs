@@ -3,24 +3,29 @@
 
 use serde_json::{Value, json};
 
-use crate::common::Fixture;
+use crate::common::{Fixture, write_result};
 
 /// A valid file whose condition and budget commands each record their invocation.
 fn base(fixture: &Fixture) -> Value {
-    fixture.counted("condition.sh", "ran.log", "condition", "echo 1");
     fixture.counted(
-        "budget.sh",
+        "condition.js",
+        "ran.log",
+        "condition",
+        "console.log(\"1\");",
+    );
+    fixture.counted(
+        "budget.js",
         "ran.log",
         "budget",
-        "printf '{\"value\": 1}' > \"$ONEBUDGETSPEC_RESULT\"",
+        &write_result(r#"{"value": 1}"#),
     );
     json!({
         "schema_version": 1,
-        "conditions": [{ "name": "probe", "command": ["./condition.sh"] }],
+        "conditions": [{ "name": "probe", "command": ["node", "condition.js"] }],
         "budgets": [{
             "id": "ok",
             "measure": "reported",
-            "command": ["./budget.sh"],
+            "command": ["node", "budget.js"],
             "unit": "ms",
             "direction": "max",
             "threshold": 5,
@@ -238,6 +243,7 @@ fn a_budgets_file_that_is_not_utf8_is_refused() {
     assert_refused(&fixture, "not UTF-8", "cannot read");
 }
 
+// Unix only: it locks the file with POSIX permission bits.
 #[cfg(unix)]
 #[test]
 fn a_budgets_file_that_cannot_be_read_is_refused() {

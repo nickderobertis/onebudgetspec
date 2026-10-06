@@ -20,6 +20,7 @@ import yaml
 
 from repo_checks.expressions import Status, Value, evaluate
 from repo_checks.paths import ROOT
+from repo_checks.programs import bash
 
 Secret = Literal[
     "CARGO_REGISTRY_TOKEN",
@@ -300,9 +301,10 @@ def run_guard(job: Job, secrets: Mapping[str, str], root: Path = ROOT) -> dict[s
             )
         env = {name: _resolve(str(value), context) for name, value in step.get("env", {}).items()}
         env = {name: value for name, value in env.items() if value}
-        with tempfile.NamedTemporaryFile("r", suffix=".out") as output:
+        # Not deleted on close: Windows lets no other process open a file that is.
+        with tempfile.NamedTemporaryFile("r", suffix=".out", delete_on_close=False) as output:
             completed = subprocess.run(
-                ["bash", GUARD_SCRIPT, *guard.group("args").split()],
+                [bash(), GUARD_SCRIPT, *guard.group("args").split()],
                 cwd=root,
                 env={**base, **env, "GITHUB_OUTPUT": output.name},
                 capture_output=True,

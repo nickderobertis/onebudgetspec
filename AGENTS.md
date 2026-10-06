@@ -27,8 +27,13 @@ and npm, with Python and TypeScript SDKs, all released at one version.
 - **Excluded, and why:** the python-cli intersection (the CLI is Rust; its PyPI
   distribution is the compiled binary in a maturin `bin` wheel, with no Python console
   entry point, and the `cli_wheel.rs` journey installs and drives it); asdf/direnv (CI pins tools through setup actions and
-  `rust-toolchain.toml`); Windows (journeys and measurement are POSIX, so the release
-  ships Linux and macOS); GitHub Release archives (every install surface is a registry).
+  `rust-toolchain.toml`); GitHub Release archives (every install surface is a registry).
+- **Platforms:** Linux, macOS and Windows, each on x86_64 and aarch64. A timeout ends a
+  command's process group on Unix and its Job Object on Windows. Every measuring command in
+  the journeys and conformance cases is Node (`node` on `PATH`), never a POSIX shell, so
+  they run on all three; a test gated to Unix states why beside its gate. Windows checks
+  out LF (`.gitattributes`), `just` exports `PYTHONUTF8=1`, and its gate lane holds no Rust
+  coverage floor (`scripts/rust-coverage.sh` says why).
 - **Modelled on onetaskgraph:** the crate split, the maturin `bin` wheel, the npm launcher
   with carriers, the schema emitted from the Rust types and the release flow.
 
@@ -59,7 +64,8 @@ regenerates them, and each generator's `--check` runs under its project's `lint`
   and, through the binary, every journey and conformance case.
 - **Python** — `onebudgetspec-sdk` (`pip install onebudgetspec-sdk`, requiring
   `onebudgetspec-cli==` the workspace version): `check`, `validate`, `list_budgets`,
-  `schema`. Binary: `binary=`, `ONEBUDGETSPEC_BIN`, the cli wheel's, `PATH`. Owes
+  `schema`. Binary: `binary=`, `ONEBUDGETSPEC_BIN`, the cli wheel's (`bin/onebudgetspec`,
+  or `Scripts/onebudgetspec.exe` on Windows), `PATH`. Owes
   `sdks/python/tests/test_conformance.py` (every case), `test_binary.py` (resolution,
   refusals), `test_generate.py` (the generator) and the `sdk_python.rs` journey.
 - **TypeScript** — `@onebudgetspec/sdk` (`npm install @onebudgetspec/sdk`, with
@@ -76,16 +82,16 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 `tools/tests/test_journeys.py` fails when this list and the journey files differ.
 
 - `crates/onebudgetspec-e2e/tests/journeys/verdicts.rs` — within and over under both directions, equality within, the figures, exits 0, 1 and 3.
-- `crates/onebudgetspec-e2e/tests/journeys/elapsed.rs` — `elapsed` times a sleep; a non-zero exit is an error.
-- `crates/onebudgetspec-e2e/tests/journeys/errors.rs` — every failed measurement is an error, and an error wins over over-budget.
+- `crates/onebudgetspec-e2e/tests/journeys/elapsed.rs` — `elapsed` times a short wait; a non-zero exit is an error.
+- `crates/onebudgetspec-e2e/tests/journeys/errors.rs` — every failed measurement is an error, and an error wins over over-budget; a timeout ends the command's whole process tree; a failure names its exit status (an NTSTATUS in hex on Windows).
 - `crates/onebudgetspec-e2e/tests/journeys/detail.rs` — `detail` is the command's, or null.
 - `crates/onebudgetspec-e2e/tests/journeys/measurement_order.rs` — once each, one at a time, in file order; unselected never run.
 - `crates/onebudgetspec-e2e/tests/journeys/conditions.rs` — declared conditions run once per file and reach only that file's results.
 - `crates/onebudgetspec-e2e/tests/journeys/returned_conditions.rs` — returned conditions stay in their result; collisions and malformed ones are errors.
-- `crates/onebudgetspec-e2e/tests/journeys/command_environment.rs` — working directory, inherited environment, empty result file, no shell.
+- `crates/onebudgetspec-e2e/tests/journeys/command_environment.rs` — working directory, a relative program found from the file's directory, inherited environment, empty result file, no shell.
 - `crates/onebudgetspec-e2e/tests/journeys/command_stderr.rs` — a failed or unreadable measurement's `error` keeps its exit status and bounded stderr tail, in JSON and text; a failing condition's diagnostic line too; success unchanged.
 - `crates/onebudgetspec-e2e/tests/journeys/output_streams.rs` — command output on stderr only; an unwritable report exits 3.
-- `crates/onebudgetspec-e2e/tests/journeys/host.rs` — host values, `unknown` conditions, the file path and ordered times.
+- `crates/onebudgetspec-e2e/tests/journeys/host.rs` — host values each platform supplies (load on Linux and macOS, available memory on Linux and Windows), `unknown` conditions, the file path and ordered times.
 - `crates/onebudgetspec-e2e/tests/journeys/files.rs` — the default file, several files, a missing file refused.
 - `crates/onebudgetspec-e2e/tests/journeys/selection.rs` — id, label and excluded-label filters together; unknown ids refused.
 - `crates/onebudgetspec-e2e/tests/journeys/discovery.rs` — recursive discovery in path order, `.gitignore`, cross-file ids, invalid nested files.

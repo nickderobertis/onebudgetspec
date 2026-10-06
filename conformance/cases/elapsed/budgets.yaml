@@ -2,7 +2,7 @@ schema_version: 1
 budgets:
   - id: nap
     measure: elapsed
-    command: ["sleep", "0.1"]
+    command: ["node", "-e", "setTimeout(() => {}, 100)"]
     unit: seconds
     direction: max
     threshold: 60

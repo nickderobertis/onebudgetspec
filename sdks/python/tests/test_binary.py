@@ -3,7 +3,9 @@
 Every candidate is a real executable that records its name and then runs the built binary,
 so each test reads which one ran. The wheel's candidate is laid out as installing the
 ``onebudgetspec-cli`` wheel lays it out: a ``.dist-info`` on ``sys.path`` whose RECORD names
-the script in the environment's ``bin``.
+the binary in the environment's scripts directory, ``bin`` on Linux and macOS and ``Scripts``
+on Windows. On Windows that binary is ``onebudgetspec.exe``, which only a real executable can
+be, so there it is a copy of the built binary and records nothing.
 """
 
 import json
@@ -14,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from conftest import run_cli
+from conftest import WINDOWS, delegating, printing, run_cli, stand_in
 
 import onebudgetspec_sdk
 from onebudgetspec_sdk import (
@@ -30,13 +32,12 @@ from onebudgetspec_sdk._client import _require_validators
 from onebudgetspec_sdk._generated.schemas import REPORT_SCHEMAS
 
 
-def recording(directory: Path, name: str, log: Path, body: str) -> Path:
-    """An executable ``onebudgetspec`` in ``directory`` that logs ``name``, then runs ``body``."""
-    directory.mkdir(parents=True, exist_ok=True)
-    program = directory / "onebudgetspec"
-    program.write_text(f'#!/bin/sh\necho {name} >> "{log}"\n{body}\n')
-    program.chmod(0o755)
-    return program
+def recording(
+    directory: Path, name: str, log: Path, source: str, program: str = "onebudgetspec"
+) -> Path:
+    """An executable ``program`` in ``directory`` that logs ``name``, then runs ``source``."""
+    logged = f"with open({str(log)!r}, 'a') as log:\n    log.write({name + chr(10)!r})\n"
+    return stand_in(directory, logged + source, program)
 
 
 @dataclass
@@ -54,34 +55,67 @@ class Candidates:
         return self.log.read_text().split() if self.log.exists() else []
 
 
-def install_wheel_layout(environment: Path, body: str, log: Path) -> Path:
-    """Lay out an installed ``onebudgetspec-cli``: its dist-info and its script."""
+@dataclass(frozen=True)
+class Layout:
+    """Where installing a wheel puts its site-packages and its binary, under the environment."""
+
+    site: str
+    scripts: str
+    binary: str
+
+
+#: A Linux or macOS environment's layout, and a Windows one's.
+POSIX = Layout(site="lib/site-packages", scripts="bin", binary="onebudgetspec")
+NT = Layout(site="Lib/site-packages", scripts="Scripts", binary="onebudgetspec.exe")
+#: The layout installing a wheel on this host makes.
+HOST = NT if WINDOWS else POSIX
+#: Whether the wheel's candidate records that it ran: on Windows it is the built binary.
+WHEEL_RECORDS = not WINDOWS
+
+
+def lay_out_wheel(environment: Path, layout: Layout) -> Path:
+    """Lay out an installed ``onebudgetspec-cli``'s dist-info; returns where its binary goes.
+
+    Its RECORD names the binary as installers write it, relative to site-packages and with
+    ``/`` separators on every platform.
+    """
     # The SDK pins the CLI at its own version, so that is the version installed beside it.
     version = onebudgetspec_sdk.__version__
-    site = environment / "lib" / "site-packages"
+    site = environment / layout.site
     info = site / f"onebudgetspec_cli-{version}.dist-info"
     info.mkdir(parents=True)
     (info / "METADATA").write_text(
         f"Metadata-Version: 2.4\nName: onebudgetspec-cli\nVersion: {version}\n"
     )
-    (info / "RECORD").write_text(f"../../bin/onebudgetspec,,\n{info.name}/METADATA,,\n")
-    return recording(environment / "bin", "wheel", log, body)
+    record = f"../../{layout.scripts}/{layout.binary},,\n{info.name}/METADATA,,\n"
+    (info / "RECORD").write_text(record)
+    return environment / layout.scripts / layout.binary
+
+
+def install_wheel(environment: Path, log: Path, built_binary: Path) -> Path:
+    """Install ``onebudgetspec-cli`` as this host lays it out; returns its binary."""
+    binary = lay_out_wheel(environment, HOST)
+    if WINDOWS:
+        binary.parent.mkdir(parents=True)
+        shutil.copy(built_binary, binary)
+        return binary
+    return recording(binary.parent, "wheel", log, delegating(built_binary), binary.name)
 
 
 @pytest.fixture
 def candidates(tmp_path: Path, built_binary: Path, monkeypatch: pytest.MonkeyPatch) -> Candidates:
     """Every candidate present: an explicit one, the variable's, the wheel's and PATH's."""
     log = tmp_path / "ran.log"
-    body = f'exec "{built_binary}" "$@"'
+    body = delegating(built_binary)
     found = Candidates(
         log=log,
         explicit=recording(tmp_path / "explicit", "explicit", log, body),
         variable=recording(tmp_path / "variable", "variable", log, body),
-        wheel=install_wheel_layout(tmp_path / "venv", body, log),
+        wheel=install_wheel(tmp_path / "venv", log, built_binary),
         on_path=recording(tmp_path / "path", "path", log, body),
     )
     monkeypatch.setenv(BINARY_ENV, str(found.variable))
-    monkeypatch.syspath_prepend(str(tmp_path / "venv" / "lib" / "site-packages"))
+    monkeypatch.syspath_prepend(str(tmp_path / "venv" / HOST.site))
     monkeypatch.setenv("PATH", str(found.on_path.parent))
     return found
 
@@ -109,7 +143,9 @@ def test_the_wheel_s_binary_wins_over_path(
     monkeypatch.delenv(BINARY_ENV)
     assert resolve_binary() == candidates.wheel
     schema()
-    assert candidates.ran() == ["wheel"]
+    # On Windows the wheel's binary is the built one, which records nothing; that no other
+    # candidate recorded shows it was the one that ran.
+    assert candidates.ran() == (["wheel"] if WHEEL_RECORDS else [])
 
 
 def test_an_empty_variable_is_not_a_binary(
@@ -117,8 +153,9 @@ def test_an_empty_variable_is_not_a_binary(
 ) -> None:
     """An empty ``ONEBUDGETSPEC_BIN`` is passed over, as if unset."""
     monkeypatch.setenv(BINARY_ENV, "")
+    assert resolve_binary() == candidates.wheel
     schema()
-    assert candidates.ran() == ["wheel"]
+    assert candidates.ran() == (["wheel"] if WHEEL_RECORDS else [])
 
 
 def test_path_is_used_when_nothing_else_names_a_binary(
@@ -126,12 +163,12 @@ def test_path_is_used_when_nothing_else_names_a_binary(
 ) -> None:
     """With no explicit binary, no variable and no wheel, PATH's ``onebudgetspec`` checks."""
     log = tmp_path / "ran.log"
-    on_path = recording(tmp_path / "path", "path", log, f'exec "{built_binary}" "$@"')
+    on_path = recording(tmp_path / "path", "path", log, delegating(built_binary))
     monkeypatch.setenv("PATH", str(on_path.parent))
     assert resolve_binary() == on_path
     (tmp_path / "budgets.yaml").write_text(
         "schema_version: 1\nbudgets:\n  - id: quick\n    measure: elapsed\n"
-        '    command: ["/bin/sh", "-c", "exit 0"]\n    unit: seconds\n'
+        f"    command: {json.dumps([sys.executable, '-c', 'pass'])}\n    unit: seconds\n"
         "    direction: max\n    threshold: 60\n"
     )
     report = check(cwd=tmp_path)
@@ -146,6 +183,41 @@ def test_a_wheel_whose_script_is_gone_falls_through_to_path(
     monkeypatch.delenv(BINARY_ENV)
     candidates.wheel.unlink()
     assert resolve_binary() == candidates.on_path
+
+
+@pytest.mark.parametrize("layout", [POSIX, NT], ids=["bin", "Scripts"])
+def test_the_wheel_s_binary_is_found_where_each_platform_installs_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, layout: Layout
+) -> None:
+    """The wheel's binary is found as each platform installs it, whichever host reads it.
+
+    Linux and macOS install it as ``bin/onebudgetspec`` and Windows as
+    ``Scripts/onebudgetspec.exe``. Only where it is found is checked, so the binary is a
+    placeholder, never run.
+    """
+    binary = lay_out_wheel(tmp_path / "venv", layout)
+    binary.parent.mkdir(parents=True)
+    binary.write_text("the wheel's binary\n")
+    monkeypatch.syspath_prepend(str(tmp_path / "venv" / layout.site))
+    monkeypatch.setenv("PATH", str(tmp_path / "nothing-on-path"))
+    assert resolve_binary() == binary
+
+
+@pytest.mark.parametrize(
+    "binary", ["bin/onebudgetspec.exe", "Scripts/onebudgetspec", "lib/onebudgetspec"]
+)
+def test_a_wheel_file_named_like_the_binary_elsewhere_is_not_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, binary: str
+) -> None:
+    """Only the two installed shapes are the binary; any other file the RECORD names is not."""
+    shape = Layout(site=POSIX.site, scripts=binary.split("/")[0], binary=binary.split("/")[1])
+    placed = lay_out_wheel(tmp_path / "venv", shape)
+    placed.parent.mkdir(parents=True, exist_ok=True)
+    placed.write_text("not the wheel's binary\n")
+    monkeypatch.syspath_prepend(str(tmp_path / "venv" / POSIX.site))
+    monkeypatch.setenv("PATH", str(tmp_path / "nothing-on-path"))
+    with pytest.raises(OnebudgetspecError, match="no binary found"):
+        resolve_binary()
 
 
 def test_no_binary_anywhere_is_an_error_naming_the_ways_to_provide_one(
@@ -184,17 +256,24 @@ def test_an_invalid_file_raises_with_the_cli_s_own_message(
 
 def test_a_status_that_is_no_report_raises_with_what_the_binary_said(tmp_path: Path) -> None:
     """A status other than 0, 1 or 3 raises with the binary's stderr, or says how it ended."""
-    log = tmp_path / "ran.log"
-    refusing = recording(tmp_path / "a", "a", log, 'echo "launcher: no carrier" >&2; exit 69')
+    refusing = stand_in(
+        tmp_path / "a", "import sys\nsys.stderr.write('launcher: no carrier\\n')\nsys.exit(69)\n"
+    )
     with pytest.raises(OnebudgetspecError) as refused:
         check(binary=refusing, cwd=tmp_path)
     assert (refused.value.exit_code, str(refused.value)) == (69, "launcher: no carrier")
 
-    silent = recording(tmp_path / "b", "b", log, "exit 70")
+    silent = stand_in(tmp_path / "b", "raise SystemExit(70)\n")
     with pytest.raises(OnebudgetspecError, match="exited 70 with no message"):
         check(binary=silent, cwd=tmp_path)
 
-    killed = recording(tmp_path / "c", "c", log, "kill -9 $$")
+
+# Windows has no signals: a process ended there by TerminateProcess has an exit status, which
+# the case above covers, so no Windows run can end the binary this way.
+@pytest.mark.skipif(WINDOWS, reason="Windows ends no process by a signal")
+def test_a_binary_ended_by_a_signal_raises_naming_it(tmp_path: Path) -> None:
+    """A binary killed by a signal raises naming the signal, its negated number the status."""
+    killed = stand_in(tmp_path / "c", "import os\nos.kill(os.getpid(), 9)\n")
     with pytest.raises(OnebudgetspecError, match="terminated by signal 9") as ended:
         validate(binary=killed, cwd=tmp_path)
     assert ended.value.exit_code == -9
@@ -220,7 +299,7 @@ def test_stdout_that_is_not_the_report_raises(
     tmp_path: Path, printed: str, call: object, reason: str
 ) -> None:
     """Stdout that is not the expected report raises rather than returning it."""
-    program = recording(tmp_path / "bin", "liar", tmp_path / "ran.log", f"echo '{printed}'")
+    program = printing(tmp_path / "bin", printed + "\n")
     assert callable(call)
     with pytest.raises(OnebudgetspecError, match=reason):
         call(binary=program)
@@ -300,14 +379,6 @@ def report_with(result: dict[str, str], host: dict[str, str] | None = None) -> s
     return text(report)
 
 
-def printing(directory: Path, stdout: str) -> Path:
-    """An executable that prints ``stdout`` verbatim and exits 0."""
-    program = directory / "onebudgetspec"
-    program.write_text(f"#!/bin/sh\ncat <<'EOF'\n{stdout}\nEOF\n")
-    program.chmod(0o755)
-    return program
-
-
 @pytest.mark.parametrize(
     ("result", "host"),
     [
@@ -377,12 +448,14 @@ def test_a_measurement_and_threshold_past_integer_range_come_back_as_doubles(
     tmp_path: Path, built_binary: Path
 ) -> None:
     """The binary prints ``1e20`` and ``1e300`` as doubles, and the SDK returns them as such."""
-    (tmp_path / "report.sh").write_text(
-        '#!/bin/sh\nprintf \'{"value": 1e20}\' > "$ONEBUDGETSPEC_RESULT"\n'
+    (tmp_path / "report.py").write_text(
+        "import os\n"
+        "with open(os.environ['ONEBUDGETSPEC_RESULT'], 'w') as result:\n"
+        "    result.write('{\"value\": 1e20}')\n"
     )
     (tmp_path / "budgets.yaml").write_text(
         "schema_version: 1\nbudgets:\n  - id: huge\n    measure: reported\n"
-        '    command: ["sh", "report.sh"]\n'
+        f"    command: {json.dumps([sys.executable, 'report.py'])}\n"
         "    unit: bytes\n    direction: max\n    threshold: 1e300\n"
     )
     assert '"actual": 1e+20' in run_cli(built_binary, ["check", "--json"], tmp_path).stdout
@@ -415,9 +488,7 @@ def test_a_bundle_of_another_shape_raises_naming_what_to_do(
 ) -> None:
     """A bundle without an integer version and the three roots is never returned."""
     printed = _bundle_without(built_binary, tmp_path, change)
-    program = recording(
-        tmp_path / "bin", "bundle", tmp_path / "ran.log", f"cat <<'EOF'\n{printed}\nEOF"
-    )
+    program = printing(tmp_path / "bin", printed + "\n")
     with pytest.raises(OnebudgetspecError) as refused:
         schema(binary=program)
     message = str(refused.value)

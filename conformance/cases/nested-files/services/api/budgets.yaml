@@ -3,7 +3,7 @@ budgets:
   - id: api-latency
     labels: [api]
     measure: reported
-    command: ["sh", "-c", "printf '{\"value\": 150}' > \"$ONEBUDGETSPEC_RESULT\""]
+    command: ["node", "-e", "require('node:fs').writeFileSync(process.env.ONEBUDGETSPEC_RESULT, JSON.stringify({ value: 150 }))"]
     unit: ms
     direction: max
     threshold: 200

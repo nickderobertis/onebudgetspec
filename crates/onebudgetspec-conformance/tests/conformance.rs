@@ -7,7 +7,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use serde_json::{Value, json};
 
@@ -48,29 +47,15 @@ fn command_under_test() -> Vec<String> {
     }
 }
 
-/// Held while a case's scripts are copied and while a process is spawned, so the two never
-/// overlap: a process forked while another test thread has a script open for writing
-/// inherits that descriptor until it execs, and running the script meanwhile fails with
-/// "text file busy".
-fn fork_lock() -> MutexGuard<'static, ()> {
-    static LOCK: Mutex<()> = Mutex::new(());
-    LOCK.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 fn run(command: &[String], cwd: &Path, args: &[String]) -> std::process::Output {
-    let child = {
-        let _forking = fork_lock();
-        Command::new(&command[0])
-            .args(&command[1..])
-            .args(args)
-            .current_dir(cwd)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-    };
-    child
-        .and_then(std::process::Child::wait_with_output)
+    Command::new(&command[0])
+        .args(&command[1..])
+        .args(args)
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
         .unwrap_or_else(|error| panic!("cannot run {command:?}: {error}"))
 }
 
@@ -102,7 +87,6 @@ fn copy_dir(from: &Path, to: &Path) {
         if entry.file_type().unwrap().is_dir() {
             copy_dir(&entry.path(), &target);
         } else {
-            let _writing = fork_lock();
             fs::copy(entry.path(), target).unwrap();
         }
     }

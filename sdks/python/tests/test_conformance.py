@@ -136,7 +136,7 @@ def case(request: pytest.FixtureRequest, tmp_path: Path) -> PreparedCase:
     source: Path = request.param
     work = tmp_path / source.name
     shutil.copytree(source, work)
-    spec: CaseSpec = json.loads((source / "case.json").read_text())
+    spec: CaseSpec = json.loads((source / "case.json").read_text(encoding="utf-8"))
     return PreparedCase(source.name, spec, work)
 
 
@@ -177,7 +177,7 @@ def test_check_returns_the_report_the_case_expects(
 
     report = call()
     assert exit_status(report) == spec["exit"], f"{name}: the verdicts earn another status"
-    expected = json.loads((work / "expected.json").read_text())
+    expected = json.loads((work / "expected.json").read_text(encoding="utf-8"))
     actual = normalize(report.model_dump(mode="json"), spec, name)
     assert actual == expected, f"{name}: the normalized report differs from expected.json"
 
@@ -219,7 +219,7 @@ def test_list_and_validate_answer_as_the_binary_does(
         )
         assert listed.model_dump(mode="json") == json.loads(listing.stdout)
         # What list selects is what check measured, in the same order.
-        expected = json.loads((work / "expected.json").read_text())["results"]
+        expected = json.loads((work / "expected.json").read_text(encoding="utf-8"))["results"]
         keys = ("id", "file", "labels", "unit", "direction", "threshold")
         assert [{key: getattr(budget, key) for key in keys} for budget in listed.budgets] == [
             {key: result[key] for key in keys} for result in expected

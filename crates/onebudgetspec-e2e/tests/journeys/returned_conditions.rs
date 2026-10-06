@@ -3,22 +3,17 @@
 
 use serde_json::{Value, json};
 
-use crate::common::{Fixture, result};
+use crate::common::{Fixture, result, write_result};
 
 /// A budget whose command records its own invocation in `budgets.log`, then writes
 /// `result`.
 fn budget(fixture: &Fixture, id: &str, result: &str) -> Value {
-    let script = format!("{id}.sh");
-    fixture.counted(
-        &script,
-        "budgets.log",
-        id,
-        &format!("printf '%s' '{result}' > \"$ONEBUDGETSPEC_RESULT\""),
-    );
+    let script = format!("{id}.js");
+    fixture.counted(&script, "budgets.log", id, &write_result(result));
     json!({
         "id": id,
         "measure": "reported",
-        "command": [format!("./{script}")],
+        "command": ["node", script],
         "unit": "seconds",
         "direction": "max",
         "threshold": 1800,
@@ -26,12 +21,17 @@ fn budget(fixture: &Fixture, id: &str, result: &str) -> Value {
 }
 
 fn declaring(fixture: &Fixture, budgets: &[Value]) {
-    fixture.counted("dispatches.sh", "conditions.log", "dispatches", "echo 3");
+    fixture.counted(
+        "dispatches.js",
+        "conditions.log",
+        "dispatches",
+        "console.log(\"3\");",
+    );
     fixture.budgets(
         "budgets.yaml",
         &json!({
             "schema_version": 1,
-            "conditions": [{ "name": "dispatches", "command": ["./dispatches.sh"] }],
+            "conditions": [{ "name": "dispatches", "command": ["node", "dispatches.js"] }],
             "budgets": budgets,
         }),
     );

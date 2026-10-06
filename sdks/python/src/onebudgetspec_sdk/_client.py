@@ -29,6 +29,10 @@ BINARY_ENV = "ONEBUDGETSPEC_BIN"
 #: The distribution whose wheel carries the binary.
 CLI_DISTRIBUTION = "onebudgetspec-cli"
 _EXECUTABLE = "onebudgetspec"
+#: Where installing the cli wheel puts its binary, as the RECORD names it: the environment's
+#: scripts directory, ``bin`` on Linux and macOS and ``Scripts`` on Windows, whose binary is
+#: an ``.exe``.
+_WHEEL_SCRIPTS = frozenset({("bin", _EXECUTABLE), ("Scripts", f"{_EXECUTABLE}.exe")})
 #: The statuses whose stdout is a report: within, over and error. A verdict is in the
 #: report, so none of them is an exception.
 _REPORTED = frozenset({0, 1, 3})
@@ -58,7 +62,7 @@ def _bundled() -> Path | None:
     except importlib.metadata.PackageNotFoundError:
         return None
     for file in distribution.files or ():
-        if file.name == _EXECUTABLE and file.parent.name == "bin":
+        if (file.parent.name, file.name) in _WHEEL_SCRIPTS:
             path = Path(os.path.normpath(Path(str(distribution.locate_file(file)))))
             if path.is_file():
                 return path

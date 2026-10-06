@@ -2,7 +2,7 @@ schema_version: 1
 budgets:
   - id: outside
     measure: reported
-    command: ["false"]
+    command: ["node", "-e", "process.exit(1)"]
     unit: items
     direction: max
     threshold: 1

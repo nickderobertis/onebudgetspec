@@ -21,16 +21,19 @@ permissions:
   contents: read
 
 jobs:
-  # The journeys run commands through POSIX `sh`, so the gate covers the platforms the
-  # release ships: Linux and macOS.
+  # The gate on every platform the release ships: Linux, macOS and Windows.
   gate:
     name: gate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # Both platforms gate a pull request; a merged commit, already gated, runs once.
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        # Every platform gates a pull request; a merged commit, already gated, runs once.
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
+    # Git Bash on Windows, so every lane runs the recipes and scripts the same way.
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v7
         with:

@@ -1,6 +1,6 @@
 //! Which files `check` reads: `./budgets.yaml` by default, every named file otherwise.
 
-use crate::common::{Fixture, file, ids, reported, result};
+use crate::common::{Fixture, file, ids, reported, result, write_result};
 
 #[test]
 fn check_with_no_path_reads_budgets_yaml_from_the_working_directory() {
@@ -67,17 +67,17 @@ fn a_directory_without_recursive_is_refused_with_status_two() {
 fn a_file_named_twice_or_by_two_spellings_is_measured_once() {
     let fixture = Fixture::new();
     fixture.counted(
-        "measure.sh",
+        "measure.js",
         "ran.log",
         "measured",
-        "printf '{\"value\": 1}' > \"$ONEBUDGETSPEC_RESULT\"",
+        &write_result(r#"{"value": 1}"#),
     );
     fixture.budgets(
         "budgets.yaml",
         &file(&[serde_json::json!({
             "id": "once",
             "measure": "reported",
-            "command": ["./measure.sh"],
+            "command": ["node", "measure.js"],
             "unit": "runs",
             "direction": "max",
             "threshold": 2,
