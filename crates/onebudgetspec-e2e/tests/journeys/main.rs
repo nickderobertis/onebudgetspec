@@ -5,6 +5,7 @@
 mod common;
 
 mod command_environment;
+mod command_stderr;
 mod conditions;
 mod detail;
 mod discovery;

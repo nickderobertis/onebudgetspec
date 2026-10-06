@@ -2,12 +2,14 @@
 //!
 //! Every command runs from the directory holding its budgets file, with the environment
 //! inherited, no shell, and its stdout and stderr sent to this process's stderr so they
-//! never mix with a report on stdout.
+//! never mix with a report on stdout. A command that fails, or whose result cannot be
+//! read, has the tail of its stderr kept in the reason recorded for it.
 
-use std::collections::BTreeMap;
-use std::io::{self, Write};
+use std::collections::{BTreeMap, VecDeque};
+use std::io::{self, Read, Write};
 use std::path::Path;
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{ChildStderr, Command, ExitStatus, Stdio};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
@@ -76,15 +78,20 @@ fn run_conditions(file: &LoadedFile) -> BTreeMap<String, String> {
 
 fn run_condition(dir: &Path, argv: &[String]) -> Result<String, String> {
     let mut command = command(dir, argv);
-    command.stdout(Stdio::piped()).stderr(stderr());
-    let output = command
-        .output()
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
         .map_err(|error| format!("cannot run {}: {error}", argv[0]))?;
+    let tee = StderrTee::start(child.stderr.take());
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("cannot wait for {}: {error}", argv[0]))?;
+    let stderr = tee.finish();
     // The value is the command's stdout, and like every command's output it reaches this
     // process's stderr too.
     let _ = io::stderr().write_all(&output.stdout);
     if !output.status.success() {
-        return Err(describe_exit(&argv[0], output.status));
+        return Err(with_stderr(describe_exit(&argv[0], output.status), &stderr));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
@@ -179,12 +186,12 @@ fn measure_elapsed(
     timeout: Option<Duration>,
 ) -> Result<Measured, String> {
     let mut command = command(dir, argv);
-    let (status, elapsed) = run(&mut command, &argv[0], timeout)?;
-    if !status.success() {
-        return Err(describe_exit(&argv[0], status));
+    let finished = run(&mut command, &argv[0], timeout)?;
+    if !finished.status.success() {
+        return Err(finished.failure(&argv[0], None));
     }
     Ok(Measured {
-        value: elapsed.as_secs_f64(),
+        value: finished.elapsed.as_secs_f64(),
         detail: None,
         returned: BTreeMap::new(),
     })
@@ -203,13 +210,19 @@ fn measure_reported(
         .map_err(|error| format!("cannot create the result file: {error}"))?;
     let mut command = command(dir, argv);
     command.env(RESULT_ENV, result_file.path());
-    let (status, _) = run(&mut command, &argv[0], timeout)?;
-    if !status.success() {
-        return Err(describe_exit(&argv[0], status));
+    let finished = run(&mut command, &argv[0], timeout)?;
+    if !finished.status.success() {
+        return Err(finished.failure(&argv[0], None));
     }
-    let text = std::fs::read_to_string(result_file.path())
-        .map_err(|error| format!("cannot read the result file {RESULT_ENV} names: {error}"))?;
-    parse_result(&text, declared)
+    let text = std::fs::read_to_string(result_file.path()).map_err(|error| {
+        finished.failure(
+            &argv[0],
+            Some(format!(
+                "cannot read the result file {RESULT_ENV} names: {error}"
+            )),
+        )
+    })?;
+    parse_result(&text, declared).map_err(|reason| finished.failure(&argv[0], Some(reason)))
 }
 
 /// Read what a `reported` command wrote to its result file.
@@ -350,13 +363,31 @@ fn stderr() -> Stdio {
     Stdio::from(io::stderr())
 }
 
-/// Run `command` to completion, killing it once `timeout` passes. Returns its exit status
-/// and its wall clock.
+/// A command that ran to completion.
+struct Finished {
+    status: ExitStatus,
+    elapsed: Duration,
+    /// The bounded tail of its stderr, as [`StderrTee::finish`] returns it.
+    stderr: String,
+}
+
+impl Finished {
+    /// Why the measurement failed: `reason` when what it produced could not be read, then
+    /// how the command exited and the tail of its stderr.
+    fn failure(&self, program: &str, reason: Option<String>) -> String {
+        let exit = describe_exit(program, self.status);
+        let reason = reason.map_or_else(|| exit.clone(), |reason| format!("{reason}; {exit}"));
+        with_stderr(reason, &self.stderr)
+    }
+}
+
+/// Run `command` to completion, killing it once `timeout` passes, with its stderr passed
+/// through a [`StderrTee`].
 fn run(
     command: &mut Command,
     program: &str,
     timeout: Option<Duration>,
-) -> Result<(ExitStatus, Duration), String> {
+) -> Result<Finished, String> {
     // A budget with a timeout runs in a process group of its own, so the timeout ends
     // everything the command started rather than only the command itself.
     #[cfg(unix)]
@@ -366,13 +397,20 @@ fn run(
     }
     let started = Instant::now();
     let mut child = command
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("cannot run {program}: {error}"))?;
+    let tee = StderrTee::start(child.stderr.take());
     let Some(timeout) = timeout else {
         let status = child
             .wait()
             .map_err(|error| format!("cannot wait for {program}: {error}"))?;
-        return Ok((status, started.elapsed()));
+        let elapsed = started.elapsed();
+        return Ok(Finished {
+            status,
+            elapsed,
+            stderr: tee.finish(),
+        });
     };
 
     let mut pause = Duration::from_millis(1);
@@ -381,15 +419,21 @@ fn run(
             .try_wait()
             .map_err(|error| format!("cannot wait for {program}: {error}"))?
         {
-            return Ok((status, started.elapsed()));
+            let elapsed = started.elapsed();
+            return Ok(Finished {
+                status,
+                elapsed,
+                stderr: tee.finish(),
+            });
         }
         let waited = started.elapsed();
         if waited >= timeout {
             kill(&mut child);
-            return Err(format!(
+            let reason = format!(
                 "{program} timed out after {} seconds and was killed",
                 timeout.as_secs()
-            ));
+            );
+            return Err(with_stderr(reason, &tee.finish()));
         }
         std::thread::sleep(pause.min(timeout.saturating_sub(waited)));
         pause = (pause * 2).min(Duration::from_millis(50));
@@ -407,6 +451,130 @@ fn kill(child: &mut std::process::Child) {
     }
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// How many characters of a command's stderr a failure's reason keeps, from its end.
+const STDERR_TAIL_CHARS: usize = 1000;
+
+/// The raw bytes kept to make that tail: enough for every character to take four.
+const STDERR_TAIL_BYTES: usize = STDERR_TAIL_CHARS * 4;
+
+/// How long a command's stderr is still read once the command has exited. The pipe closes
+/// as soon as nothing holds it open; a process the command left running may hold it for
+/// ever, and is not waited for.
+const STDERR_DRAIN: Duration = Duration::from_millis(250);
+
+/// A command's stderr, written through to this process's stderr as it arrives, with its
+/// tail kept for the reason a failure records.
+struct StderrTee {
+    tail: Arc<Mutex<StderrTail>>,
+    closed: mpsc::Receiver<()>,
+}
+
+impl StderrTee {
+    fn start(pipe: Option<ChildStderr>) -> Self {
+        let tail = Arc::new(Mutex::new(StderrTail::default()));
+        // With no pipe the sender is dropped here, so `finish` does not wait.
+        let (sender, closed) = mpsc::channel();
+        if let Some(mut pipe) = pipe {
+            let kept = Arc::clone(&tail);
+            std::thread::spawn(move || {
+                let mut buffer = [0_u8; 8192];
+                loop {
+                    match pipe.read(&mut buffer) {
+                        Ok(0) => break,
+                        Ok(read) => {
+                            let chunk = &buffer[..read];
+                            let _ = io::stderr().write_all(chunk);
+                            kept.lock()
+                                .unwrap_or_else(PoisonError::into_inner)
+                                .push(chunk);
+                        }
+                        Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
+                        Err(_) => break,
+                    }
+                }
+                let _ = sender.send(());
+            });
+        }
+        Self { tail, closed }
+    }
+
+    /// The tail of what the command wrote to stderr, once it has exited: decoded lossily,
+    /// each line trimmed, blank lines dropped and the rest joined by ` | `, with any other
+    /// control character made a space. Past [`STDERR_TAIL_CHARS`] characters only the last
+    /// that many are kept, after a leading `…`. Empty when it wrote nothing but whitespace.
+    fn finish(self) -> String {
+        let _ = self.closed.recv_timeout(STDERR_DRAIN);
+        self.tail
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .text()
+    }
+}
+
+#[derive(Default)]
+struct StderrTail {
+    bytes: VecDeque<u8>,
+    /// Whether earlier bytes were dropped to keep `bytes` within [`STDERR_TAIL_BYTES`].
+    dropped: bool,
+}
+
+impl StderrTail {
+    fn push(&mut self, chunk: &[u8]) {
+        self.bytes.extend(chunk);
+        let excess = self.bytes.len().saturating_sub(STDERR_TAIL_BYTES);
+        if excess > 0 {
+            self.bytes.drain(..excess);
+            self.dropped = true;
+        }
+    }
+
+    fn text(&self) -> String {
+        let mut bytes: Vec<u8> = self.bytes.iter().copied().collect();
+        if self.dropped {
+            // The cut may have split a character; its continuation bytes are not text.
+            let split = bytes
+                .iter()
+                .take_while(|byte| (0x80..0xC0).contains(*byte))
+                .count();
+            bytes.drain(..split);
+        }
+        let decoded = String::from_utf8_lossy(&bytes);
+        let joined: String = decoded
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>()
+            .join(" | ")
+            .chars()
+            .map(|character| {
+                if character.is_control() {
+                    ' '
+                } else {
+                    character
+                }
+            })
+            .collect();
+        let count = joined.chars().count();
+        if count <= STDERR_TAIL_CHARS && !self.dropped {
+            return joined;
+        }
+        let kept: String = joined
+            .chars()
+            .skip(count.saturating_sub(STDERR_TAIL_CHARS))
+            .collect();
+        format!("…{}", kept.trim_start())
+    }
+}
+
+/// `reason`, followed by the tail of the command's stderr when it wrote any.
+fn with_stderr(reason: String, stderr: &str) -> String {
+    if stderr.is_empty() {
+        reason
+    } else {
+        format!("{reason}; its stderr: {stderr}")
+    }
 }
 
 fn describe_exit(program: &str, status: ExitStatus) -> String {

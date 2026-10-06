@@ -63,7 +63,15 @@ JSON object there and exits 0:
 `detail` and `conditions` are optional. Returned conditions are recorded in that result's
 host conditions only; a returned name equal to a declared condition, `load1`, `cpus` or
 `mem_available_mib` makes the measurement an error rather than replacing a sampled value.
-A command's own stdout and stderr go to stderr, never into a report.
+A command's own stdout and stderr go to stderr, never into a report, with one exception:
+when a budget's command fails, times out, or exits 0 with a result that cannot be read,
+its result's `error` names why, how it exited, and then `; its stderr: ` and the tail of
+what it wrote there. That tail is decoded lossily, each line trimmed, blank lines dropped
+and the rest joined by ` | `, and it is bounded to at most the last 1000 characters,
+after a leading `…` when anything was cut. A command that wrote nothing there gets no
+such suffix; a command that succeeds is reported without its stderr. A failing condition
+command is still recorded as `unknown`, and the same reason appears on the line
+onebudgetspec prints to stderr for it.
 
 ## The command line
 
