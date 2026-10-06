@@ -13,6 +13,7 @@ import { BINARY_ENV } from "../src/index.ts";
 import {
   builtBinary,
   cleanScratch,
+  delegating,
   ROOT,
   ran,
   recording,
@@ -48,17 +49,18 @@ async function installed(): Promise<{
 }> {
   const dir = scratch();
   const log = join(dir, "ran.log");
-  const body = `exec "${builtBinary()}" "$@"`;
+  const body = delegating(builtBinary());
   const modules = join(dir, "project", "node_modules");
   const sdk = join(modules, "@onebudgetspec", "sdk");
   mkdirSync(sdk, { recursive: true });
   cpSync(join(ROOT, "sdks", "typescript", "src"), join(sdk, "src"), { recursive: true });
   cpSync(join(ROOT, "sdks", "typescript", "package.json"), join(sdk, "package.json"));
   // The SDK's one runtime import outside itself, which its build bundles, linked as a
-  // package manager links it.
+  // package manager links it: a junction on Windows, which needs no privilege there.
   symlinkSync(
     realpathSync(join(ROOT, "sdks", "typescript", "node_modules", "ajv")),
     join(modules, "ajv"),
+    "junction",
   );
   const cli = join(modules, "@onebudgetspec", "cli");
   for (const part of ["package.json", "bin", "lib"]) {
@@ -109,7 +111,7 @@ describe("the binary a call runs", () => {
     writeFileSync(
       join(work, "budgets.yaml"),
       "schema_version: 1\nbudgets:\n  - id: quick\n    measure: elapsed\n" +
-        '    command: ["/bin/sh", "-c", "exit 0"]\n    unit: seconds\n' +
+        `    command: ${JSON.stringify([process.execPath, "-e", "0"])}\n    unit: seconds\n` +
         "    direction: max\n    threshold: 60\n",
     );
     const report = await sdk.check({ cwd: work });

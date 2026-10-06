@@ -4,7 +4,7 @@
 // `bun scripts/generate.ts` (`just generate`) writes src/generated; `--check` (run by
 // `just lint`) writes nothing and fails, naming each file, when what is committed differs
 // from what the current schema generates. The binary is ONEBUDGETSPEC_BIN when set, else the
-// workspace's target/debug/onebudgetspec.
+// workspace's target/debug/onebudgetspec (onebudgetspec.exe on Windows).
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -49,9 +49,11 @@ function run(command: string, args: string[], nextStep: string, input?: string):
 
 /** `content` as biome formats a file named `name`, so the committed files pass format-check. */
 function formatted(name: string, content: string): string {
-  const biome = join(WORKSPACE, "node_modules", ".bin", "biome");
+  // Biome's own entry script, run by this runtime, picks the platform's binary; the
+  // node_modules/.bin link to it is a shell or .exe shim that differs by platform.
+  const biome = join(WORKSPACE, "node_modules", "@biomejs", "biome", "bin", "biome");
   const path = `--stdin-file-path=sdks/typescript/src/generated/${name}`;
-  return run(biome, ["format", path], TOOLS, content);
+  return run(process.execPath, [biome, "format", path], TOOLS, content);
 }
 
 type SchemaBundle = {
@@ -107,7 +109,14 @@ if (given.some((argument) => argument !== "--check")) {
 }
 const checking = given.includes("--check");
 
-const binary = process.env.ONEBUDGETSPEC_BIN || join(WORKSPACE, "target", "debug", "onebudgetspec");
+const binary =
+  process.env.ONEBUDGETSPEC_BIN ||
+  join(
+    WORKSPACE,
+    "target",
+    "debug",
+    process.platform === "win32" ? "onebudgetspec.exe" : "onebudgetspec",
+  );
 if (!existsSync(binary)) fail(`${binary} is missing; ${REBUILD}`);
 const bundle = parseBundle(run(binary, ["schema"], REBUILD));
 

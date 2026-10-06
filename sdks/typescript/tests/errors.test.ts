@@ -1,17 +1,19 @@
 // How a call that gets no report rejects, and what it refuses before anything runs.
 import { afterAll, expect, test } from "bun:test";
-import { chmodSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { check, listBudgets, OnebudgetspecError, schema, validate } from "../src/index.ts";
 import {
   builtBinary,
   cleanScratch,
+  printing,
   ROOT,
-  recording,
   rejection,
   runCli,
   scratch,
+  standIn,
+  WINDOWS,
 } from "./helpers.ts";
 
 afterAll(cleanScratch);
@@ -41,17 +43,24 @@ test("a binary that cannot run rejects", async () => {
 
 test("a status that is no report rejects with what the binary said", async () => {
   const dir = scratch();
-  const log = join(dir, "ran.log");
-  const refusing = recording(join(dir, "a"), "a", log, 'echo "launcher: no carrier" >&2; exit 69');
+  const refusing = standIn(
+    join(dir, "a"),
+    'process.stderr.write("launcher: no carrier\\n");\nprocess.exitCode = 69;\n',
+  );
   const refused = await rejection(check({ cwd: dir, binary: refusing }), OnebudgetspecError);
   expect([refused.exitCode, refused.message]).toEqual([69, "launcher: no carrier"]);
 
-  const silent = recording(join(dir, "b"), "b", log, "exit 70");
+  const silent = standIn(join(dir, "b"), "process.exit(70);\n");
   expect(
     (await rejection(check({ cwd: dir, binary: silent }), OnebudgetspecError)).message,
   ).toContain("exited 70 with no message");
+});
 
-  const killed = recording(join(dir, "c"), "c", log, "kill -9 $$");
+// Windows has no signals: a process ended there by TerminateProcess has an exit status,
+// which the case above covers, so no Windows run can end the binary this way.
+test.skipIf(WINDOWS)("a binary ended by a signal rejects naming it", async () => {
+  const dir = scratch();
+  const killed = standIn(join(dir, "c"), 'process.kill(process.pid, "SIGKILL");\n');
   const ended = await rejection(validate({ cwd: dir, binary: killed }), OnebudgetspecError);
   expect(ended.exitCode).toBeNull();
   expect(ended.message).toContain("terminated by SIGKILL");
@@ -71,7 +80,7 @@ test.each<[string, string, Call, string]>([
   ["[]", "schema", schemaWith, "not a JSON object"],
 ])("stdout %p from %s rejects", async (printed, _name, call, reason) => {
   const dir = scratch();
-  const liar = recording(join(dir, "bin"), "liar", join(dir, "ran.log"), `echo '${printed}'`);
+  const liar = printing(join(dir, "bin"), `${printed}\n`);
   const refused = await rejection(call(liar), OnebudgetspecError);
   expect(refused.message).toContain(reason);
 });
@@ -118,18 +127,14 @@ test.each<[string, Record<string, string>, Record<string, string>]>([
   ["the largest uint64", {}, { mem_available_mib: "18446744073709551615" }],
 ])("a report holding %s is returned", async (_what, result, host) => {
   const dir = scratch();
-  const program = join(dir, "onebudgetspec");
-  writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${reportWith(result, host)}\nEOF\n`);
-  chmodSync(program, 0o755);
+  const program = printing(dir, `${reportWith(result, host)}\n`);
   const report = await check({ binary: program });
   expect(report.results).toHaveLength(1);
 });
 
 test("a report whose every format holds is returned as printed", async () => {
   const dir = scratch();
-  const program = join(dir, "onebudgetspec");
-  writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${reportWith({})}\nEOF\n`);
-  chmodSync(program, 0o755);
+  const program = printing(dir, `${reportWith({})}\n`);
   const report = await check({ binary: program });
   expect(report.results[0]?.ended_at).toBe("2026-10-05T10:00:01.123456789+02:00");
 });
@@ -180,9 +185,7 @@ test.each<[string, Record<string, string>, Record<string, string>, string]>([
   ["memory in exponent form", {}, { mem_available_mib: "1e30" }, "1e30 is not a 64-bit"],
 ])("%s is refused", async (_what, result, host, reason) => {
   const dir = scratch();
-  const program = join(dir, "onebudgetspec");
-  writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${reportWith(result, host)}\nEOF\n`);
-  chmodSync(program, 0o755);
+  const program = printing(dir, `${reportWith(result, host)}\n`);
   const refused = await rejection(check({ binary: program }), OnebudgetspecError);
   expect(refused.message).toContain(reason);
 });
@@ -225,12 +228,16 @@ test("a value shaped like a flag is passed as a value", async () => {
   expect(refused.message).toContain("--version");
 });
 
+/** A script writing a measurement of 1e20 to the result file. */
+const WRITE_1E20 =
+  'require("node:fs").writeFileSync(process.env.ONEBUDGETSPEC_RESULT, \'{"value": 1e20}\');';
+
 test("a measurement and threshold too large for an integer come back as the doubles they are", async () => {
   const dir = scratch();
   writeFileSync(
     join(dir, "budgets.yaml"),
     "schema_version: 1\nbudgets:\n  - id: huge\n    measure: reported\n" +
-      `    command: ["/bin/sh", "-c", "printf '{\\"value\\": 1e20}' > \\"$ONEBUDGETSPEC_RESULT\\""]\n` +
+      `    command: ${JSON.stringify([process.execPath, "-e", WRITE_1E20])}\n` +
       "    unit: bytes\n    direction: max\n    threshold: 1e300\n",
   );
   const printed = runCli(["check", "--json"], dir);
@@ -250,9 +257,7 @@ JSON.parse = (text, reviver) =>
 function withoutSource(printed: string): { status: number | null; stdout: string } {
   const dir = scratch();
   writeFileSync(join(dir, "without-source.js"), WITHOUT_SOURCE);
-  const program = join(dir, "onebudgetspec");
-  writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${printed}\nEOF\n`);
-  chmodSync(program, 0o755);
+  const program = printing(dir, `${printed}\n`);
   const script = join(dir, "drive.ts");
   const sdk = join(ROOT, "sdks", "typescript", "src", "index.ts");
   writeFileSync(
@@ -312,9 +317,7 @@ test.each(["empty", "boolean version", "roots array", "missing root", "root not 
   "a bundle (%s) of another shape rejects naming what to do",
   async (change) => {
     const dir = scratch();
-    const program = join(dir, "onebudgetspec");
-    writeFileSync(program, `#!/bin/sh\ncat <<'EOF'\n${bundleWith(change)}\nEOF\n`);
-    chmodSync(program, 0o755);
+    const program = printing(dir, `${bundleWith(change)}\n`);
     const refused = await rejection(schema({ binary: program }), OnebudgetspecError);
     expect(refused.message).toContain("is not a schema bundle");
     expect(refused.message).toContain("budgets-file");

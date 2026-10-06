@@ -1,21 +1,21 @@
 // The launcher's decisions, over real files in a temporary directory and real processes.
 const { expect, test } = require("bun:test");
 const { spawnSync } = require("node:child_process");
-const { chmodSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } = require("node:fs");
+const { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
 const { CARRIERS, finish, locate } = require("../lib/launcher.js");
 
 /**
- * A carrier package on disk whose binary is the shell script `body`.
- * @param {string} body
+ * A carrier package on disk holding `bin/<name>`. `locate` reads only the files, never runs
+ * the binary, so its content is a placeholder.
+ * @param {string} name the binary's file name
  */
-function carrier(body) {
+function carrier(name) {
   const root = mkdtempSync(join(tmpdir(), "carrier-"));
   mkdirSync(join(root, "bin"));
   writeFileSync(join(root, "package.json"), "{}");
-  writeFileSync(join(root, "bin", "onebudgetspec"), `#!/bin/sh\n${body}\n`);
-  chmodSync(join(root, "bin", "onebudgetspec"), 0o755);
+  writeFileSync(join(root, "bin", name), "a carrier's binary\n");
   return root;
 }
 
@@ -37,10 +37,25 @@ function located(found) {
   return found;
 }
 
+/**
+ * This runtime run with the script `source`: a real process on every platform.
+ * @param {string} source
+ */
+function runScript(source) {
+  return spawnSync(process.execPath, ["-e", source]);
+}
+
 test("every published platform is a carrier, and nothing else is", () => {
-  expect(CARRIERS).toEqual(["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64"]);
+  expect(CARRIERS).toEqual([
+    "linux-x64",
+    "linux-arm64",
+    "darwin-x64",
+    "darwin-arm64",
+    "win32-x64",
+    "win32-arm64",
+  ]);
   for (const [platform, arch] of [
-    ["win32", "x64"],
+    ["win32", "ia32"],
     ["linux", "ia32"],
     ["freebsd", "x64"],
   ]) {
@@ -55,19 +70,37 @@ test("every published platform is a carrier, and nothing else is", () => {
   }
 });
 
-test("the carrier for the platform is resolved to its binary", () => {
-  const root = carrier("exit 0");
+test.each([
+  ["linux", "x64", "onebudgetspec"],
+  ["darwin", "arm64", "onebudgetspec"],
+  ["win32", "x64", "onebudgetspec.exe"],
+  ["win32", "arm64", "onebudgetspec.exe"],
+])("the carrier for %s-%s is resolved to its %s", (platform, arch, name) => {
+  const root = carrier(name);
   /** @type {string[]} */
   const requested = [];
   const found = located(
-    locate("linux", "x64", (request) => {
+    locate(platform, arch, (request) => {
       requested.push(request);
       return join(root, "package.json");
     }),
   );
-  expect(requested).toEqual(["@onebudgetspec/cli-linux-x64/package.json"]);
-  expect(found.carrier).toBe("@onebudgetspec/cli-linux-x64");
-  expect(found.binary.endsWith(join("bin", "onebudgetspec"))).toBe(true);
+  expect(requested).toEqual([`@onebudgetspec/cli-${platform}-${arch}/package.json`]);
+  expect(found.carrier).toBe(`@onebudgetspec/cli-${platform}-${arch}`);
+  expect(found.binary.endsWith(join("bin", name))).toBe(true);
+});
+
+test("a carrier holding only the other platforms' binary name is refused", () => {
+  const windowsOnly = carrier("onebudgetspec.exe");
+  const unixOnly = carrier("onebudgetspec");
+  for (const [platform, root] of [
+    ["linux", windowsOnly],
+    ["win32", unixOnly],
+  ]) {
+    const without = refused(locate(platform, "x64", () => join(root, "package.json")));
+    expect(without.status).toBe(69);
+    expect(without.message).toContain(`@onebudgetspec/cli-${platform}-x64 is not installed`);
+  }
 });
 
 test("a missing carrier, or one without its binary, is refused with 69", () => {
@@ -91,28 +124,34 @@ test("a missing carrier, or one without its binary, is refused with 69", () => {
 });
 
 test("a binary that resolves outside its package is refused", () => {
-  const root = carrier("exit 0");
-  const elsewhere = carrier("exit 0");
+  const root = carrier("onebudgetspec");
+  const elsewhere = carrier("onebudgetspec");
   const linked = mkdtempSync(join(tmpdir(), "carrier-"));
-  mkdirSync(join(linked, "bin"));
   writeFileSync(join(linked, "package.json"), "{}");
-  symlinkSync(join(elsewhere, "bin", "onebudgetspec"), join(linked, "bin", "onebudgetspec"));
+  // The package's bin directory is a link to another package's; a junction on Windows,
+  // which needs no privilege there, and a directory symlink elsewhere.
+  symlinkSync(join(elsewhere, "bin"), join(linked, "bin"), "junction");
   expect(located(locate("linux", "x64", () => join(root, "package.json"))).binary).toBeDefined();
   const escaped = refused(locate("linux", "x64", () => join(linked, "package.json")));
   expect(escaped.status).toBe(69);
   expect(escaped.message).toContain("outside the package");
 });
 
-test("the binary's exit status, failure to start and signal become the launcher's", () => {
-  const exits = carrier("exit 3");
-  const binary = join(exits, "bin", "onebudgetspec");
-  expect(finish(spawnSync(binary, []), binary, "c")).toEqual({ status: 3 });
-  const killed = join(carrier("kill -9 $$"), "bin", "onebudgetspec");
-  const signalled = finish(spawnSync(killed, []), killed, "c");
-  expect(signalled.status).toBe(70);
-  expect(signalled.message).toContain("terminated by SIGKILL");
-  const absent = join(exits, "bin", "not-there");
+test("the binary's exit status and failure to start become the launcher's", () => {
+  expect(finish(runScript("process.exit(3)"), "b", "c")).toEqual({ status: 3 });
+  const absent = join(carrier("onebudgetspec"), "bin", "not-there");
   const failed = finish(spawnSync(absent, []), absent, "@onebudgetspec/cli-linux-x64");
   expect(failed.status).toBe(69);
   expect(failed.message).toContain("reinstall @onebudgetspec/cli-linux-x64");
 });
+
+// Windows has no signals: a process ended there by TerminateProcess has an exit status,
+// which the status case above covers, so no Windows run can end the binary this way.
+test.skipIf(process.platform === "win32")(
+  "a binary ended by a signal ends the launcher with 70",
+  () => {
+    const signalled = finish(runScript("process.kill(process.pid, 'SIGKILL')"), "b", "c");
+    expect(signalled.status).toBe(70);
+    expect(signalled.message).toContain("terminated by SIGKILL");
+  },
+);

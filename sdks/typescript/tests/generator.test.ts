@@ -17,7 +17,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import { builtBinary, cleanScratch, ROOT, scratch } from "./helpers.ts";
+import {
+  builtBinary,
+  cleanScratch,
+  printing,
+  ROOT,
+  SYMLINKS,
+  scratch,
+  standIn,
+} from "./helpers.ts";
 
 afterAll(cleanScratch);
 
@@ -31,8 +39,9 @@ function workspace(): string {
   cpSync(join(PACKAGE, "scripts"), join(copy, "scripts"), { recursive: true });
   cpSync(join(PACKAGE, "src", "generated"), join(copy, "src", "generated"), { recursive: true });
   for (const file of ["biome.json", ".gitignore"]) cpSync(join(ROOT, file), join(root, file));
-  symlinkSync(join(ROOT, "node_modules"), join(root, "node_modules"));
-  symlinkSync(join(PACKAGE, "node_modules"), join(copy, "node_modules"));
+  // Junctions on Windows, which need no privilege there; directory symlinks elsewhere.
+  symlinkSync(join(ROOT, "node_modules"), join(root, "node_modules"), "junction");
+  symlinkSync(join(PACKAGE, "node_modules"), join(copy, "node_modules"), "junction");
   return copy;
 }
 
@@ -89,10 +98,7 @@ test("--check names stale, missing and extra files; generating repairs them", ()
 });
 
 function fakeBinary(printed: string): string {
-  const program = join(scratch(), "onebudgetspec");
-  writeFileSync(program, `#!/bin/sh\nprintf '%s' '${printed}'\n`);
-  chmodSync(program, 0o755);
-  return program;
+  return printing(scratch(), printed);
 }
 
 test.each([
@@ -119,9 +125,10 @@ test("a missing binary is refused with how to build it", () => {
 
 test("a binary that fails is refused with its own message", () => {
   const copy = workspace();
-  const program = join(scratch(), "onebudgetspec");
-  writeFileSync(program, "#!/bin/sh\necho 'schema: broken' >&2\nexit 3\n");
-  chmodSync(program, 0o755);
+  const program = standIn(
+    scratch(),
+    'process.stderr.write("schema: broken\\n");\nprocess.exitCode = 3;\n',
+  );
   const refused = generate(copy, program);
   expect(refused.status).toBe(1);
   expect(refused.stderr).toContain("schema: broken");
@@ -139,6 +146,8 @@ test("a generated file it cannot write is refused with a next step", () => {
   writeFileSync(stale, "// stale\n");
   chmodSync(stale, 0o444);
   const refused = generate(copy, builtBinary());
+  // Writable again, so the scratch directory can be removed on Windows too.
+  chmodSync(stale, 0o644);
   expect(refused.status).toBe(1);
   expect(refused.stderr).toContain("make it writable");
 });
@@ -187,7 +196,8 @@ test("a directory where a model belongs is named stale and replaced", () => {
   expect(generate(copy, builtBinary(), "--check").status).toBe(0);
 });
 
-test("a symlink where a model belongs is replaced, never written through", () => {
+// A symlink to a file needs a privilege on Windows; see SYMLINKS.
+test.skipIf(!SYMLINKS)("a symlink where a model belongs is replaced, never written through", () => {
   const copy = workspace();
   const committed = contents(copy);
   const outside = join(scratch(), "outside.ts");
@@ -218,7 +228,8 @@ test("an unexpected directory and a link to one outside are named and removed", 
   const outside = join(scratch(), "outside");
   mkdirSync(outside);
   writeFileSync(join(outside, "keep.txt"), "keep me\n");
-  symlinkSync(outside, join(generated, "link"));
+  // A junction on Windows, which needs no privilege there; a directory symlink elsewhere.
+  symlinkSync(outside, join(generated, "link"), "junction");
   const drifted = contents(copy);
 
   const checked = generate(copy, builtBinary(), "--check");

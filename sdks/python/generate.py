@@ -3,7 +3,8 @@
 ``python generate.py`` (``just generate``) writes ``src/onebudgetspec_sdk/_generated``;
 ``python generate.py --check`` (run by ``just lint``) writes nothing and fails, naming each
 file, when what is committed differs from what the current schema generates. The binary is
-``ONEBUDGETSPEC_BIN`` when set, else the workspace's ``target/debug/onebudgetspec``.
+``ONEBUDGETSPEC_BIN`` when set, else the workspace's ``target/debug/onebudgetspec``
+(``onebudgetspec.exe`` on Windows).
 """
 
 import argparse
@@ -18,7 +19,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 GENERATED = HERE / "src" / "onebudgetspec_sdk" / "_generated"
-WORKSPACE_BINARY = HERE.parents[1] / "target" / "debug" / "onebudgetspec"
+#: The binary cargo builds in the workspace, which Windows names with its ``.exe``.
+WORKSPACE_BINARY = (
+    HERE.parents[1]
+    / "target"
+    / "debug"
+    / ("onebudgetspec.exe" if os.name == "nt" else "onebudgetspec")
+)
 #: The bundle roots the SDK's calls return, and the module each is generated into.
 ROOTS = {"check-report": "check_report.py", "list-report": "list_report.py"}
 HEADER = (
@@ -69,7 +76,7 @@ class SchemaBundle:
 def _run(command: list[str], next_step: str, *, stdin: str | None = None) -> str:
     try:
         completed = subprocess.run(
-            command, input=stdin, capture_output=True, text=True, check=False
+            command, input=stdin, capture_output=True, encoding="utf-8", check=False
         )
     except OSError as error:
         raise GenerateError(f"cannot run {command[0]} ({error}); {next_step}") from error
@@ -102,7 +109,7 @@ def render(root: str, schema: dict[str, object]) -> str:
     with tempfile.TemporaryDirectory() as scratch:
         source = Path(scratch) / f"{root}.json"
         output = Path(scratch) / "models.py"
-        source.write_text(json.dumps(schema))
+        source.write_text(json.dumps(schema), encoding="utf-8")
         _run(
             [
                 sys.executable,
@@ -137,7 +144,7 @@ def render(root: str, schema: dict[str, object]) -> str:
             ],
             tools,
         )
-        text = output.read_text()
+        text = output.read_text(encoding="utf-8")
     return _formatted(text)
 
 
@@ -203,7 +210,7 @@ def _differences(wanted: dict[str, str]) -> tuple[list[str], list[str]]:
         for name, content in wanted.items()
         if name not in present
         or not _is_model_file(present[name])
-        or present[name].read_text() != content
+        or present[name].read_text(encoding="utf-8") != content
     )
     return stale, sorted(set(present) - set(wanted))
 
@@ -241,7 +248,8 @@ def main(argv: list[str] | None = None) -> int:
             target = GENERATED / name
             if target.is_symlink() or (target.exists() and not _is_model_file(target)):
                 _remove(target)
-            target.write_text(wanted[name])
+            # LF on every platform, as committed: Windows would otherwise write CRLF.
+            target.write_text(wanted[name], encoding="utf-8", newline="\n")
         for name in extra:
             _remove(GENERATED / name)
     except GenerateError as error:
