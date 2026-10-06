@@ -427,7 +427,7 @@ wheels = [
 
 [[package]]
 name = "onebudgetspec-cli"
-version = "0.1.1"
+version = "0.1.2"
 source = { virtual = "." }
 
 [[package]]
@@ -465,7 +465,7 @@ dev = [
 
 [[package]]
 name = "onebudgetspec-sdk"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "sdks/python" }
 dependencies = [
     { name = "jsonschema" },

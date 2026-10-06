@@ -2,7 +2,7 @@
 # onto PATH by `pip install onebudgetspec-cli`. Also the root of the uv workspace.
 [project]
 name = "onebudgetspec-cli"
-version = "0.1.1"
+version = "0.1.2"
 description = "The onebudgetspec command line: check, validate and list the budgets registered in budgets.yaml files."
 readme = "README.md"
 requires-python = ">=3.9"

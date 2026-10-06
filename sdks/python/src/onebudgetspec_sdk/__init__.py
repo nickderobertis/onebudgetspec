@@ -42,4 +42,4 @@ __all__ = [
 ]
 
 #: The version of this package, which releases in lock step with the ``onebudgetspec`` binary.
-__version__ = "0.1.1"
+__version__ = "0.1.2"
