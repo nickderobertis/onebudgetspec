@@ -199,7 +199,8 @@ worked example, a repository lays them out as:
 budgets.yaml                         # always checked
 services/api/budgets.yaml            # checked when services/api is affected
 services/api/budgets/measure.mjs     # the one runner of the file's reported budgets
-services/api/budgets/fixtures/       # recorded traffic only those budgets replay
+services/api/budgets/fixtures/       # seeded pages only one budget reads
+services/api/tests/sync.test.mjs     # an existing test that also records telemetry
 services/api/project.json
 ```
 
@@ -208,12 +209,21 @@ its measurements: the commands it names, the tests they run, and fixtures only i
 use. Its measurements may call shared code anywhere else, such as a common test harness,
 the code under measurement, or a fixture other tests use too; only something that exists
 solely to serve one of its budgets must not live outside that tree. Here
-`services/api/budgets/fixtures/sync.json`, which only the API's budgets replay, belongs under
+`services/api/budgets/fixtures/pages.json`, which only the API's budgets read, belongs under
 `services/api`, while the `libs/http-client` they measure and the `tools/test-harness` every
 project's tests share stay where they are.
 
-A budget's `command` runs its measurement directly, or through one generic runner that
-reads `ONEBUDGETSPEC_BUDGET_ID`, never through a wrapper script per budget:
+Prefer measuring where a test already exercises the behaviour. An existing test records the
+budget's figure as temporary telemetry during its normal run, written to a test output that
+is never committed, and the budget's command only analyses that data and reports it. A
+standalone measurement is for a behaviour no existing test exercises, or one whose
+recording there would cost more than measuring it on its own. Here the API's sync test
+already replays recorded traffic, so it records each upstream request it makes, and
+`api-requests-per-sync` counts them; no test pages through results, so
+`api-queries-per-page` measures on its own.
+
+A budget's `command` runs its measurement or analysis directly, or through one generic
+runner that reads `ONEBUDGETSPEC_BUDGET_ID`, never through a wrapper script per budget:
 
 ```yaml title="services/api/budgets.yaml"
 schema_version: 1
@@ -244,11 +254,17 @@ budgets:
 ```
 
 ```js title="services/api/budgets/measure.mjs"
+import { readFile } from "node:fs/promises";
 import { report } from "@onebudgetspec/sdk";
-import { queriesPerPage, requestsPerSync } from "./measurements.mjs";
+import { queriesPerPage } from "./queries-per-page.mjs";
 
 const measurements = {
-  "api-requests-per-sync": requestsPerSync,
+  // Analyses what tests/sync.test.mjs recorded; a missing recording fails the budget.
+  "api-requests-per-sync": async () => {
+    const requests = JSON.parse(await readFile("dist/telemetry/sync-requests.json", "utf8"));
+    return { value: requests.length, detail: "upstream requests one sync made" };
+  },
+  // No existing test pages through results, so this one measures on its own.
   "api-queries-per-page": queriesPerPage,
 };
 const { value, detail } = await measurements[process.env.ONEBUDGETSPEC_BUDGET_ID]();
@@ -261,23 +277,30 @@ Whether a budget's check can be cached depends on how it is measured:
   and fixtures, such as requests counted against recorded traffic. Its cache key covers its
   budgets file's tree (the project root), the production sources of the code it measures
   (in Nx, `^production`, or the named dependency's inputs), and the onebudgetspec version
-  (the lockfile entry that pins it).
+  (the lockfile entry that pins it). One that analyses a test's telemetry depends on that
+  test and takes the telemetry it wrote as an input too.
 - **An `elapsed` budget is not cacheable**, and neither is any budget that reads the host:
   its load, the clock, the network or a credential. Label those budgets, here `host`, and
   check them in a target that is never cached.
 
 So `services/api/project.json` checks its deterministic budgets in a cached `budgets`
-target and the rest in an uncached one:
+target, after the test that records their telemetry, and the rest in an uncached one:
 
 ```json
 {
   "targets": {
+    "test": {
+      "command": "node --test services/api/tests",
+      "outputs": ["{projectRoot}/dist/telemetry"]
+    },
     "budgets": {
       "command": "onebudgetspec check services/api/budgets.yaml --exclude-label host",
+      "dependsOn": ["test"],
       "cache": true,
       "inputs": [
         "{projectRoot}/**/*",
         "^production",
+        { "dependentTasksOutputFiles": "**/telemetry/*.json" },
         { "externalDependencies": ["@onebudgetspec/cli"] }
       ]
     },
