@@ -54,6 +54,22 @@ fn recursive_check_finds_nested_files_in_path_order_and_skips_gitignored_ones() 
         .check_report();
     assert_eq!(ids(&named, "results"), ["alpha", "alpha-deep"]);
     assert_eq!(result(&named, "alpha")["file"], "alpha/budgets.yaml");
+
+    // A root given with a trailing separator, `/` or the platform's own, reads the same.
+    for root in [
+        "alpha/".to_owned(),
+        format!("alpha{}", std::path::MAIN_SEPARATOR),
+    ] {
+        let trailing = fixture
+            .run(["check", "--json", "--recursive", root.as_str()])
+            .expect_status(0)
+            .check_report();
+        assert_eq!(result(&trailing, "alpha")["file"], "alpha/budgets.yaml");
+        assert_eq!(
+            result(&trailing, "alpha-deep")["file"],
+            "alpha/deep/budgets.yaml"
+        );
+    }
 }
 
 #[test]
