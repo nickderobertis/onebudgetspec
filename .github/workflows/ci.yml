@@ -13,9 +13,12 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+# A newer push cancels a stale run. Marking a draft ready does not: that run is on the same
+# commit, so it queues behind the draft's run, whose cancelled lanes would otherwise fail
+# `check` on a commit nothing has judged.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event.action != 'ready_for_review' }}
 
 permissions:
   contents: read

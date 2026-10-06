@@ -30,6 +30,13 @@ const bundle = await schema(); // the JSON Schema bundle
 - `validate({paths, recursive, cwd})` → `Promise<ListReport>`
 - `listBudgets({paths, ids, labels, excludeLabels, recursive, cwd})` → `Promise<ListReport>`
 - `schema()` → `Promise<Record<string, unknown>>`
+- `report(value: number, detail?: string)` → `boolean`, synchronous, which runs no binary: a
+  `reported` budget's command calls it to write its result to the file
+  `ONEBUDGETSPEC_RESULT` names, replacing it, and gets `true`. With that variable unset or
+  empty it writes nothing and returns `false`, so a test that measures behaves the same
+  outside a check. A non-finite value throws `RangeError` and a failed write throws, and
+  neither writes anything. It never reads a budgets file or judges the value; `onebudgetspec
+  check` does. Every budget's command also gets its id in `ONEBUDGETSPEC_BUDGET_ID`.
 
 Exit statuses `0` (within), `1` (over) and `3` (a measurement errored) all resolve with the
 report, since the verdicts are in it. Status `2`, an invalid invocation or budgets file,

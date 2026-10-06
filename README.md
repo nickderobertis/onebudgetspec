@@ -75,7 +75,10 @@ JSON object there and exits 0:
 {"value": 1395.0, "detail": "optional text", "conditions": {"runner": "large"}}
 ```
 
-`detail` and `conditions` are optional. Returned conditions are recorded in that result's
+`detail` and `conditions` are optional. A `reported` command that exits 0 having written
+nothing, only whitespace, text that is not JSON, or an object without a numeric `value` gets
+verdict `error`, and that result's `id` names the budget, so a measurement need not check
+that it wrote its result. Returned conditions are recorded in that result's
 host conditions only; a returned name equal to a declared condition, `load1`, `cpus` or
 `mem_available_mib` makes the measurement an error rather than replacing a sampled value.
 A command's own stdout and stderr go to stderr, never into a report, with one exception:
@@ -89,6 +92,35 @@ anything was cut. A command that wrote nothing but whitespace there gets no such
 a command that succeeds is reported without its stderr. A failing condition command is
 still recorded as `unknown`, and the same reason appears on the line onebudgetspec prints
 to stderr for it.
+
+Every budget's command, `elapsed` and `reported` alike, runs with `ONEBUDGETSPEC_BUDGET_ID`
+set to its budget's `id`; a condition's command, which belongs to no budget, runs without
+it. One generic runner can therefore serve every budget of a file, choosing what to measure
+by that variable, with no list of ids of its own.
+
+Each SDK writes a `reported` result for a measurement written in its language:
+
+| SDK | Reporter |
+| --- | --- |
+| Rust | `onebudgetspec_core::report(value: f64, detail: Option<&str>) -> std::io::Result<bool>` |
+| Python | `onebudgetspec_sdk.report(value: float, detail: str \| None = None) -> bool` |
+| TypeScript | `report(value: number, detail?: string): boolean` from `@onebudgetspec/sdk`, synchronous |
+
+When `ONEBUDGETSPEC_RESULT` is set and non-empty, each replaces the contents of the file it
+names with one JSON object, `{"value": value}` plus `"detail": detail` when a detail is
+given, and returns true. When it is unset or empty, each writes nothing and returns false,
+so a test that measures behaves the same outside a check. A non-finite value is refused
+without writing anything: Rust returns an `Err` of kind `InvalidInput`, Python raises
+`ValueError` and TypeScript throws `RangeError`. A failed write is Rust's `Err`, Python's
+`OSError` or a thrown error in TypeScript. No reporter reads a budgets file or compares the
+value with a threshold: `onebudgetspec check` is the only judge. A command that returns
+`conditions` writes its result itself, as above.
+
+```python
+from onebudgetspec_sdk import report
+
+report(len(recorded_requests), detail="one sync of the recorded fixture")
+```
 
 ## The command line
 
@@ -131,9 +163,9 @@ from it.
 | --- | --- | --- | --- |
 | Package | `onebudgetspec-core` (crates.io) | `onebudgetspec-sdk` (PyPI), imported as `onebudgetspec_sdk` | `@onebudgetspec/sdk` (npm) |
 | Install | `cargo add onebudgetspec-core` | `pip install onebudgetspec-sdk`, which installs `onebudgetspec-cli` at the same version | `npm install @onebudgetspec/sdk`, which installs its optional dependency `@onebudgetspec/cli` at the same version |
-| Calls | `load(paths, recursive)`, then `.select(&Selection)` and `.check()` or `.list_report()`, or `.all().list_report()` to validate; `schema_bundle()` | `check(paths=None, ids=None, labels=None, exclude_labels=None, recursive=False, cwd=None) -> CheckReport`, `validate(paths=None, recursive=False, cwd=None) -> ListReport`, `list_budgets(...)` with `check`'s arguments `-> ListReport`, `schema() -> dict` | `check({paths, ids, labels, excludeLabels, recursive, cwd})`, `validate({paths, recursive, cwd})`, `listBudgets({paths, ids, labels, excludeLabels, recursive, cwd})`, `schema()`, each a promise of the generated type |
+| Calls | `load(paths, recursive)`, then `.select(&Selection)` and `.check()` or `.list_report()`, or `.all().list_report()` to validate; `schema_bundle()`; `report(value, detail)` | `check(paths=None, ids=None, labels=None, exclude_labels=None, recursive=False, cwd=None) -> CheckReport`, `validate(paths=None, recursive=False, cwd=None) -> ListReport`, `list_budgets(...)` with `check`'s arguments `-> ListReport`, `schema() -> dict`; `report(value, detail=None) -> bool`, which runs no binary | `check({paths, ids, labels, excludeLabels, recursive, cwd})`, `validate({paths, recursive, cwd})`, `listBudgets({paths, ids, labels, excludeLabels, recursive, cwd})`, `schema()`, each a promise of the generated type; `report(value, detail)`, synchronous, which runs no binary |
 | Binary | none: it measures in process | the `binary=` argument, then `ONEBUDGETSPEC_BIN`, then the `onebudgetspec` the `onebudgetspec-cli` wheel installed (`Scripts\onebudgetspec.exe` on Windows), then `onebudgetspec` on `PATH` (`onebudgetspec.exe` on Windows) | the `binary` option, then `ONEBUDGETSPEC_BIN`, then the launcher of the resolved `@onebudgetspec/cli` package |
-| Tests and journeys it owes | `crates/onebudgetspec-core/tests/api.rs`, `crates/onebudgetspec-core/tests/schema.rs`, and every CLI journey and conformance case, which drive it through the binary | `sdks/python/tests/test_conformance.py` (every conformance case through `check`, `list_budgets` and `validate`), `sdks/python/tests/test_binary.py` (resolution order and refusals), `sdks/python/tests/test_generate.py` (the model generator), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` | `sdks/typescript/tests/conformance.test.ts`, `sdks/typescript/tests/binary.test.ts`, `sdks/typescript/tests/errors.test.ts` and `sdks/typescript/tests/generator.test.ts` (the same concerns), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` |
+| Tests and journeys it owes | `crates/onebudgetspec-core/tests/api.rs`, `crates/onebudgetspec-core/tests/schema.rs`, and every CLI journey and conformance case, which drive it through the binary; `crates/onebudgetspec-e2e/tests/journeys/rust_report.rs` (`report`) | `sdks/python/tests/test_conformance.py` (every conformance case through `check`, `list_budgets` and `validate`), `sdks/python/tests/test_binary.py` (resolution order and refusals), `sdks/python/tests/test_generate.py` (the model generator), `sdks/python/tests/test_report.py` (`report`), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` | `sdks/typescript/tests/conformance.test.ts`, `sdks/typescript/tests/binary.test.ts`, `sdks/typescript/tests/errors.test.ts`, `sdks/typescript/tests/generator.test.ts` and `sdks/typescript/tests/report.test.ts` (the same concerns), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` |
 
 In Python and TypeScript, exit statuses `0`, `1` and `3` return the report, since the
 verdicts are in it; status `2` (an invalid invocation or budgets file) raises
@@ -164,49 +196,129 @@ affect run; the budgets that must always be checked go in the root file. With Nx
 worked example, a repository lays them out as:
 
 ```text
-budgets.yaml               # always checked
-services/api/budgets.yaml  # checked when services/api is affected
+budgets.yaml                         # always checked
+services/api/budgets.yaml            # checked when services/api is affected
+services/api/budgets/measure.mjs     # the one runner of the file's reported budgets
+services/api/budgets/fixtures/       # seeded pages only one budget reads
+services/api/tests/sync.test.mjs     # an existing test that also records telemetry
 services/api/project.json
 ```
 
-The project's own file:
+A `budgets.yaml` sits at the root of the smallest tree that holds everything specific to
+its measurements: the commands it names, the tests they run, and fixtures only its budgets
+use. Its measurements may call shared code anywhere else, such as a common test harness,
+the code under measurement, or a fixture other tests use too; only something that exists
+solely to serve one of its budgets must not live outside that tree. Here
+`services/api/budgets/fixtures/pages.json`, which only the API's budgets read, belongs under
+`services/api`, while the `libs/http-client` they measure and the `tools/test-harness` every
+project's tests share stay where they are.
+
+Prefer measuring where a test already exercises the behaviour. An existing test records the
+budget's figure as temporary telemetry during its normal run, written to a test output that
+is never committed, and the budget's command only analyses that data and reports it. A
+standalone measurement is for a behaviour no existing test exercises, or one whose
+recording there would cost more than measuring it on its own. Here the API's sync test
+already replays recorded traffic, so it records each upstream request it makes, and
+`api-requests-per-sync` counts them; no test pages through results, so
+`api-queries-per-page` measures on its own.
+
+A budget's `command` runs its measurement or analysis directly, or through one generic
+runner that reads `ONEBUDGETSPEC_BUDGET_ID`, never through a wrapper script per budget:
 
 ```yaml title="services/api/budgets.yaml"
 schema_version: 1
 budgets:
   - id: api-cold-start
     description: "Seconds from process start to the first healthy response"
+    labels: [host]
     measure: elapsed
-    command: ["bash", "scripts/start-and-probe.sh"]
+    command: ["node", "budgets/start-and-probe.mjs"]
     unit: seconds
     direction: max
     threshold: 2
     timeout_seconds: 30
-  - id: api-requests-per-second
+  - id: api-requests-per-sync
+    description: "Upstream requests one sync of the recorded fixture makes"
     measure: reported
-    command: ["bash", "scripts/load-test.sh"]
-    unit: requests/s
-    direction: min
-    threshold: 500
+    command: ["node", "budgets/measure.mjs"]
+    unit: requests
+    direction: max
+    threshold: 40
+  - id: api-queries-per-page
+    description: "Database queries one page of results makes"
+    measure: reported
+    command: ["node", "budgets/measure.mjs"]
+    unit: queries
+    direction: max
+    threshold: 3
 ```
 
-checked by that project's `budgets` target in `services/api/project.json`:
+```js title="services/api/budgets/measure.mjs"
+import { readFile } from "node:fs/promises";
+import { report } from "@onebudgetspec/sdk";
+import { queriesPerPage } from "./queries-per-page.mjs";
+
+const measurements = {
+  // Analyses what tests/sync.test.mjs recorded; a missing recording fails the budget.
+  "api-requests-per-sync": async () => {
+    const requests = JSON.parse(await readFile("dist/telemetry/sync-requests.json", "utf8"));
+    if (!Array.isArray(requests)) throw new Error("sync-requests.json is not an array");
+    return { value: requests.length, detail: "upstream requests one sync made" };
+  },
+  // No existing test pages through results, so this one measures on its own.
+  "api-queries-per-page": queriesPerPage,
+};
+const id = process.env.ONEBUDGETSPEC_BUDGET_ID;
+if (!Object.hasOwn(measurements, id)) throw new Error(`no measurement for budget ${id}`);
+const { value, detail } = await measurements[id]();
+report(value, detail);
+```
+
+Whether a budget's check can be cached depends on how it is measured:
+
+- **A deterministic `reported` budget is cacheable**: one whose figure depends only on code
+  and fixtures, such as requests counted against recorded traffic. Its cache key covers its
+  budgets file's tree (the project root), the production sources of the code it measures
+  (in Nx, `^production`, or the named dependency's inputs), and the onebudgetspec version
+  (the lockfile entry that pins it). One that analyses a test's telemetry depends on that
+  test and takes the telemetry it wrote as an input too.
+- **An `elapsed` budget is not cacheable**, and neither is any budget that reads the host:
+  its load, the clock, the network or a credential. Label those budgets, here `host`, and
+  check them in a target that is never cached.
+
+So `services/api/project.json` checks its deterministic budgets in a cached `budgets`
+target, after the test that records their telemetry, and the rest in an uncached one:
 
 ```json
 {
   "targets": {
+    "test": {
+      "command": "node --test services/api/tests",
+      "outputs": ["{projectRoot}/dist/telemetry"]
+    },
     "budgets": {
-      "command": "onebudgetspec check services/api/budgets.yaml",
-      "inputs": ["{projectRoot}/**/*"]
+      "command": "onebudgetspec check services/api/budgets.yaml --exclude-label host",
+      "dependsOn": ["test"],
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/**/*",
+        "^production",
+        { "dependentTasksOutputFiles": "**/telemetry/*.json" },
+        { "externalDependencies": ["@onebudgetspec/cli"] }
+      ]
+    },
+    "budgets-host": {
+      "command": "onebudgetspec check services/api/budgets.yaml --label host",
+      "cache": false
     }
   }
 }
 ```
 
-and run for the affected projects only:
+and runs them for the affected projects only:
 
 ```sh
-nx affected -t budgets
+nx affected -t budgets budgets-host
 ```
 
 The root file holds what every change must stay within:

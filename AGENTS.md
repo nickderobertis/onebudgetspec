@@ -60,19 +60,22 @@ regenerates them, and each generator's `--check` runs under its project's `lint`
 0, 1 and 3 return the report; 2 raises or rejects `OnebudgetspecError` with the CLI's message.
 
 - **Rust** — `onebudgetspec-core` (`cargo add onebudgetspec-core`): `load`, `select`,
-  `check`, `list_report`, `schema_bundle`, in process. Owes `crates/onebudgetspec-core/tests/`
-  and, through the binary, every journey and conformance case.
+  `check`, `list_report`, `schema_bundle`, `report`, in process. Owes
+  `crates/onebudgetspec-core/tests/` and, through the binary, every journey and conformance
+  case; `report` the `rust_report.rs` journey.
 - **Python** — `onebudgetspec-sdk` (`pip install onebudgetspec-sdk`, requiring
   `onebudgetspec-cli==` the workspace version): `check`, `validate`, `list_budgets`,
-  `schema`. Binary: `binary=`, `ONEBUDGETSPEC_BIN`, the cli wheel's (`bin/onebudgetspec`,
+  `schema`, and `report`, which runs no binary. Binary: `binary=`, `ONEBUDGETSPEC_BIN`, the cli wheel's (`bin/onebudgetspec`,
   or `Scripts/onebudgetspec.exe` on Windows), `PATH`. Owes
   `sdks/python/tests/test_conformance.py` (every case), `test_binary.py` (resolution,
-  refusals), `test_generate.py` (the generator) and the `sdk_python.rs` journey.
+  refusals), `test_generate.py` (the generator), `test_report.py` (`report`) and the
+  `sdk_python.rs` journey.
 - **TypeScript** — `@onebudgetspec/sdk` (`npm install @onebudgetspec/sdk`, with
   `@onebudgetspec/cli` optional, `workspace:*` packed as the workspace version): `check`,
-  `validate`, `listBudgets`, `schema`. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
+  `validate`, `listBudgets`, `schema`, and `report`, which runs no binary. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
   `@onebudgetspec/cli` launcher. Owes `sdks/typescript/tests/conformance.test.ts`,
-  `binary.test.ts`, `errors.test.ts`, `generator.test.ts` and the `sdk_typescript.rs` journey.
+  `binary.test.ts`, `errors.test.ts`, `generator.test.ts`, `report.test.ts` and the
+  `sdk_typescript.rs` journey.
 
 A new conformance case must use only flags both SDK runners parse; each fails on any other.
 <!-- llmlint: ignore-end[instruction_layer_localized] -->
@@ -88,8 +91,10 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 - `crates/onebudgetspec-e2e/tests/journeys/measurement_order.rs` — once each, one at a time, in file order; unselected never run.
 - `crates/onebudgetspec-e2e/tests/journeys/conditions.rs` — declared conditions run once per file and reach only that file's results.
 - `crates/onebudgetspec-e2e/tests/journeys/returned_conditions.rs` — returned conditions stay in their result; collisions and malformed ones are errors.
+- `crates/onebudgetspec-e2e/tests/journeys/budget_id.rs` — `ONEBUDGETSPEC_BUDGET_ID` reaches every budget's command and no condition's; one generic runner serves two budgets.
 - `crates/onebudgetspec-e2e/tests/journeys/command_environment.rs` — working directory, a relative program found from the file's directory, inherited environment, empty result file, no shell.
 - `crates/onebudgetspec-e2e/tests/journeys/command_stderr.rs` — a failed or unreadable measurement's `error` keeps its exit status and bounded stderr tail, in JSON and text; a failing condition's diagnostic line too; success unchanged.
+- `crates/onebudgetspec-e2e/tests/journeys/rust_report.rs` — a Rust measurement's `report` under a check gives `actual` and `detail`; outside one it writes nothing; a non-finite value or a failed write is an error.
 - `crates/onebudgetspec-e2e/tests/journeys/output_streams.rs` — command output on stderr only; an unwritable report exits 3.
 - `crates/onebudgetspec-e2e/tests/journeys/host.rs` — host values each platform supplies (load on Linux and macOS, available memory on Linux and Windows), `unknown` conditions, the file path and ordered times.
 - `crates/onebudgetspec-e2e/tests/journeys/files.rs` — the default file, several files, a missing file refused.
@@ -102,8 +107,8 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 - `crates/onebudgetspec-e2e/tests/journeys/validate.rs` — `validate` accepts a good file, running nothing.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/cli_wheel.rs` — the wheel's binary checks a case exactly as the cargo build does.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs` — the launcher runs its carrier like the cargo build, and refuses a missing, broken or killed one.
-- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` — the SDK wheel pins `onebudgetspec-cli` at the workspace version, and installed beside it answers a conformance case through every call, typed.
-- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` — the SDK tarball takes `@onebudgetspec/cli` as an optional dependency at the workspace version, answers a conformance case through every call beside the launcher, and type-checks a consumer.
+- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` — the SDK wheel pins `onebudgetspec-cli` at the workspace version, and installed beside it answers a conformance case through every call, typed; a Python runner's `report` reaches that binary's check.
+- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` — the SDK tarball takes `@onebudgetspec/cli` as an optional dependency at the workspace version, answers a conformance case through every call beside the launcher, and type-checks a consumer; a JavaScript runner's `report` reaches the launcher's check.
 
 ## Commits, releases, and merging
 

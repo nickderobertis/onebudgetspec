@@ -28,6 +28,7 @@ fn every_kind_of_failed_measurement_is_an_error() {
         (budget("fails", &exits(2)), "status 2"),
         (slow, "timed out"),
         (budget("empty", &node("", &[])), "empty"),
+        (budget("whitespace", &reports(" \n\t \r\n")), "empty"),
         (budget("not-json", &reports("value: 3")), "not valid JSON"),
         (
             budget("not-an-object", &reports("[3]")),
