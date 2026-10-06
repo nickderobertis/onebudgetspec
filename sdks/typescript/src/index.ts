@@ -1,4 +1,5 @@
-/** The onebudgetspec TypeScript SDK: check, validate and list budgets through the binary. */
+/** The onebudgetspec TypeScript SDK: check, validate and list budgets through the binary,
+ * and `report` a `reported` budget's result from the command that measures it. */
 
 import type { CheckResult } from "./generated/check-report.ts";
 import type { ListedBudget } from "./generated/list-report.ts";
@@ -21,6 +22,7 @@ export {
   validate,
 } from "./client.ts";
 export type { CheckReport, CheckResult, Host } from "./generated/check-report.ts";
+export { report } from "./report.ts";
 export type { ListedBudget, ListReport } from "./generated/list-report.ts";
 export { SCHEMA_BUNDLE_VERSION } from "./generated/schemas.ts";
 
