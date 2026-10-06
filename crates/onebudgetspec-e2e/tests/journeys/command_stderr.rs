@@ -437,3 +437,81 @@ fn the_bound_counts_characters_whatever_their_bytes() {
     assert_eq!(tail("split"), "…END");
     assert_eq!(tail("multibyte"), format!("…{}", "€".repeat(1000)));
 }
+
+#[test]
+fn a_refused_result_shape_or_returned_condition_names_the_exit_status_and_the_stderr() {
+    let fixture = Fixture::new();
+    let writes = |id: &str, result: &str| {
+        budget(
+            id,
+            "reported",
+            &json!([
+                "sh",
+                "-c",
+                format!(
+                    "echo 'schema drifted; update the script' >&2; printf '%s' '{result}' > \"$ONEBUDGETSPEC_RESULT\""
+                )
+            ]),
+        )
+    };
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[
+            writes("unknown-key", r#"{"value": 3, "unit": "ms"}"#),
+            writes("string-value", r#"{"value": "3"}"#),
+            writes("collides", r#"{"value": 3, "conditions": {"load1": "9"}}"#),
+        ]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    for (id, reason) in [
+        ("unknown-key", "the result file has an unknown key \"unit\""),
+        (
+            "string-value",
+            "the result's \"value\" is a string rather than a number",
+        ),
+        ("collides", "the result returns a condition named \"load1\""),
+    ] {
+        let error = error(&report, id);
+        assert!(error.starts_with(reason), "{id}: {error}");
+        assert!(
+            error.ends_with(
+                "; sh exited with status 0; its stderr: schema drifted; update the script"
+            ),
+            "{id}: {error}"
+        );
+    }
+}
+
+/// The binary's own stderr failing does not stop a command's stderr being read, so the
+/// command still finishes and its reason still reaches the report.
+#[cfg(target_os = "linux")]
+#[test]
+fn an_unwritable_stderr_still_leaves_the_reason_in_the_report() {
+    let fixture = Fixture::new();
+    explaining(&fixture);
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget("explained", "reported", &json!(["./explain.sh"]))]),
+    );
+    let full = std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/full")
+        .expect("/dev/full opens for writing");
+    let output = crate::common::spawn(
+        std::process::Command::new(crate::common::binary())
+            .args(["check", "--json"])
+            .current_dir(fixture.path())
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(full),
+    )
+    .wait_with_output()
+    .expect("onebudgetspec's output is read");
+    assert_eq!(output.status.code(), Some(3));
+    let report: Value = serde_json::from_slice(&output.stdout).expect("stdout is one report");
+    crate::common::validate("check-report", &report);
+    assert_eq!(error(&report, "explained"), EXPLAINED);
+}
