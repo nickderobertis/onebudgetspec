@@ -8,7 +8,7 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::io::{self, Read, Write};
 use std::path::Path;
-use std::process::{ChildStderr, Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{Arc, Mutex, PoisonError, mpsc};
 use std::time::{Duration, Instant};
 
@@ -82,7 +82,7 @@ fn run_condition(dir: &Path, argv: &[String]) -> Result<String, String> {
     let mut child = command
         .spawn()
         .map_err(|error| format!("cannot run {}: {error}", argv[0]))?;
-    let tee = StderrTee::start(child.stderr.take());
+    let tee = StderrTee::start(&mut child, &argv[0])?;
     let output = child
         .wait_with_output()
         .map_err(|error| format!("cannot wait for {}: {error}", argv[0]))?;
@@ -400,7 +400,7 @@ fn run(
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| format!("cannot run {program}: {error}"))?;
-    let tee = StderrTee::start(child.stderr.take());
+    let tee = StderrTee::start(&mut child, program)?;
     let Some(timeout) = timeout else {
         let status = child
             .wait()
@@ -440,7 +440,7 @@ fn run(
     }
 }
 
-fn kill(child: &mut std::process::Child) {
+fn kill(child: &mut Child) {
     #[cfg(unix)]
     if let Ok(group) = i32::try_from(child.id()) {
         // SAFETY: kill(2) with a negative pid signals the process group the child leads,
@@ -472,13 +472,15 @@ struct StderrTee {
 }
 
 impl StderrTee {
-    fn start(pipe: Option<ChildStderr>) -> Self {
+    /// Start reading `child`'s piped stderr. When no thread can be started to read it,
+    /// `child` is killed, since nothing would drain the pipe, and the reason is returned.
+    fn start(child: &mut Child, program: &str) -> Result<Self, String> {
         let tail = Arc::new(Mutex::new(StderrTail::default()));
         // With no pipe the sender is dropped here, so `finish` does not wait.
         let (sender, closed) = mpsc::channel();
-        if let Some(mut pipe) = pipe {
+        if let Some(mut pipe) = child.stderr.take() {
             let kept = Arc::clone(&tail);
-            std::thread::spawn(move || {
+            let reader = std::thread::Builder::new().spawn(move || {
                 let mut buffer = [0_u8; 8192];
                 loop {
                     match pipe.read(&mut buffer) {
@@ -496,8 +498,12 @@ impl StderrTee {
                 }
                 let _ = sender.send(());
             });
+            if let Err(error) = reader {
+                kill(child);
+                return Err(format!("cannot read the stderr of {program}: {error}"));
+            }
         }
-        Self { tail, closed }
+        Ok(Self { tail, closed })
     }
 
     /// The tail of what the command wrote to stderr, once it has exited: decoded lossily,
@@ -557,7 +563,7 @@ impl StderrTail {
             })
             .collect();
         let count = joined.chars().count();
-        if count <= STDERR_TAIL_CHARS && !self.dropped {
+        if count == 0 || (count <= STDERR_TAIL_CHARS && !self.dropped) {
             return joined;
         }
         let kept: String = joined

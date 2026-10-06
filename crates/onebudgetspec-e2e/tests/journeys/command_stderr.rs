@@ -260,3 +260,167 @@ fn a_failing_condition_states_its_stderr_on_the_diagnostic_line_and_stays_unknow
         run.stderr
     );
 }
+
+#[test]
+fn a_removed_result_file_names_the_exit_status_and_the_stderr() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget(
+            "removed",
+            "reported",
+            &json!([
+                "sh",
+                "-c",
+                "echo 'cleaned up too eagerly' >&2; rm \"$ONEBUDGETSPEC_RESULT\""
+            ]),
+        )]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    let removed = error(&report, "removed");
+    assert!(
+        removed.starts_with("cannot read the result file ONEBUDGETSPEC_RESULT names: "),
+        "{removed}"
+    );
+    assert!(
+        removed.ends_with("; sh exited with status 0; its stderr: cleaned up too eagerly"),
+        "{removed}"
+    );
+}
+
+#[test]
+fn a_command_killed_by_a_signal_keeps_its_stderr() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget(
+            "killed",
+            "elapsed",
+            &json!(["sh", "-c", "echo 'out of memory' >&2; kill -9 $$"]),
+        )]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert_eq!(
+        error(&report, "killed"),
+        "sh was terminated by signal 9; its stderr: out of memory"
+    );
+}
+
+#[test]
+fn a_process_left_holding_stderr_does_not_hold_up_the_check() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[budget(
+            "orphaned",
+            "elapsed",
+            // The sleeper keeps only the command's stderr open: its stdout is the binary's
+            // stderr, which this test reads to the end.
+            &json!([
+                "sh",
+                "-c",
+                "sleep 30 >/dev/null & echo 'left a sleeper behind' >&2; exit 1"
+            ]),
+        )]),
+    );
+    let started = std::time::Instant::now();
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert!(
+        started.elapsed().as_secs() < 20,
+        "the check waited for the process its command left running"
+    );
+    assert_eq!(
+        error(&report, "orphaned"),
+        "sh exited with status 1; its stderr: left a sleeper behind"
+    );
+}
+
+#[test]
+fn control_characters_become_spaces_and_whitespace_alone_adds_nothing() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[
+            budget(
+                "controls",
+                "elapsed",
+                &json!(["sh", "-c", "printf 'a\\tb\\033c\\r\\n' >&2; exit 1"]),
+            ),
+            budget(
+                "blank",
+                "elapsed",
+                &json!(["sh", "-c", "printf '  \\n\\n\\t\\n' >&2; exit 1"]),
+            ),
+            budget(
+                "blank-and-long",
+                "elapsed",
+                &json!(["sh", "-c", "printf '%5000s\\n' '' >&2; exit 1"]),
+            ),
+        ]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert_eq!(
+        error(&report, "controls"),
+        "sh exited with status 1; its stderr: a b c"
+    );
+    assert_eq!(error(&report, "blank"), "sh exited with status 1");
+    assert_eq!(error(&report, "blank-and-long"), "sh exited with status 1");
+}
+
+#[test]
+fn the_bound_counts_characters_whatever_their_bytes() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[
+            // 1000 characters exactly is kept whole; one more is cut to the last 1000.
+            budget(
+                "at-the-bound",
+                "elapsed",
+                &json!(["sh", "-c", "printf '%01000d' 0 >&2; exit 1"]),
+            ),
+            budget(
+                "past-the-bound",
+                "elapsed",
+                &json!(["sh", "-c", "printf '1%01000d' 0 >&2; exit 1"]),
+            ),
+            // Two bytes a character, past the bytes kept, so the cut splits one.
+            budget(
+                "multibyte",
+                "elapsed",
+                &json!([
+                    "sh",
+                    "-c",
+                    "i=0; while [ $i -lt 3001 ]; do printf 'é' >&2; i=$((i+1)); done; exit 1"
+                ]),
+            ),
+        ]),
+    );
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    let tail = |id: &str| {
+        let error = error(&report, id);
+        error
+            .split_once("; its stderr: ")
+            .unwrap_or_else(|| panic!("{error}"))
+            .1
+            .to_owned()
+    };
+    assert_eq!(tail("at-the-bound"), "0".repeat(1000));
+    assert_eq!(tail("past-the-bound"), format!("…{}", "0".repeat(1000)));
+    assert_eq!(tail("multibyte"), format!("…{}", "é".repeat(1000)));
+}

@@ -1,3 +1,3 @@
 #!/bin/sh
-printf 'bad \377 byte\n' >&2
+printf 'sensor returned \377; reconnect the sensor and re-run\n' >&2
 exit 2

@@ -4,8 +4,8 @@
   "exit": 3,
   "error_contains": {
     "explained": "sh exited with status 1; its stderr: telemetry is absent | run the collector first",
-    "raw": "sh exited with status 2; its stderr: bad � byte",
-    "verbose": "progress line 499 of the noise | LAST-LINE",
+    "raw": "sh exited with status 2; its stderr: sensor returned \ufffd; reconnect the sensor and re-run",
+    "verbose": "progress line 499 of the noise | build failed: out of disk space; free some space and re-run",
     "unreadable": "; sh exited with status 0; its stderr: could not reach the database"
   }
 }
