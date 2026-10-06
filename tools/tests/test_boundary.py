@@ -9,9 +9,9 @@ import re
 from pathlib import Path
 
 import pytest
-from conftest import copy_tree
+from conftest import copy_tree, other_version
 
-from repo_checks import boundary
+from repo_checks import boundary, versions
 
 LIBRARY = (*boundary.SHIPPED, "Cargo.lock", "uv.lock", "bun.lock")
 
@@ -22,7 +22,8 @@ OWN_VERSION = re.compile(r'(?m)^(name = "onebudgetspec[^"]*"\nversion = ")[^"]*"
 def bump(lock: Path) -> None:
     """Rewrite the workspace's own versions in ``lock`` the way a release does."""
     text = lock.read_text()
-    bumped = OWN_VERSION.sub(r'\g<1>99.0.0"', text)
+    released = other_version(versions.workspace_version())
+    bumped = OWN_VERSION.sub(lambda found: f'{found.group(1)}{released}"', text)
     assert bumped != text, f"{lock.name} carries none of the workspace's packages"
     lock.write_text(bumped)
 

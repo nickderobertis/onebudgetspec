@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from repo_checks.paths import ROOT
+from repo_checks.versions import workspace_version
 
 
 def build(out: Path) -> subprocess.CompletedProcess[str]:
@@ -21,9 +22,13 @@ def build(out: Path) -> subprocess.CompletedProcess[str]:
 def test_the_new_artifact_is_named_and_earlier_ones_are_not(tmp_path: Path) -> None:
     out = tmp_path / "dist"
     out.mkdir()
-    older = out / "onebudgetspec-cli-0.0.9.tgz"
+    version = workspace_version()
+    # A pre-release of the workspace's version precedes it, whatever the version is.
+    earlier = f"{version}-rc.1"
+    assert earlier != version
+    older = out / f"onebudgetspec-cli-{earlier}.tgz"
     older.write_text("an earlier build")
-    same_name = out / "onebudgetspec-cli-0.1.0.tgz"
+    same_name = out / f"onebudgetspec-cli-{version}.tgz"
     same_name.write_text("an earlier build of this version")
     past = time.time() - 60
     for stale in (older, same_name):

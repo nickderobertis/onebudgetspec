@@ -23,6 +23,13 @@ def schema(binary: Path) -> str:
     return subprocess.run([binary, "schema"], capture_output=True, text=True, check=True).stdout
 
 
+def other_version(version: str) -> str:
+    """A release version that is not ``version``: the next major after it."""
+    other = f"{int(version.split('.')[0]) + 1}.0.0"
+    assert other != version
+    return other
+
+
 def copy_tree(into: Path, *entries: str) -> Path:
     """Copy ``entries`` (files or directories) of the repository into ``into``."""
     for entry in entries:

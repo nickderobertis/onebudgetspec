@@ -56,15 +56,15 @@ class Candidates:
 
 def install_wheel_layout(environment: Path, body: str, log: Path) -> Path:
     """Lay out an installed ``onebudgetspec-cli``: its dist-info and its script."""
+    # The SDK pins the CLI at its own version, so that is the version installed beside it.
+    version = onebudgetspec_sdk.__version__
     site = environment / "lib" / "site-packages"
-    info = site / "onebudgetspec_cli-0.1.0.dist-info"
+    info = site / f"onebudgetspec_cli-{version}.dist-info"
     info.mkdir(parents=True)
     (info / "METADATA").write_text(
-        "Metadata-Version: 2.4\nName: onebudgetspec-cli\nVersion: 0.1.0\n"
+        f"Metadata-Version: 2.4\nName: onebudgetspec-cli\nVersion: {version}\n"
     )
-    (info / "RECORD").write_text(
-        "../../bin/onebudgetspec,,\nonebudgetspec_cli-0.1.0.dist-info/METADATA,,\n"
-    )
+    (info / "RECORD").write_text(f"../../bin/onebudgetspec,,\n{info.name}/METADATA,,\n")
     return recording(environment / "bin", "wheel", log, body)
 
 

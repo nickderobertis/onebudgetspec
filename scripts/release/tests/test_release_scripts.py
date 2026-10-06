@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import threading
+import tomllib
 import zipfile
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -19,6 +20,22 @@ from urllib.parse import unquote
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
+
+#: The version publish.sh releases: the workspace's, which every release bumps.
+VERSION: str = tomllib.loads((ROOT / "Cargo.toml").read_text())["workspace"]["package"]["version"]
+
+
+def other_than(version: str) -> str:
+    """A release version that is not ``version``: the next major after it."""
+    other = f"{int(version.split('.')[0]) + 1}.0.0"
+    assert other != version
+    return other
+
+
+#: A version the workspace is not at, for packages built at the wrong one.
+OTHER = other_than(VERSION)
+#: A pre-release of the workspace's version, which precedes it, for what a registry served before.
+EARLIER = f"{VERSION}-rc.1"
 
 
 class Answer(NamedTuple):
@@ -196,21 +213,22 @@ def test_publish_refuses_without_its_token(tmp_path: Path, target: str, token: s
 
 
 def test_publish_refuses_a_package_its_target_does_not_publish(tmp_path: Path) -> None:
-    packed = pack(tmp_path, "@onebudgetspec/cli", "0.1.0")
+    packed = pack(tmp_path, "@onebudgetspec/cli", VERSION)
     refused = publish("sdk-npm", str(packed), NPM_TOKEN="token")
     assert refused.returncode == 1
     assert "@onebudgetspec/cli, which target sdk-npm does not publish" in refused.stderr
 
 
 def test_publish_refuses_a_package_at_another_version(tmp_path: Path) -> None:
-    packed = pack(tmp_path, "@onebudgetspec/sdk", "9.9.9")
+    assert VERSION != OTHER
+    packed = pack(tmp_path, "@onebudgetspec/sdk", OTHER)
     refused = publish("sdk-npm", str(packed), NPM_TOKEN="token")
     assert refused.returncode == 1
-    assert "@onebudgetspec/sdk@9.9.9, not the workspace's 0.1.0" in refused.stderr
+    assert f"@onebudgetspec/sdk@{OTHER}, not the workspace's {VERSION}" in refused.stderr
 
 
 def test_publish_refuses_an_unreadable_wheel(tmp_path: Path) -> None:
-    (tmp_path / "onebudgetspec_sdk-0.1.0-py3-none-any.whl").write_text("")
+    (tmp_path / f"onebudgetspec_sdk-{VERSION}-py3-none-any.whl").write_text("")
     refused = publish("pypi", str(tmp_path), PYPI_TOKEN="token")
     assert refused.returncode == 1
     assert "is not a readable wheel" in refused.stderr
@@ -235,21 +253,22 @@ def packument(version: str, name: str = "@onebudgetspec/sdk") -> Answer:
 
 
 def test_publish_skips_a_version_npm_already_serves(registry: str, tmp_path: Path) -> None:
-    ANSWERS["/@onebudgetspec/sdk"] = packument("0.1.0")
-    packed = pack(tmp_path, "@onebudgetspec/sdk", "0.1.0")
+    ANSWERS["/@onebudgetspec/sdk"] = packument(VERSION)
+    packed = pack(tmp_path, "@onebudgetspec/sdk", VERSION)
     done = publish("sdk-npm", str(packed), **npm_registry_env(registry, tmp_path))
     assert done.returncode == 0, done.stderr
-    assert done.stdout == "publish: already published at 0.1.0, skipped: @onebudgetspec/sdk\n"
+    assert done.stdout == f"publish: already published at {VERSION}, skipped: @onebudgetspec/sdk\n"
     assert UPLOADS == []
 
 
-@pytest.mark.parametrize("served", [None, "0.0.9"])
+@pytest.mark.parametrize("serves_earlier", [False, True])
 def test_publish_uploads_a_version_npm_does_not_serve(
-    registry: str, tmp_path: Path, served: str | None
+    registry: str, tmp_path: Path, serves_earlier: bool
 ) -> None:
-    if served:
-        ANSWERS["/@onebudgetspec/sdk"] = packument(served)
-    packed = pack(tmp_path, "@onebudgetspec/sdk", "0.1.0")
+    if serves_earlier:
+        assert VERSION != EARLIER
+        ANSWERS["/@onebudgetspec/sdk"] = packument(EARLIER)
+    packed = pack(tmp_path, "@onebudgetspec/sdk", VERSION)
     done = publish("sdk-npm", str(packed), **npm_registry_env(registry, tmp_path))
     assert done.returncode == 0, done.stderr
     assert UPLOADS == ["/@onebudgetspec/sdk"]
@@ -257,10 +276,10 @@ def test_publish_uploads_a_version_npm_does_not_serve(
 
 def test_publish_refuses_when_npm_cannot_say_what_it_serves(registry: str, tmp_path: Path) -> None:
     ANSWERS["/@onebudgetspec/sdk"] = Answer(500, {"error": "down"})
-    packed = pack(tmp_path, "@onebudgetspec/sdk", "0.1.0")
+    packed = pack(tmp_path, "@onebudgetspec/sdk", VERSION)
     refused = publish("sdk-npm", str(packed), **npm_registry_env(registry, tmp_path))
     assert refused.returncode == 1
-    assert "npm could not say whether @onebudgetspec/sdk@0.1.0 is published" in refused.stderr
+    assert f"npm could not say whether @onebudgetspec/sdk@{VERSION} is published" in refused.stderr
     assert UPLOADS == []
 
 
@@ -277,15 +296,15 @@ def test_publish_refuses_a_tarball_without_a_manifest(tmp_path: Path) -> None:
 
 
 def test_publish_reads_a_wheel_s_identity_from_its_metadata(tmp_path: Path) -> None:
-    wheel = tmp_path / "onebudgetspec_cli-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / f"onebudgetspec_cli-{VERSION}-py3-none-any.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr(
-            "onebudgetspec_sdk-0.1.0.dist-info/METADATA",
-            "Metadata-Version: 2.4\nName: onebudgetspec-sdk\nVersion: 0.1.0\n",
+            f"onebudgetspec_sdk-{VERSION}.dist-info/METADATA",
+            f"Metadata-Version: 2.4\nName: onebudgetspec-sdk\nVersion: {VERSION}\n",
         )
     refused = publish("pypi", str(tmp_path), PYPI_TOKEN="token")
     assert refused.returncode == 1
-    assert "is onebudgetspec-sdk 0.1.0, not onebudgetspec-cli 0.1.0" in refused.stderr
+    assert f"is onebudgetspec-sdk {VERSION}, not onebudgetspec-cli {VERSION}" in refused.stderr
     wheel.write_text("not a zip")
     refused = publish("pypi", str(tmp_path), PYPI_TOKEN="token")
     assert "is not a readable wheel" in refused.stderr
@@ -293,24 +312,24 @@ def test_publish_reads_a_wheel_s_identity_from_its_metadata(tmp_path: Path) -> N
 
 def test_publish_skips_crates_crates_io_already_serves(registry: str) -> None:
     for crate in ("onebudgetspec-core", "onebudgetspec"):
-        ANSWERS[f"/api/v1/crates/{crate}/0.1.0"] = Answer(200, {"version": {"num": "0.1.0"}})
+        ANSWERS[f"/api/v1/crates/{crate}/{VERSION}"] = Answer(200, {"version": {"num": VERSION}})
     done = publish(
         "crate", CARGO_REGISTRY_TOKEN="token", ONEBUDGETSPEC_CRATES_API=f"{registry}api/v1"
     )
     assert done.returncode == 0, done.stderr
     assert (
         done.stdout
-        == "publish: already published at 0.1.0, skipped: onebudgetspec-core onebudgetspec\n"
+        == f"publish: already published at {VERSION}, skipped: onebudgetspec-core onebudgetspec\n"
     )
 
 
 def test_publish_refuses_when_crates_io_cannot_say(registry: str) -> None:
-    ANSWERS["/api/v1/crates/onebudgetspec-core/0.1.0"] = Answer(503, {"errors": []})
+    ANSWERS[f"/api/v1/crates/onebudgetspec-core/{VERSION}"] = Answer(503, {"errors": []})
     refused = publish(
         "crate", CARGO_REGISTRY_TOKEN="token", ONEBUDGETSPEC_CRATES_API=f"{registry}api/v1"
     )
     assert refused.returncode == 1
-    assert "crates.io answered HTTP 503 for onebudgetspec-core 0.1.0" in refused.stderr
+    assert f"crates.io answered HTTP 503 for onebudgetspec-core {VERSION}" in refused.stderr
     unreachable = publish(
         "crate", CARGO_REGISTRY_TOKEN="token", ONEBUDGETSPEC_CRATES_API="http://127.0.0.1:9/api/v1"
     )
@@ -329,11 +348,11 @@ def npm_target(tmp_path: Path) -> NpmTarget:
     """Two packed carriers and the packed launcher, in the directories release.yml passes."""
     carriers = tmp_path / "carriers"
     for platform in ("linux-x64", "darwin-arm64"):
-        packed = pack(tmp_path / platform, f"@onebudgetspec/cli-{platform}", "0.1.0")
+        packed = pack(tmp_path / platform, f"@onebudgetspec/cli-{platform}", VERSION)
         carriers.mkdir(exist_ok=True)
         for tarball in packed.iterdir():
             tarball.rename(carriers / tarball.name)
-    return NpmTarget(carriers, pack(tmp_path / "launcher", "@onebudgetspec/cli", "0.1.0"))
+    return NpmTarget(carriers, pack(tmp_path / "launcher", "@onebudgetspec/cli", VERSION))
 
 
 def test_publish_uploads_the_carriers_before_the_launcher(registry: str, tmp_path: Path) -> None:
@@ -352,7 +371,7 @@ def test_publish_resumes_a_partly_published_release(registry: str, tmp_path: Pat
     target = npm_target(tmp_path)
     for platform in ("linux-x64", "darwin-arm64"):
         name = f"@onebudgetspec/cli-{platform}"
-        ANSWERS[f"/{name}"] = packument("0.1.0", name)
+        ANSWERS[f"/{name}"] = packument(VERSION, name)
     done = publish(
         "npm", str(target.carriers), str(target.launcher), **npm_registry_env(registry, tmp_path)
     )
@@ -374,46 +393,55 @@ def wheel_of(directory: Path, file_name: str, name: str, version: str) -> Path:
 
 
 @pytest.mark.parametrize(
-    ("target", "name", "reason"),
+    ("target", "name", "version", "reason"),
     [
         (
             "sdk-pypi",
             "onebudgetspec-cli",
-            "is onebudgetspec-cli 0.1.0, not onebudgetspec-sdk 0.1.0",
+            VERSION,
+            f"is onebudgetspec-cli {VERSION}, not onebudgetspec-sdk {VERSION}",
         ),
         (
             "sdk-pypi",
             "onebudgetspec-sdk",
-            "is onebudgetspec-sdk 0.2.0, not onebudgetspec-sdk 0.1.0",
+            OTHER,
+            f"is onebudgetspec-sdk {OTHER}, not onebudgetspec-sdk {VERSION}",
         ),
-        ("pypi", "onebudgetspec-cli", "is onebudgetspec-cli 0.2.0, not onebudgetspec-cli 0.1.0"),
+        (
+            "pypi",
+            "onebudgetspec-cli",
+            OTHER,
+            f"is onebudgetspec-cli {OTHER}, not onebudgetspec-cli {VERSION}",
+        ),
     ],
 )
 def test_publish_refuses_a_wheel_of_another_target_or_version(
-    tmp_path: Path, target: str, name: str, reason: str
+    tmp_path: Path, target: str, name: str, version: str, reason: str
 ) -> None:
-    version = "0.1.0" if name == "onebudgetspec-cli" and target == "sdk-pypi" else "0.2.0"
-    wheel_of(tmp_path, f"{name.replace('-', '_')}-0.1.0-py3-none-any.whl", name, version)
+    wheel_of(tmp_path, f"{name.replace('-', '_')}-{VERSION}-py3-none-any.whl", name, version)
     refused = publish(target, str(tmp_path), PYPI_TOKEN="token")
     assert refused.returncode == 1
     assert reason in refused.stderr
 
 
 def test_publish_refuses_an_unexpected_answer_from_npm(registry: str, tmp_path: Path) -> None:
-    # The registry lists 0.1.0 but describes it as another version.
-    manifest = {"name": "@onebudgetspec/sdk", "version": "0.1.0-other", "dist": {"tarball": "x"}}
+    # The registry lists the workspace's version but describes it as another version.
+    described = f"{VERSION}-other"
+    manifest = {"name": "@onebudgetspec/sdk", "version": described, "dist": {"tarball": "x"}}
     ANSWERS["/@onebudgetspec/sdk"] = Answer(
         200,
         {
             "name": "@onebudgetspec/sdk",
-            "dist-tags": {"latest": "0.1.0"},
-            "versions": {"0.1.0": manifest},
+            "dist-tags": {"latest": VERSION},
+            "versions": {VERSION: manifest},
         },
     )
-    packed = pack(tmp_path, "@onebudgetspec/sdk", "0.1.0")
+    packed = pack(tmp_path, "@onebudgetspec/sdk", VERSION)
     refused = publish("sdk-npm", str(packed), **npm_registry_env(registry, tmp_path))
     assert refused.returncode == 1
-    assert "npm answered '0.1.0-other' when asked for @onebudgetspec/sdk@0.1.0" in refused.stderr
+    assert (
+        f"npm answered '{described}' when asked for @onebudgetspec/sdk@{VERSION}" in refused.stderr
+    )
     assert UPLOADS == []
 
 

@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from conftest import copy_tree
+from conftest import copy_tree, other_version
 
 from repo_checks import versions
 from repo_checks.paths import ROOT
@@ -23,6 +23,9 @@ FILES = (
     "npm",
 )
 
+#: A version the workspace is not at, which no release makes it.
+OTHER = other_version(versions.workspace_version())
+
 
 def test_the_tree_agrees() -> None:
     assert versions.disagreements() == []
@@ -35,9 +38,10 @@ def test_each_place_that_drifts_is_named(
 ) -> None:
     root = copy_tree(tmp_path, *FILES)
     chosen = versions.places()[place]
-    chosen.write(root, "9.9.9")
+    assert versions.workspace_version(root) != OTHER
+    chosen.write(root, OTHER)
     assert versions.disagreements(root) == [
-        f"{chosen.path}: 9.9.9 (workspace is {versions.workspace_version()})"
+        f"{chosen.path}: {OTHER} (workspace is {versions.workspace_version()})"
     ]
     assert versions.main(["check"], root) == 1
     assert chosen.path in capsys.readouterr().err
@@ -60,7 +64,7 @@ def test_each_sdk_s_pin_on_the_cli_is_held_to_the_workspace_version() -> None:
 @pytest.mark.parametrize(
     "change",
     [
-        {"optionalDependencies": {"@onebudgetspec/cli": "0.0.9"}},
+        {"optionalDependencies": {"@onebudgetspec/cli": OTHER}},
         {"optionalDependencies": {}, "dependencies": {"@onebudgetspec/cli": "workspace:*"}},
         {"dependencies": {"@onebudgetspec/cli": "workspace:*"}},
         {"dependencies": ["@onebudgetspec/cli"]},
@@ -80,10 +84,11 @@ def test_a_typescript_sdk_pin_other_than_the_workspace_s_optional_launcher_is_na
 
 def test_set_brings_every_place_and_the_workspace_to_one_version(tmp_path: Path) -> None:
     root = copy_tree(tmp_path, *FILES)
-    assert versions.main(["set", "0.2.0"], root) == 0
-    assert versions.workspace_version(root) == "0.2.0"
+    assert versions.workspace_version(root) != OTHER
+    assert versions.main(["set", OTHER], root) == 0
+    assert versions.workspace_version(root) == OTHER
     assert versions.disagreements(root) == []
-    assert all(place.read(root) == "0.2.0" for place in versions.places())
+    assert all(place.read(root) == OTHER for place in versions.places())
 
 
 def test_set_refuses_what_is_not_a_version(
@@ -133,7 +138,8 @@ def test_set_refuses_a_place_with_no_version_field_and_writes_nothing(
     root = copy_tree(tmp_path, *FILES)
     workspace = versions.workspace_version(root)
     (root / "sdks/typescript/src/index.ts").write_text("export const NOTHING = 1;\n")
-    assert versions.main(["set", "99.0.0"], root) == 1
+    assert workspace != OTHER
+    assert versions.main(["set", OTHER], root) == 1
     err = capsys.readouterr().err
     assert "sdks/typescript/src/index.ts: no version found to write; nothing was written" in err
     assert versions.workspace_version(root) == workspace
@@ -175,7 +181,12 @@ def test_the_probe_and_this_check_share_one_version_grammar() -> None:
     assert grammar(ROOT / "scripts/release/release-probe.py") == grammar(
         ROOT / "tools/src/repo_checks/versions.py"
     )
-    for good in ("0.1.0", "1.2.3-rc.1", "1.2.3+build.5", "10.20.30-alpha.beta"):
+    for good in (
+        versions.workspace_version(),
+        "1.2.3-rc.1",
+        "1.2.3+build.5",
+        "10.20.30-alpha.beta",
+    ):
         assert versions.VERSION.fullmatch(good), good
 
 
