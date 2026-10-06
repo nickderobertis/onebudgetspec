@@ -12,9 +12,6 @@ import tarfile
 from dataclasses import dataclass
 from pathlib import Path
 
-import pytest
-from conftest import other_version
-
 from repo_checks import versions
 from repo_checks.paths import ROOT
 
@@ -25,6 +22,13 @@ OWN_CRATE = re.compile(r'(?m)^(name = "onebudgetspec[^"]*"\nversion = ")[^"]*"')
 LOCKED = re.compile(r'"name": "(@onebudgetspec/[^"]+)",\n\s*"version": "([^"]+)"')
 #: The npm packages this repository publishes, each a bun workspace.
 PACKAGES = ("cli", *(f"cli-{platform}" for platform in versions.PLATFORMS), "sdk")
+
+
+def other_version(version: str) -> str:
+    """A release version that is not ``version``: the next major after it."""
+    other = f"{int(version.split('.')[0]) + 1}.0.0"
+    assert other != version
+    return other
 
 
 @dataclass(frozen=True)
@@ -143,15 +147,21 @@ def test_the_release_branch_s_lock_and_packed_sdk_carry_its_version(tmp_path: Pa
     assert git(pushed.origin, "rev-parse", BRANCH, env=pushed.env) == head
 
 
-@pytest.mark.parametrize("listed", ["", "release-plz-closed"])
-def test_no_open_release_pull_request_changes_nothing(tmp_path: Path, listed: str) -> None:
-    pushed = release(tmp_path, listed)
+def test_no_open_release_pull_request_changes_nothing(tmp_path: Path) -> None:
+    pushed = release(tmp_path, "")
     before = git(pushed.origin, "rev-parse", BRANCH, env=pushed.env)
     synced = sync(pushed)
-    if listed:
-        # gh names a branch the origin does not hold: the fetch fails and nothing is pushed.
-        assert synced.returncode != 0
-        assert "the release PR is unchanged" in synced.stderr
-    else:
-        assert synced.returncode == 0, synced.stderr
+    assert (synced.returncode, synced.stdout, synced.stderr) == (0, "", "")
+    assert git(pushed.origin, "rev-parse", BRANCH, env=pushed.env) == before
+
+
+def test_a_release_branch_gone_before_the_fetch_is_refused_and_nothing_is_pushed(
+    tmp_path: Path,
+) -> None:
+    # gh lists an open release pull request whose branch the origin no longer holds.
+    pushed = release(tmp_path, "release-plz-2026-01-02T00-00-00Z")
+    before = git(pushed.origin, "rev-parse", BRANCH, env=pushed.env)
+    synced = sync(pushed)
+    assert synced.returncode != 0
+    assert "the release PR is unchanged" in synced.stderr
     assert git(pushed.origin, "rev-parse", BRANCH, env=pushed.env) == before

@@ -1,6 +1,7 @@
 """scripts/build-dist.sh names the artifact it just built, even beside earlier builds."""
 
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -23,8 +24,8 @@ def test_the_new_artifact_is_named_and_earlier_ones_are_not(tmp_path: Path) -> N
     out = tmp_path / "dist"
     out.mkdir()
     version = workspace_version()
-    # A pre-release of the workspace's version precedes it, whatever the version is.
-    earlier = f"{version}-rc.1"
+    # `-0` is the lowest pre-release of the version's own release, so it precedes the version.
+    earlier = f"{re.split('[-+]', version)[0]}-0"
     assert earlier != version
     older = out / f"onebudgetspec-cli-{earlier}.tgz"
     older.write_text("an earlier build")

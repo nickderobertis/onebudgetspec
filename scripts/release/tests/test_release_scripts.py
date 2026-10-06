@@ -6,6 +6,7 @@ through every refusal it makes before contacting a registry.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -34,8 +35,9 @@ def other_than(version: str) -> str:
 
 #: A version the workspace is not at, for packages built at the wrong one.
 OTHER = other_than(VERSION)
-#: A pre-release of the workspace's version, which precedes it, for what a registry served before.
-EARLIER = f"{VERSION}-rc.1"
+#: The lowest pre-release of the workspace's own release, which precedes the workspace's
+#: version, for what a registry served before.
+EARLIER = f"{re.split('[-+]', VERSION)[0]}-0"
 
 
 class Answer(NamedTuple):
