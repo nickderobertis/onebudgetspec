@@ -147,13 +147,17 @@ test("the binary's exit status and failure to start become the launcher's", () =
   expect(failed.message).toContain("reinstall @onebudgetspec/cli-linux-x64");
 });
 
-// Windows has no signals: a process ended there by TerminateProcess has an exit status,
-// which the status case above covers, so no Windows run can end the binary this way.
-test.skipIf(process.platform === "win32")(
-  "a binary ended by a signal ends the launcher with 70",
-  () => {
-    const signalled = finish(runScript("process.kill(process.pid, 'SIGKILL')"), "b", "c");
-    expect(signalled.status).toBe(70);
-    expect(signalled.message).toContain("terminated by SIGKILL");
-  },
-);
+// Windows has no signals: a process ended there, as by TerminateProcess, has an exit
+// status, which the launcher passes on like any other.
+test("a binary ended by a signal ends the launcher with 70, or on Windows with its status", () => {
+  const ended = runScript("process.kill(process.pid, 'SIGKILL')");
+  const finished = finish(ended, "b", "c");
+  if (process.platform === "win32") {
+    const status = ended.status ?? 0;
+    expect(status).toBeGreaterThan(0);
+    expect(finished).toEqual({ status });
+  } else {
+    expect(finished.status).toBe(70);
+    expect(finished.message).toContain("terminated by SIGKILL");
+  }
+});

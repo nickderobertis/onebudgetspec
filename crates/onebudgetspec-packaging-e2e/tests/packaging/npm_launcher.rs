@@ -114,7 +114,7 @@ fn the_installed_launcher_refuses_a_damaged_carrier() {
     let carrier = artifact("npm-carrier");
     let dir = tempfile::tempdir().unwrap();
     let project = npm_project_with(dir.path(), &[&carrier, &launcher]);
-    let installed = project.join("node_modules/.bin/onebudgetspec");
+    let installed = npm_bin(&project, "onebudgetspec");
     let binary = project
         .join("node_modules/@onebudgetspec")
         .join(format!("cli-{}", host_platform()))
