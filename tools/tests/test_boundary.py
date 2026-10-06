@@ -5,6 +5,7 @@ that is planted.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,32 @@ from conftest import copy_tree
 from repo_checks import boundary
 
 LIBRARY = (*boundary.SHIPPED, "Cargo.lock", "uv.lock", "bun.lock")
+
+# A release rewrites this workspace's own package versions in its locks.
+OWN_VERSION = re.compile(r'(?m)^(name = "onebudgetspec[^"]*"\nversion = ")[^"]*"')
+
+
+def bump(lock: Path) -> None:
+    """Rewrite the workspace's own versions in ``lock`` the way a release does."""
+    text = lock.read_text()
+    bumped = OWN_VERSION.sub(r'\g<1>99.0.0"', text)
+    assert bumped != text, f"{lock.name} carries none of the workspace's packages"
+    lock.write_text(bumped)
+
+
+def plant(lock: Path, package: str, entry: str) -> None:
+    """Add ``entry`` to ``package``'s resolved dependencies in ``lock``, whatever its version.
+
+    A planting that matches nothing fails here, so it is never read as a clean scan.
+    """
+    text = lock.read_text()
+    head = re.compile(
+        rf'(?m)^name = "{re.escape(package)}"\nversion = "[^"]*"\n(?:source = .*\n)?'
+        r"dependencies = \[\n"
+    )
+    planted = head.sub(lambda found: found.group(0) + entry, text, count=1)
+    assert planted != text, f"{lock.name} has no {package} entry with dependencies to plant in"
+    lock.write_text(planted)
 
 
 def test_the_library_is_clean(schema: str) -> None:
@@ -76,17 +103,27 @@ def test_a_name_planted_in_a_manifest_dependency_list_fails_the_scan(
     )
 
 
+@pytest.mark.parametrize("bumped", [False, True], ids=["current", "released"])
 @pytest.mark.parametrize("name", boundary.STACK)
-def test_a_name_planted_in_a_resolved_dependency_fails_the_scan(tmp_path: Path, name: str) -> None:
+def test_a_name_planted_in_a_resolved_dependency_fails_the_scan(
+    tmp_path: Path, name: str, bumped: bool
+) -> None:
     root = copy_tree(tmp_path, *LIBRARY)
     lock = root / "Cargo.lock"
-    text = lock.read_text()
-    text = text.replace(
-        'name = "onebudgetspec-core"\nversion = "0.1.0"\ndependencies = [\n',
-        f'name = "onebudgetspec-core"\nversion = "0.1.0"\ndependencies = [\n "{name}-sys",\n',
-    )
-    lock.write_text(text + f'\n[[package]]\nname = "{name}-sys"\nversion = "1.0.0"\n')
+    if bumped:
+        bump(lock)
+    plant(lock, "onebudgetspec-core", f' "{name}-sys",\n')
+    lock.write_text(lock.read_text() + f'\n[[package]]\nname = "{name}-sys"\nversion = "1.0.0"\n')
     assert f"Cargo.lock: resolves dependency {name}-sys" in boundary.scan(root)
+
+
+def test_a_planting_that_matches_nothing_fails_loudly(tmp_path: Path) -> None:
+    root = copy_tree(tmp_path, "Cargo.lock")
+    lock = root / "Cargo.lock"
+    before = lock.read_text()
+    with pytest.raises(AssertionError, match="no onebudgetspec-absent entry"):
+        plant(lock, "onebudgetspec-absent", ' "onevcs-sys",\n')
+    assert lock.read_text() == before
 
 
 @pytest.mark.parametrize(
@@ -201,16 +238,13 @@ def test_crediting_the_model_layout_is_the_one_exception() -> None:
     assert boundary.scan_text("x", "modelled on onetaskgraph and onevcs") == ["x:1: names onevcs"]
 
 
-def test_python_and_bun_dependencies_are_followed(tmp_path: Path) -> None:
+@pytest.mark.parametrize("bumped", [False, True], ids=["current", "released"])
+def test_python_and_bun_dependencies_are_followed(tmp_path: Path, bumped: bool) -> None:
     root = copy_tree(tmp_path, *LIBRARY)
     uv = root / "uv.lock"
-    sdk = (
-        'name = "onebudgetspec-sdk"\nversion = "0.1.0"\nsource = { editable = "sdks/python" }\n'
-        "dependencies = [\n"
-    )
-    planted = '    { name = "onejudge-client" },\n'
-    assert sdk in uv.read_text()
-    uv.write_text(uv.read_text().replace(sdk, sdk + planted))
+    if bumped:
+        bump(uv)
+    plant(uv, "onebudgetspec-sdk", '    { name = "onejudge-client" },\n')
     bun = root / "bun.lock"
     bun.write_text(
         bun.read_text()
