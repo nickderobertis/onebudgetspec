@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 rust-version = "1.97"
 license = "MIT"
@@ -14,7 +14,7 @@ authors = ["Nick DeRobertis"]
 # The CLI and the SDK release in lock step at one version; the exact requirement keeps a
 # consumer from resolving the binary against a different SDK patch. `just set-version`
 # rewrites it and `just versions` refuses any other.
-onebudgetspec-core = { path = "crates/onebudgetspec-core", version = "=0.1.1" }
+onebudgetspec-core = { path = "crates/onebudgetspec-core", version = "=0.1.2" }
 
 chrono = { version = "0.4.45", default-features = false, features = ["std", "serde", "clock"] }
 clap = { version = "4.6.7", features = ["derive"] }

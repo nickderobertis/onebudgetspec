@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/nickderobertis/onebudgetspec/compare/v0.1.1...v0.1.2) - 2026-10-06
+
+### Added
+
+- build, test and release onebudgetspec for Windows on x86_64 and aarch64 ([#15](https://github.com/nickderobertis/onebudgetspec/pull/15))
+
 ## [0.1.1](https://github.com/nickderobertis/onebudgetspec/compare/v0.1.0...v0.1.1) - 2026-10-06
 
 ### Fixed
