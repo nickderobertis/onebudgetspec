@@ -85,6 +85,16 @@ def places() -> list[Place]:
         found.append(
             Place(f"npm/platforms/{platform}/package.json", r'^(  "version": ")([^"]+)(")')
         )
+    # bun's pack writes `workspace:*` as the version bun.lock records for that workspace, and
+    # `bun install --lockfile-only` (bun 1.3) keeps an existing lock's workspace versions when
+    # their manifests change, so the lock is written here with the manifests.
+    for name in ("cli", *(f"cli-{platform}" for platform in PLATFORMS), "sdk"):
+        found.append(
+            Place(
+                "bun.lock",
+                rf'^(      "name": "@onebudgetspec/{name}",\n      "version": ")([^"]+)(")',
+            )
+        )
     return found
 
 

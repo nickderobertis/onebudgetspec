@@ -13,6 +13,7 @@ from repo_checks import versions
 from repo_checks.paths import ROOT
 
 FILES = (
+    "bun.lock",
     "Cargo.toml",
     "clippy.toml",
     "pyproject.toml",
