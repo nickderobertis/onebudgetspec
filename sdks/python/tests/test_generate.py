@@ -92,6 +92,10 @@ def test_check_names_stale_missing_and_extra_files_and_generate_repairs_them(
 
     assert generate(package, built_binary).returncode == 0
     assert contents(package) == committed
+    # Read as bytes, which no platform's newline translation touches: what was rewritten
+    # ends its lines in LF, as committed, on Windows too.
+    for name in ("check_report.py", "list_report.py"):
+        assert b"\r\n" not in (package / GENERATED / name).read_bytes(), name
     assert generate(package, built_binary, "--check").returncode == 0
 
 
