@@ -262,12 +262,15 @@ const measurements = {
   // Analyses what tests/sync.test.mjs recorded; a missing recording fails the budget.
   "api-requests-per-sync": async () => {
     const requests = JSON.parse(await readFile("dist/telemetry/sync-requests.json", "utf8"));
+    if (!Array.isArray(requests)) throw new Error("sync-requests.json is not an array");
     return { value: requests.length, detail: "upstream requests one sync made" };
   },
   // No existing test pages through results, so this one measures on its own.
   "api-queries-per-page": queriesPerPage,
 };
-const { value, detail } = await measurements[process.env.ONEBUDGETSPEC_BUDGET_ID]();
+const id = process.env.ONEBUDGETSPEC_BUDGET_ID;
+if (!Object.hasOwn(measurements, id)) throw new Error(`no measurement for budget ${id}`);
+const { value, detail } = await measurements[id]();
 report(value, detail);
 ```
 
