@@ -3,7 +3,9 @@
 Every project carries one ``type:`` tag, and each type may depend only on the types listed
 for it below, so an edge drawn back toward a contract or into a shipped package from a
 test tier fails here. Rust crates must also declare, as Nx dependencies, every workspace
-crate their Cargo manifest depends on, or affected selection would miss them.
+crate their Cargo manifest depends on, or affected selection would miss them. Nx runs a
+target's command through cmd.exe on Windows, which expands no glob, so a command with one
+runs it under ``bash -c``.
 """
 
 import json
@@ -55,6 +57,7 @@ class Project:
     root: Path
     tags: tuple[str, ...]
     dependencies: tuple[ProjectName, ...]
+    commands: tuple[str, ...] = ()
 
     @classmethod
     def read(cls, path: Path) -> "Project":
@@ -74,11 +77,28 @@ class Project:
             path.parent,
             tuple(tags),
             tuple(ProjectName(dependency) for dependency in dependencies),
+            _commands(path, rest.get("targets", {})),
         )
 
     def kinds(self) -> list[str]:
         """The values of this project's ``type:`` tags."""
         return [tag.removeprefix("type:") for tag in self.tags if tag.startswith("type:")]
+
+
+def _commands(path: Path, targets: object) -> tuple[str, ...]:
+    """Every ``nx:run-commands`` command line of ``targets``."""
+    if not isinstance(targets, dict):
+        raise InvalidProject(f"{path}: `targets` is not an object")
+    found: list[str] = []
+    for target in targets.values():
+        options = target.get("options", {}) if isinstance(target, dict) else {}
+        entries = [options["command"]] if "command" in options else options.get("commands", [])
+        for entry in entries:
+            command = entry.get("command") if isinstance(entry, dict) else entry
+            if not isinstance(command, str):
+                raise InvalidProject(f"{path}: a target's command is not a string")
+            found.append(command)
+    return tuple(found)
 
 
 def projects(root: Path = ROOT) -> dict[ProjectName, Project]:
@@ -134,6 +154,11 @@ def problems(root: Path = ROOT) -> list[str]:
                 issues.append(
                     f"{name} ({kinds[name]}) may not depend on {dependency} ({kinds[dependency]})"
                 )
+        issues.extend(
+            f"{name}: `{command}` has a glob cmd.exe will not expand; run it under `bash -c`"
+            for command in project.commands
+            if any(c in command for c in "*?[") and not command.startswith("bash -c ")
+        )
         manifest = project.root / "Cargo.toml"
         if manifest.is_file():
             cargo = tomllib.loads(manifest.read_text())

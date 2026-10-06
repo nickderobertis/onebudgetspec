@@ -11,7 +11,7 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync shellcheck scripts/*.sh scripts/nx"
+        "command": "bash -c \"uv run --frozen --no-sync shellcheck scripts/*.sh scripts/nx\""
       }
     }
   }
