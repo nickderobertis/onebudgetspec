@@ -11,11 +11,20 @@ use serde_json::Value;
 /// The workspace version every distribution releases at.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// The workspace root, two directories above this crate's. Not canonicalized: on Windows
+/// that makes a `\\?\` path, which bash and npm do not read as a path.
 pub fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()
-        .expect("the workspace root exists")
+        .ancestors()
+        .nth(2)
+        .expect("the crate is two directories below the workspace root")
+        .to_path_buf()
+}
+
+/// `path` as an argument to bash: with `/` separators, which bash on Windows reads as it
+/// reads its own, where a `\` may be taken as an escape.
+fn bash_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 /// `name` as this platform names a program file: with `.exe` on Windows.
@@ -25,8 +34,6 @@ pub fn exe(name: &str) -> String {
 
 /// The program a shell would run for the bare name `name`: the first match on `PATH`, in
 /// `PATH`'s order, and on Windows as `name.exe` or else `name.cmd` (which is how npm ships).
-/// Windows itself looks in its system directory before `PATH`, where it may find a
-/// different `bash`.
 fn on_path(name: &str) -> Option<PathBuf> {
     let suffixes: &[&str] = if cfg!(windows) {
         &[".exe", ".cmd"]
@@ -39,6 +46,28 @@ fn on_path(name: &str) -> Option<PathBuf> {
             .map(|suffix| dir.join(format!("{name}{suffix}")))
             .find(|candidate| candidate.is_file())
     })
+}
+
+/// The bash `scripts/build-dist.sh` is written for: on Windows, Git's, two directories
+/// above its exec path under `bin`. A bare `bash` there finds the WSL launcher in Windows'
+/// system directory first, which runs nothing without a Linux distribution.
+fn bash() -> PathBuf {
+    if !cfg!(windows) {
+        return PathBuf::from("bash");
+    }
+    let exec_path = succeed("git", &["--exec-path"], Path::new("."));
+    let bash = Path::new(exec_path.trim())
+        .ancestors()
+        .nth(3)
+        .expect("git's exec path is three directories into its installation")
+        .join("bin")
+        .join("bash.exe");
+    assert!(
+        bash.is_file(),
+        "Git for Windows keeps no bash at {}; install Git for Windows, whose bash runs scripts/build-dist.sh",
+        bash.display()
+    );
+    bash
 }
 
 /// A program installed under `node_modules/.bin`: npm links a `.cmd` there on Windows.
@@ -79,11 +108,10 @@ pub fn artifact(artifact: &str) -> PathBuf {
         return path.clone();
     }
     let out = dist().join(artifact);
-    let bash = on_path("bash").expect("bash is on PATH to run scripts/build-dist.sh");
-    let output = Command::new(bash)
-        .arg(root().join("scripts/build-dist.sh"))
+    let output = Command::new(bash())
+        .arg(bash_path(&root().join("scripts/build-dist.sh")))
         .arg(artifact)
-        .arg(&out)
+        .arg(bash_path(&out))
         .output()
         .expect("bash runs scripts/build-dist.sh");
     assert!(

@@ -18,6 +18,7 @@ import yaml
 
 from repo_checks import workflows
 from repo_checks.paths import ROOT
+from repo_checks.programs import bash
 
 
 @dataclass(frozen=True)
@@ -103,7 +104,7 @@ def test_the_guard_script_exits_zero_and_answers_both_ways(tmp_path: Path) -> No
     def guard(*args: str, **env: str) -> str:
         output.write_text("")
         completed = subprocess.run(
-            ["bash", "scripts/ci-guard.sh", *args],
+            [bash(), "scripts/ci-guard.sh", *args],
             cwd=ROOT,
             env={"PATH": "/usr/bin:/bin", "GITHUB_OUTPUT": str(output), **env},
             capture_output=True,
@@ -124,7 +125,7 @@ def test_the_guard_script_exits_zero_and_answers_both_ways(tmp_path: Path) -> No
 def test_the_guard_script_refuses_a_malformed_call(tmp_path: Path) -> None:
     for args, env in (([], {"GITHUB_OUTPUT": str(tmp_path / "o")}), (["NPM_TOKEN"], {})):
         completed = subprocess.run(
-            ["bash", "scripts/ci-guard.sh", *args],
+            [bash(), "scripts/ci-guard.sh", *args],
             cwd=ROOT,
             env={"PATH": "/usr/bin:/bin", **env},
             capture_output=True,
@@ -209,7 +210,7 @@ def test_triggers_read_every_spelling(tmp_path: Path) -> None:
 
 def test_the_guard_script_refuses_a_name_that_is_not_a_variable(tmp_path: Path) -> None:
     completed = subprocess.run(
-        ["bash", "scripts/ci-guard.sh", "NPM_TOKEN", "$(id)"],
+        [bash(), "scripts/ci-guard.sh", "NPM_TOKEN", "$(id)"],
         cwd=ROOT,
         env={"PATH": "/usr/bin:/bin", "GITHUB_OUTPUT": str(tmp_path / "o")},
         capture_output=True,

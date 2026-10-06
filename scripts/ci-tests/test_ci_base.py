@@ -7,6 +7,7 @@ from typing import NamedTuple
 
 import pytest
 from repo_checks.paths import ROOT
+from repo_checks.programs import bash
 
 SCRIPT = ROOT / "scripts/ci-base.sh"
 
@@ -42,7 +43,7 @@ def base(cwd: Path, tmp_path: Path, **env: str) -> Derived:
     output = tmp_path / "github-output"
     output.write_text("")
     completed = subprocess.run(
-        ["bash", str(SCRIPT)],
+        [bash(), SCRIPT.as_posix()],
         cwd=cwd,
         env={
             "PATH": os.environ["PATH"],
