@@ -12,7 +12,7 @@ fn the_wheel_installs_a_binary_that_behaves_like_the_cargo_build() {
     );
     let dir = tempfile::tempdir().unwrap();
     let bin = venv_with(dir.path(), &wheel);
-    let installed = bin.join("onebudgetspec");
+    let installed = bin.join(crate::common::exe("onebudgetspec"));
     assert!(
         installed.is_file(),
         "the wheel installed no {}",

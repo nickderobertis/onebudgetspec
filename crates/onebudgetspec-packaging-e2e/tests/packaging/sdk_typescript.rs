@@ -59,12 +59,17 @@ const bundle: Record<string, unknown> = await schema();
 console.log(conditions, listed.budgets.length, validated.schema_version, Object.keys(bundle));
 "#;
 
-/// The manifest packed into `tarball`.
+/// The manifest packed into `tarball`. Named relative to its directory, since a `C:` in a
+/// path is a remote host to GNU tar, which Git Bash puts on a Windows PATH.
 fn packed_manifest(tarball: &Path) -> Value {
     let manifest = succeed(
         "tar",
-        &["-xOzf", tarball.to_str().unwrap(), "package/package.json"],
-        Path::new("."),
+        &[
+            "-xOzf",
+            tarball.file_name().unwrap().to_str().unwrap(),
+            "package/package.json",
+        ],
+        tarball.parent().unwrap(),
     );
     serde_json::from_str(&manifest).expect("the packed package.json is JSON")
 }
@@ -154,5 +159,6 @@ fn a_consumer_type_checks_against_the_installed_declarations() {
         r#"{"name": "consumer", "private": true, "type": "module"}"#,
     )
     .unwrap();
-    succeed(root().join("node_modules/.bin/tsc"), &["-p", "."], &project);
+    let tsc = root().join("node_modules/typescript/bin/tsc");
+    succeed("node", &[tsc.to_str().unwrap(), "-p", "."], &project);
 }

@@ -7,7 +7,10 @@ use std::process::Command;
 
 use serde_json::Value;
 
-use crate::common::{SDK_CASE, VERSION, artifact, assert_sdk_answers, conformance_case, succeed};
+use crate::common::{
+    SDK_CASE, VERSION, artifact, assert_sdk_answers, conformance_case, exe, node_dir, succeed,
+    venv_bin,
+};
 
 /// Each call over the case named by argv[1], with the selection its case.json gives.
 const DRIVE: &str = r#"
@@ -47,11 +50,11 @@ with zipfile.ZipFile(sys.argv[1]) as wheel:
 "#;
 
 /// A fresh environment under `dir` with `wheels` installed and their other requirements
-/// resolved; returns its `bin` directory.
+/// resolved; returns its [`venv_bin`] directory.
 fn venv_with_requirements(dir: &Path, wheels: &[&Path]) -> std::path::PathBuf {
     let venv = dir.join("venv");
     succeed("uv", &["venv", "--quiet", venv.to_str().unwrap()], dir);
-    let python = venv.join("bin/python");
+    let python = venv_bin(&venv).join(exe("python"));
     let mut args = vec![
         "pip",
         "install",
@@ -61,7 +64,7 @@ fn venv_with_requirements(dir: &Path, wheels: &[&Path]) -> std::path::PathBuf {
     ];
     args.extend(wheels.iter().map(|wheel| wheel.to_str().unwrap()));
     succeed("uv", &args, dir);
-    venv.join("bin")
+    venv_bin(&venv)
 }
 
 #[test]
@@ -73,8 +76,16 @@ fn the_wheel_requires_the_cli_at_exactly_the_workspace_version() {
         "{name}"
     );
     let requires = succeed(
-        "python3",
-        &["-c", REQUIRES, wheel.to_str().unwrap()],
+        "uv",
+        &[
+            "run",
+            "--no-project",
+            "--quiet",
+            "python",
+            "-c",
+            REQUIRES,
+            wheel.to_str().unwrap(),
+        ],
         Path::new("."),
     );
     let cli: Vec<&str> = requires
@@ -90,10 +101,11 @@ fn the_installed_sdk_answers_a_conformance_case_through_the_wheel_s_binary() {
     let cli = artifact("cli-wheel");
     let dir = tempfile::tempdir().unwrap();
     let bin = venv_with_requirements(dir.path(), &[&sdk, &cli]);
-    let installed = bin.join("onebudgetspec").canonicalize().unwrap();
+    let installed = bin.join(exe("onebudgetspec")).canonicalize().unwrap();
+    let python = bin.join(exe("python"));
 
     let version = succeed(
-        bin.join("python"),
+        &python,
         &[
             "-c",
             "import onebudgetspec_sdk; print(onebudgetspec_sdk.__version__)",
@@ -102,7 +114,7 @@ fn the_installed_sdk_answers_a_conformance_case_through_the_wheel_s_binary() {
     );
     assert_eq!(version.trim(), VERSION);
     let typed = succeed(
-        bin.join("python"),
+        &python,
         &[
             "-c",
             "import importlib.resources as r; print(r.files('onebudgetspec_sdk').joinpath('py.typed').is_file())",
@@ -112,12 +124,21 @@ fn the_installed_sdk_answers_a_conformance_case_through_the_wheel_s_binary() {
     assert_eq!(typed.trim(), "True", "the wheel ships no py.typed marker");
 
     let (case_dir, case) = conformance_case(dir.path(), SDK_CASE);
-    // No ONEBUDGETSPEC_BIN and only the environment's own bin on PATH: the SDK must find
-    // the binary the onebudgetspec-cli wheel installed.
-    let output = Command::new(bin.join("python"))
+    // No ONEBUDGETSPEC_BIN, and on PATH only the environment's own programs, the node the
+    // case measures with, and the system's directories: the SDK must find the binary the
+    // onebudgetspec-cli wheel installed.
+    let system: Vec<std::path::PathBuf> = if cfg!(windows) {
+        let windows = std::env::var_os("SystemRoot").expect("Windows sets SystemRoot");
+        vec![Path::new(&windows).join("System32")]
+    } else {
+        vec!["/usr/bin".into(), "/bin".into()]
+    };
+    let path = std::env::join_paths([bin.clone(), node_dir()].iter().chain(&system))
+        .expect("the directories join into a PATH");
+    let output = Command::new(&python)
         .args(["-c", DRIVE, case_dir.to_str().unwrap()])
         .env_remove("ONEBUDGETSPEC_BIN")
-        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("PATH", path)
         .current_dir(dir.path())
         .output()
         .expect("the environment's python runs");

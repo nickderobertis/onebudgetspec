@@ -18,6 +18,50 @@ pub fn root() -> PathBuf {
         .expect("the workspace root exists")
 }
 
+/// `name` as this platform names a program file: with `.exe` on Windows.
+pub fn exe(name: &str) -> String {
+    format!("{name}{}", std::env::consts::EXE_SUFFIX)
+}
+
+/// The program a shell would run for the bare name `name`: the first match on `PATH`, in
+/// `PATH`'s order, and on Windows as `name.exe` or else `name.cmd` (which is how npm ships).
+/// Windows itself looks in its system directory before `PATH`, where it may find a
+/// different `bash`.
+fn on_path(name: &str) -> Option<PathBuf> {
+    let suffixes: &[&str] = if cfg!(windows) {
+        &[".exe", ".cmd"]
+    } else {
+        &[""]
+    };
+    std::env::split_paths(&std::env::var_os("PATH")?).find_map(|dir| {
+        suffixes
+            .iter()
+            .map(|suffix| dir.join(format!("{name}{suffix}")))
+            .find(|candidate| candidate.is_file())
+    })
+}
+
+/// A program installed under `node_modules/.bin`: npm links a `.cmd` there on Windows.
+pub fn npm_bin(project: &Path, name: &str) -> PathBuf {
+    let suffix = if cfg!(windows) { ".cmd" } else { "" };
+    project.join(format!("node_modules/.bin/{name}{suffix}"))
+}
+
+/// Where a virtual environment keeps its programs: `Scripts` on Windows, `bin` elsewhere.
+pub fn venv_bin(venv: &Path) -> PathBuf {
+    venv.join(if cfg!(windows) { "Scripts" } else { "bin" })
+}
+
+/// The directory holding the `node` that runs the cases' measuring commands, for a journey
+/// that runs an SDK with a `PATH` of its own.
+pub fn node_dir() -> PathBuf {
+    let node = succeed("node", &["-p", "process.execPath"], Path::new("."));
+    Path::new(node.trim())
+        .parent()
+        .expect("node is in a directory")
+        .to_path_buf()
+}
+
 /// Where the artifacts of this test run are built, shared by every journey in it.
 fn dist() -> &'static Path {
     static DIST: OnceLock<tempfile::TempDir> = OnceLock::new();
@@ -35,7 +79,8 @@ pub fn artifact(artifact: &str) -> PathBuf {
         return path.clone();
     }
     let out = dist().join(artifact);
-    let output = Command::new("bash")
+    let bash = on_path("bash").expect("bash is on PATH to run scripts/build-dist.sh");
+    let output = Command::new(bash)
         .arg(root().join("scripts/build-dist.sh"))
         .arg(artifact)
         .arg(&out)
@@ -69,9 +114,15 @@ pub fn succeed(program: impl AsRef<std::ffi::OsStr>, args: &[&str], cwd: &Path) 
     String::from_utf8(output.stdout).expect("stdout is UTF-8")
 }
 
+/// Run `program` with `args` from `cwd`. A bare name is found on `PATH` as a shell would.
 pub fn run(program: impl AsRef<std::ffi::OsStr>, args: &[&str], cwd: &Path) -> Output {
     let program = program.as_ref();
-    Command::new(program)
+    let bare = Path::new(program).components().count() == 1;
+    let resolved = bare
+        .then(|| program.to_str().and_then(on_path))
+        .flatten()
+        .map_or_else(|| program.to_owned(), PathBuf::into_os_string);
+    Command::new(&resolved)
         .args(args)
         .current_dir(cwd)
         .output()
@@ -84,11 +135,11 @@ pub fn run(program: impl AsRef<std::ffi::OsStr>, args: &[&str], cwd: &Path) -> O
 }
 
 /// A fresh virtual environment under `dir`, with `wheel` installed from the local file.
-/// Returns the environment's `bin` directory.
+/// Returns the environment's [`venv_bin`] directory.
 pub fn venv_with(dir: &Path, wheel: &Path) -> PathBuf {
     let venv = dir.join("venv");
     succeed("uv", &["venv", "--quiet", venv.to_str().unwrap()], dir);
-    let python = venv.join("bin/python");
+    let python = venv_bin(&venv).join(exe("python"));
     succeed(
         "uv",
         &[
@@ -103,7 +154,7 @@ pub fn venv_with(dir: &Path, wheel: &Path) -> PathBuf {
         ],
         dir,
     );
-    venv.join("bin")
+    venv_bin(&venv)
 }
 
 /// A fresh npm project under `dir` with `tarballs` installed from the local files and no
@@ -135,7 +186,7 @@ pub fn npm_project_with(dir: &Path, tarballs: &[&Path]) -> PathBuf {
 
 /// The cargo-built binary, which an installed entry point must behave exactly like.
 pub fn direct_binary() -> PathBuf {
-    let binary = root().join("target/debug/onebudgetspec");
+    let binary = root().join("target/debug").join(exe("onebudgetspec"));
     assert!(
         binary.is_file(),
         "{} is missing; build it with `cargo build -p onebudgetspec` (Nx's test target depends on that build)",
@@ -155,13 +206,13 @@ pub fn case(dir: &Path) -> PathBuf {
 budgets:
   - id: fast
     measure: reported
-    command: ["sh", "-c", "echo '{\"value\": 2}' > \"$ONEBUDGETSPEC_RESULT\""]
+    command: ["node", "-e", "require('fs').writeFileSync(process.env.ONEBUDGETSPEC_RESULT, '{\"value\": 2}')"]
     unit: ms
     direction: max
     threshold: 5
   - id: slow
     measure: reported
-    command: ["sh", "-c", "echo '{\"value\": 9, \"detail\": \"too slow\"}' > \"$ONEBUDGETSPEC_RESULT\""]
+    command: ["node", "-e", "require('fs').writeFileSync(process.env.ONEBUDGETSPEC_RESULT, '{\"value\": 9, \"detail\": \"too slow\"}')"]
     unit: ms
     direction: max
     threshold: 5
