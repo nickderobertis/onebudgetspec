@@ -149,7 +149,6 @@ fn commands_see_end_of_input_whatever_the_caller_pipes_in() {
     use std::process::{Command, Stdio};
 
     let fixture = Fixture::new();
-    // Counts the bytes on stdin until its end, then reports them through `then`.
     let counting = |then: &str| {
         node(
             &format!(

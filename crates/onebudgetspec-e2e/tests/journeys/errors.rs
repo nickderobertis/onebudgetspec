@@ -22,6 +22,7 @@ fn every_kind_of_failed_measurement_is_an_error() {
     let fixture = Fixture::new();
     let mut slow = budget("times-out", &node("setTimeout(() => {}, 30000);", &[]));
     slow["timeout_seconds"] = json!(1);
+    // Only the Unix-only signal case below is pushed onto the list.
     #[cfg_attr(not(unix), allow(unused_mut))]
     let mut cases = vec![
         (budget("fails", &exits(2)), "status 2"),

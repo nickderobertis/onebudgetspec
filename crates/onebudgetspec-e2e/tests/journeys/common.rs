@@ -2,8 +2,8 @@
 //! real commands, the built binary run over it as a subprocess, and the schema every
 //! report it prints must validate against. Nothing is doubled.
 //!
-//! Every command a journey measures is Node.js, run as `node` from `PATH`, so the same
-//! journey runs on Linux, macOS and Windows with no shell or Unix utility under it.
+//! Measuring commands run Node.js, as `node` from `PATH`, or a built program, never a shell
+//! or a Unix utility, so the same journey runs on Linux, macOS and Windows.
 
 use std::ffi::OsStr;
 use std::fs;
