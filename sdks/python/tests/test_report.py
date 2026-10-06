@@ -52,6 +52,22 @@ def test_a_non_finite_value_is_refused_without_writing(
     assert result.read_text() == "untouched"
 
 
+@pytest.mark.parametrize(
+    ("value", "detail"), [(True, None), ("3", None), (None, None), (3, 7), (3, b"bytes")]
+)
+def test_a_value_or_detail_of_the_wrong_type_is_refused_without_writing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: object, detail: object
+) -> None:
+    """Only a number is a value and only a string a detail; anything else writes nothing."""
+    result = tmp_path / "result.json"
+    result.write_text("untouched")
+    monkeypatch.setenv(RESULT_ENV, str(result))
+    with pytest.raises(TypeError, match="must be a"):
+        # The wrong types are the point: a caller with no type checker can pass them.
+        report(value, detail)  # ty: ignore[invalid-argument-type]
+    assert result.read_text() == "untouched"
+
+
 def test_a_failed_write_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """A file that cannot be written raises the OSError writing it."""
     result = tmp_path / "no-such-directory" / "result.json"

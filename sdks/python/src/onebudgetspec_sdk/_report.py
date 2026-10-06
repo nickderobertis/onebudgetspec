@@ -30,9 +30,15 @@ def report(value: float, detail: str | None = None) -> bool:
     ``False``, so a test that measures behaves the same outside a check.
 
     Raises:
+        TypeError: ``value`` is not a number or ``detail`` not a string; nothing is written.
         ValueError: ``value`` is not finite; nothing is written.
         OSError: the file could not be written.
     """
+    # A bool is an int to Python but would be written as a JSON boolean, which is no value.
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise TypeError(f"a reported value must be a number, not {type(value).__name__}")
+    if detail is not None and not isinstance(detail, str):
+        raise TypeError(f"a reported detail must be a string, not {type(detail).__name__}")
     if not math.isfinite(value):
         raise ValueError(f"a reported value must be a finite number, not {value}")
     path = os.environ.get(RESULT_ENV)

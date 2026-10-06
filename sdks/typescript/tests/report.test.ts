@@ -56,6 +56,24 @@ test("a non-finite value is refused without writing", () => {
   }
 });
 
+test("a value or detail of the wrong type is refused without writing", () => {
+  const result = join(scratch(), "result.json");
+  writeFileSync(result, "untouched");
+  process.env[RESULT_ENV] = result;
+  // What a JavaScript caller, unchecked by the compiler, can pass.
+  const loose = report as (value: unknown, detail?: unknown) => boolean;
+  for (const [value, detail] of [
+    ["3", undefined],
+    [true, undefined],
+    [null, undefined],
+    [3, 7],
+    [3, null],
+  ]) {
+    expect(() => loose(value, detail)).toThrow(TypeError);
+    expect(readFileSync(result, "utf8")).toBe("untouched");
+  }
+});
+
 test("a failed write throws", () => {
   const result = join(scratch(), "no-such-directory", "result.json");
   process.env[RESULT_ENV] = result;

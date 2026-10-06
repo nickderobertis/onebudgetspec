@@ -15,10 +15,19 @@ const RESULT_ENV = "ONEBUDGETSPEC_RESULT";
  * returns `true`. When it is unset or empty, nothing is written and this returns `false`,
  * so a test that measures behaves the same outside a check.
  *
+ * @throws {TypeError} `value` is not a number or `detail` not a string; nothing is written.
  * @throws {RangeError} `value` is not finite; nothing is written.
  * @throws the error writing the file, when it cannot be written.
  */
 export function report(value: number, detail?: string): boolean {
+  // A JavaScript caller is held to the signature too: anything else writes a result the
+  // check would refuse.
+  if (typeof value !== "number") {
+    throw new TypeError(`a reported value must be a number, not ${typeof value}`);
+  }
+  if (detail !== undefined && typeof detail !== "string") {
+    throw new TypeError(`a reported detail must be a string, not ${typeof detail}`);
+  }
   if (!Number.isFinite(value)) {
     throw new RangeError(`a reported value must be a finite number, not ${value}`);
   }
