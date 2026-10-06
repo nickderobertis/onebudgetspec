@@ -122,7 +122,8 @@ def test_a_missing_version_and_a_missing_carrier_are_named(tmp_path: Path) -> No
         launcher.read_text().replace('    "@onebudgetspec/cli-darwin-x64": "workspace:*",\n', "")
     )
     problems = versions.disagreements(root)
-    assert "sdks/typescript/src/index.ts: no version found (workspace is 0.1.0)" in problems
+    workspace = versions.workspace_version()
+    assert f"sdks/typescript/src/index.ts: no version found (workspace is {workspace})" in problems
     assert any("carriers" in problem for problem in problems)
 
 
@@ -130,13 +131,14 @@ def test_set_refuses_a_place_with_no_version_field_and_writes_nothing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = copy_tree(tmp_path, *FILES)
+    workspace = versions.workspace_version(root)
     (root / "sdks/typescript/src/index.ts").write_text("export const NOTHING = 1;\n")
-    assert versions.main(["set", "0.2.0"], root) == 1
+    assert versions.main(["set", "99.0.0"], root) == 1
     err = capsys.readouterr().err
     assert "sdks/typescript/src/index.ts: no version found to write; nothing was written" in err
-    assert versions.workspace_version(root) == "0.1.0"
+    assert versions.workspace_version(root) == workspace
     assert all(
-        place.read(root) == "0.1.0"
+        place.read(root) == workspace
         for place in versions.places()
         if place.path != "sdks/typescript/src/index.ts"
     )
@@ -148,7 +150,10 @@ def test_a_workspace_version_that_is_not_a_version_is_named(
 ) -> None:
     root = copy_tree(tmp_path, *FILES)
     cargo = root / "Cargo.toml"
-    cargo.write_text(cargo.read_text().replace('version = "0.1.0"\n', f"{line}\n", 1))
+    text = cargo.read_text()
+    workspace = f'version = "{versions.workspace_version(root)}"\n'
+    assert workspace in text
+    cargo.write_text(text.replace(workspace, f"{line}\n", 1))
     [problem] = versions.disagreements(root)
     assert problem.startswith("Cargo.toml: workspace version ")
     assert problem.endswith("is not a version such as 1.2.3")
