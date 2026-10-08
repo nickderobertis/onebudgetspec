@@ -98,7 +98,6 @@ fn the_text_line_matches_the_contract_for_within_over_and_error() {
     assert!(lines[2].contains("(unknown%)"), "{}", lines[2]);
 }
 
-/// A `reported` budget writing `value` and `detail` under `max` against `threshold`.
 fn detailed(id: &str, value: f64, threshold: f64, detail: &str) -> Value {
     json!({
         "id": id,
