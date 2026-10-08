@@ -34,4 +34,4 @@ export type Direction = CheckResult["direction"];
 export type Measure = ListedBudget["measure"];
 
 /** The version of this package, which releases in lock step with the `onebudgetspec` binary. */
-export const VERSION = "0.1.3";
+export const VERSION = "0.1.4";
