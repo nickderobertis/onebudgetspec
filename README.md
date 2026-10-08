@@ -135,11 +135,18 @@ With no PATH, `./budgets.yaml` is read. `--recursive` searches a directory for f
 `budgets.yaml`, honouring `.gitignore`. Every verb takes `--output text|json` (`--json` for
 short). `schema` prints the JSON Schema bundle for the budgets file and both reports.
 
-A text result reads:
+A text result reads as one line, followed, when the result has a non-empty `detail`, by
+each line of that detail indented by two spaces, whatever the verdict:
 
 ```text
 budget gate-time: actual 1395 seconds, budget 1800 seconds, headroom 405 seconds (22.5%) — within; host: load=2.1/8 mem_available=5120MiB dispatches=3
+budget bundle-size: actual 900 kilobytes, budget 800 kilobytes, headroom -100 kilobytes (-12.5%) — over; host: load=2.1/8 mem_available=5120MiB dispatches=3
+  vendor chunk: 610 kilobytes
+  app chunk: 290 kilobytes
 ```
+
+A failed measurement's line is `budget <id>: error — <reason>; host: ...`. A result with no
+detail, or an empty one, is its line alone.
 
 | Exit | Meaning |
 | ---- | ------- |
