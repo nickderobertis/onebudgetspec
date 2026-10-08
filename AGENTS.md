@@ -101,7 +101,7 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 - `crates/onebudgetspec-e2e/tests/journeys/selection.rs` — id, label and excluded-label filters together; unknown ids refused.
 - `crates/onebudgetspec-e2e/tests/journeys/discovery.rs` — recursive discovery in path order, `.gitignore`, cross-file ids, invalid nested files.
 - `crates/onebudgetspec-e2e/tests/journeys/invalid_files.rs` — every invalid shape refused with 2, naming file and key, running nothing.
-- `crates/onebudgetspec-e2e/tests/journeys/text_output.rs` — the text line for each verdict, matching the JSON.
+- `crates/onebudgetspec-e2e/tests/journeys/text_output.rs` — the text line for each verdict, matching the JSON; a non-empty `detail`'s lines follow it, indented by two spaces.
 - `crates/onebudgetspec-e2e/tests/journeys/json_flag.rs` — `--json` equals `--output json` on every verb.
 - `crates/onebudgetspec-e2e/tests/journeys/list.rs` — `list` under every selection, running nothing.
 - `crates/onebudgetspec-e2e/tests/journeys/validate.rs` — `validate` accepts a good file, running nothing.

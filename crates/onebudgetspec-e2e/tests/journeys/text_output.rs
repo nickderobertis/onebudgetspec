@@ -4,7 +4,7 @@
 use regex::Regex;
 use serde_json::{Value, json};
 
-use crate::common::{Fixture, exits, node, reported, result};
+use crate::common::{Fixture, exits, file, node, reported, reports, result};
 
 fn figure(value: &Value) -> String {
     value
@@ -96,4 +96,78 @@ fn the_text_line_matches_the_contract_for_within_over_and_error() {
         "budget gate-time: actual 1395 requests, budget 1800 requests, headroom 405 requests (22.5%) — within"
     );
     assert!(lines[2].contains("(unknown%)"), "{}", lines[2]);
+}
+
+fn detailed(id: &str, value: f64, threshold: f64, detail: &str) -> Value {
+    json!({
+        "id": id,
+        "measure": "reported",
+        "command": reports(&json!({ "value": value, "detail": detail }).to_string()),
+        "unit": "requests",
+        "direction": "max",
+        "threshold": threshold,
+    })
+}
+
+#[test]
+fn a_detail_follows_its_result_line_indented_by_two_spaces() {
+    let fixture = Fixture::new();
+    fixture.budgets(
+        "budgets.yaml",
+        &file(&[
+            detailed(
+                "grew",
+                900.0,
+                800.0,
+                "vendor chunk: 610 requests\napp chunk: 290 requests\n\n  nested: 4",
+            ),
+            detailed("steady", 4.0, 10.0, "4 of 10 calls hit the cache"),
+            reported("plain", 4.0, "max", 10.0),
+            detailed("empty", 4.0, 10.0, ""),
+            {
+                let mut broken = reported("broken", 1.0, "max", 10.0);
+                broken["command"] = exits(5);
+                broken
+            },
+        ]),
+    );
+    let text = fixture.run(["check"]);
+    text.expect_status(3);
+    let report = fixture
+        .run(["check", "--json"])
+        .expect_status(3)
+        .check_report();
+    assert_eq!(result(&report, "broken")["verdict"], "error");
+    assert!(result(&report, "plain")["detail"].is_null());
+    assert_eq!(result(&report, "empty")["detail"], "");
+
+    let lines: Vec<&str> = text.stdout.lines().collect();
+    let expected_after = |at: usize, id: &str| {
+        assert!(
+            lines[at].starts_with(&format!("budget {id}: ")),
+            "line {at} is not {id}'s result line:\n{}",
+            text.stdout
+        );
+    };
+    assert_eq!(lines.len(), 10, "{}", text.stdout);
+    expected_after(0, "grew");
+    assert!(lines[0].contains(" — over; host: "), "{}", lines[0]);
+    assert_eq!(
+        lines[1..5],
+        [
+            "  vendor chunk: 610 requests",
+            "  app chunk: 290 requests",
+            "  ",
+            "    nested: 4",
+        ]
+    );
+    expected_after(5, "steady");
+    assert!(lines[5].contains(" — within; host: "), "{}", lines[5]);
+    assert_eq!(lines[6], "  4 of 10 calls hit the cache");
+    // No detail and an empty one add nothing: the next line is the next result's.
+    expected_after(7, "plain");
+    expected_after(8, "empty");
+    expected_after(9, "broken");
+    assert!(lines[9].contains(": error — "), "{}", lines[9]);
+    assert!(text.stdout.ends_with('\n'), "{}", text.stdout);
 }
