@@ -8,17 +8,16 @@ name: ci
 on:
   push:
     branches: [main]
-  # `ready_for_review` on top of the defaults: the required checks must run again when a
-  # draft pull request is marked ready, or the merge waits on contexts that never report.
+  # The defaults, without `ready_for_review`: a draft's runs already report the required
+  # checks on its head commit, and marking it ready changes no commit, so a run on the
+  # lift would only repeat them.
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened]
 
-# A newer push cancels a stale run. Marking a draft ready does not: that run is on the same
-# commit, so it queues behind the draft's run, whose cancelled lanes would otherwise fail
-# `check` on a commit nothing has judged.
+# A newer push cancels a stale run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event.action != 'ready_for_review' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
