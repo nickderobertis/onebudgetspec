@@ -331,14 +331,15 @@ def test_a_guard_step_that_runs_more_than_the_guard_is_refused_unrun(
     assert not marker.exists(), "the smuggled command ran"
 
 
-def test_the_required_checks_run_again_when_a_draft_is_marked_ready() -> None:
+def test_marking_a_draft_ready_does_not_rerun_the_required_checks() -> None:
     """Read the trigger list GitHub reads, since only GitHub can raise the event itself.
 
-    Marking a draft ready emits `ready_for_review`, an event only the hosted repository
-    raises and no local run can replay, so the proof here is the trigger list as GitHub
-    parses it. The merge path's own lift of a draft is the end-to-end proof.
+    A draft's runs report on its head commit, and marking it ready changes no commit, so
+    the draft's runs are the ones the merge path reads; a run on `ready_for_review` would
+    only repeat them. The proof here is the trigger list as GitHub parses it.
     """
     document = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
     # PyYAML reads the bare key `on` as the boolean True.
     pull_request = document[True]["pull_request"]
-    assert {"opened", "synchronize", "reopened", "ready_for_review"} <= set(pull_request["types"])
+    assert {"opened", "synchronize", "reopened"} <= set(pull_request["types"])
+    assert "ready_for_review" not in pull_request["types"]
