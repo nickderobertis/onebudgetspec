@@ -21,6 +21,21 @@ fn fork_lock() -> MutexGuard<'static, ()> {
     LOCK.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// SPIKE ONLY (spikes/saphyr-diff, never lands): with `ONEBUDGETSPEC_SPIKE_CORPUS` set,
+/// keep a copy of every budgets document a journey writes, named by its content's hash,
+/// for the differential harness to read.
+fn spike_dump(kind: &str, extension: &str, text: &str) {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let Some(root) = std::env::var_os("ONEBUDGETSPEC_SPIKE_CORPUS") else {
+        return;
+    };
+    let mut hasher = DefaultHasher::new();
+    text.hash(&mut hasher);
+    let dir = Path::new(&root).join(kind);
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join(format!("{:016x}.{extension}", hasher.finish())), text).unwrap();
+}
+
 /// Spawn `command`, with whatever streams it was given, under the fork lock.
 pub fn spawn(command: &mut Command) -> Child {
     let _forking = fork_lock();
@@ -163,6 +178,9 @@ impl Fixture {
 
     /// Write `text` to `relative`, creating its directories, under the fork lock.
     pub fn write(&self, relative: &str, text: &str) -> PathBuf {
+        if relative.ends_with("budgets.yaml") {
+            spike_dump("texts", "yaml", text);
+        }
         let path = self.path().join(relative);
         let _writing = fork_lock();
         fs::create_dir_all(path.parent().expect("a file has a directory")).unwrap();
@@ -182,6 +200,7 @@ impl Fixture {
 
     /// Write a budgets file from a JSON value, rendered as block YAML.
     pub fn budgets(&self, relative: &str, contents: &Value) -> PathBuf {
+        spike_dump("values", "json", &contents.to_string());
         let yaml = serde_norway::to_string(contents).expect("the value renders as YAML");
         self.write(relative, &yaml)
     }
