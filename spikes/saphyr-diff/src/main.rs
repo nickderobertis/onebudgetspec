@@ -7,6 +7,8 @@
 //! keep: `values/*.json` (the JSON values `Fixture::budgets` renders) and `texts/*.yaml`
 //! (every budgets.yaml a journey writes). `run.sh` produces it and runs this.
 
+mod adapters;
+
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -483,6 +485,14 @@ fn probes() -> Vec<(&'static str, String)> {
         ("block literal description", add("description: |\n      two\n      lines")),
         ("quoted key", BASE.replacen("unit: ms", "\"unit\": ms", 1)),
         ("non-string key", add("1: x")),
+        ("unit: ~", swap("unit: ms", "unit: ~")),
+        ("id: null", swap("id: ok", "id: null")),
+        ("labels: [fast, ~]", add("labels: [fast, ~]")),
+        ("command: [node, x, null]", swap("[node, budget.js]", "[node, budget.js, null]")),
+        ("threshold: ~", swap("threshold: 5", "threshold: ~")),
+        ("unit: (empty)", swap("unit: ms", "unit:")),
+        ("non-ASCII text before a patched ~", swap("id: ok", "id: ok\n    description: \"µs, ½, 日本\"").replacen("unit: ms", "unit: ~", 1)),
+        ("description: \".inf\" (a string)", add("description: \".inf\"")),
     ]
 }
 
@@ -823,6 +833,9 @@ fn main() {
     writeln!(o, "\nprobes: {} run, {probe_same} identical", probe_list.len()).unwrap();
 
     // ---- TIMING -----------------------------------------------------------------------
+    // ---- ADAPTERS ---------------------------------------------------------------------
+    adapter_section(o, &docs, &error_cases, &probe_list, &written, &variants[best].1);
+
     writeln!(o, "\n## PARSE TIME (release build; 15 rounds of 2000 parses after 200 warm-up)\n").unwrap();
     let largest_repo = docs
         .iter()
@@ -883,4 +896,146 @@ fn timed_micros(run: &dyn Fn()) -> (f64, f64) {
         .collect();
     rounds.sort_by(f64::total_cmp);
     (rounds[0], rounds[rounds.len() / 2])
+}
+
+/// The options the adapters sit on: the two `Options` that reproduce today by themselves.
+fn recommended() -> Options {
+    serde_saphyr::options! { with_snippet: false, merge_keys: MergeKeyPolicy::AsOrdinary }
+}
+
+fn verdict_name(v: Agreement) -> &'static str {
+    match v {
+        Agreement::Same => "EXACT",
+        Agreement::SamePathOtherMessage => "same outcome and path",
+        Agreement::Different => "DIFFERENT",
+    }
+}
+
+/// Every small code change in `adapters.rs`, alone and together, over every real document,
+/// every error case and every probe; then the schema-less and the write adapters.
+fn adapter_section(
+    o: &mut String,
+    docs: &[Doc],
+    error_cases: &[(String, String, String)],
+    probes: &[(&'static str, String)],
+    written: &[(String, Value)],
+    best_write: &SerializerOptions,
+) {
+    use adapters::Adapters;
+    let schema = adapters::Schema::load();
+    writeln!(o, "\n## ADAPTERS: small code changes around serde-saphyr (options: with_snippet: false, merge_keys: AsOrdinary)\n").unwrap();
+
+    let mut cases: Vec<(String, String, String)> = Vec::new();
+    for doc in docs {
+        cases.push((format!("real/{}", doc.kind), doc.name.clone(), doc.text.clone()));
+    }
+    for (name, text, _) in error_cases {
+        cases.push(("errors".into(), name.clone(), text.clone()));
+    }
+    for (name, text) in probes {
+        cases.push(("probe".into(), (*name).to_owned(), text.clone()));
+    }
+
+    let mut tally: BTreeMap<String, [usize; 6]> = BTreeMap::new();
+    for (kind, name, text) in &cases {
+        let today = norway::<BudgetsFile>(text);
+        let options_only = adapters::parse::<BudgetsFile>(text, recommended, Adapters::default(), &schema);
+        let all = adapters::parse::<BudgetsFile>(text, recommended, Adapters::ALL, &schema);
+        let before = agreement(&today, &options_only);
+        let after = agreement(&today, &all);
+        let entry = tally.entry(kind.clone()).or_default();
+        entry[before as usize] += 1;
+        entry[3 + after as usize] += 1;
+        if before == Agreement::Same && after == Agreement::Same {
+            continue;
+        }
+        let singles: Vec<String> = Adapters::singles()
+            .into_iter()
+            .filter_map(|(label, a)| {
+                let v = agreement(&today, &adapters::parse::<BudgetsFile>(text, recommended, a, &schema));
+                (v < before).then(|| format!("{label} -> {}", verdict_name(v)))
+            })
+            .collect();
+        writeln!(o, "- [{kind}] {name}: options only {}; all adapters {}; single adapters that improve it: {singles:?}", verdict_name(before), verdict_name(after)).unwrap();
+        if after != Agreement::Same {
+            writeln!(o, "    today: {}", show(&today)).unwrap();
+            writeln!(o, "    all adapters: {}", show(&all)).unwrap();
+        }
+    }
+    writeln!(o, "\nTallies (options only: exact / same path / different -> all adapters: exact / same path / different):").unwrap();
+    for (kind, t) in &tally {
+        writeln!(o, "  {kind:<34} {}/{}/{} -> {}/{}/{}", t[0], t[1], t[2], t[3], t[4], t[5]).unwrap();
+    }
+
+    // Schema-less reads.
+    writeln!(o, "\n### Schema-less reads into serde_json::Value: non-finite floats as null\n").unwrap();
+    let mut value_texts: Vec<(String, String)> = docs.iter().map(|d| (format!("{} {}", d.kind, d.name), d.text.clone())).collect();
+    for (name, text) in probes {
+        value_texts.push((format!("probe {name}"), text.clone()));
+    }
+    for (label, adapter) in [
+        ("saphyr tree -> JSON, non-finite -> null", 0),
+        ("serde-saphyr Value (reject_non_finite_typeless_float: false), \".inf\"/\"-.inf\"/\".nan\" strings -> null", 1),
+    ] {
+        let mut same = 0;
+        let mut both_refuse = 0;
+        let mut differ = Vec::new();
+        for (name, text) in &value_texts {
+            let today = norway::<Value>(text).ok();
+            let after = if adapter == 0 {
+                adapters::tree_value_with_null_non_finite(text)
+            } else {
+                adapters::saphyr_value_with_null_non_finite(text).ok()
+            };
+            match (&today, &after) {
+                (Some(a), Some(b)) if a == b => same += 1,
+                (None, None) => both_refuse += 1,
+                _ => differ.push(format!("{name}: today {today:?} / adapted {after:?}")),
+            }
+        }
+        let real_differ = differ.iter().filter(|d| !d.starts_with("probe ")).count();
+        writeln!(
+            o,
+            "{label}: {} documents ({} real, {} probes), {same} equal, {both_refuse} refused by both, {} differ: {real_differ} real, {} probes",
+            value_texts.len(),
+            docs.len(),
+            probes.len(),
+            differ.len(),
+            differ.len() - real_differ,
+        )
+        .unwrap();
+        for d in &differ {
+            writeln!(o, "  {}", &d[..d.len().min(400)]).unwrap();
+        }
+    }
+
+    // Writes.
+    writeln!(o, "\n### Writes: serde-saphyr (prefer_block_scalars: false) re-quoted with single quotes\n").unwrap();
+    let mut identical = 0;
+    let mut remaining = Vec::new();
+    let mut meaning = Vec::new();
+    for (name, value) in written {
+        let today = serde_norway::to_string(value).unwrap();
+        let after = adapters::single_quoted(&saphyr_write(value, best_write.clone()).unwrap());
+        if today == after {
+            identical += 1;
+        } else {
+            for pair in line_diff(&today, &after) {
+                remaining.push((name.clone(), pair));
+            }
+        }
+        for (reader, read) in [("norway", norway::<Value>(&after)), ("saphyr", saphyr::<Value>(&after, Options::default()))] {
+            if read.as_ref().ok() != Some(value) {
+                meaning.push(format!("{name}: {reader} reads the re-quoted text as {}", show(&read)));
+            }
+        }
+    }
+    writeln!(o, "byte-identical to serde_norway: {identical} of {}", written.len()).unwrap();
+    for (name, (before, after)) in &remaining {
+        writeln!(o, "  [{name}]\n    before: {before:?}\n    after:  {after:?}").unwrap();
+    }
+    writeln!(o, "re-quoted texts that do not read back to their value: {}", meaning.len()).unwrap();
+    for m in &meaning {
+        writeln!(o, "  {m}").unwrap();
+    }
 }

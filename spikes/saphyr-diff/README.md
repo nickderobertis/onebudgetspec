@@ -20,4 +20,9 @@ and `core/tests/api.rs`'s literals. It prints:
   `SerializerOptions`.
 - **ERRORS:** `invalid_files.rs`'s defects and `api.rs`'s refusals.
 - **PROBES:** synthetic edge cases.
+- **ADAPTERS:** the small code changes in `src/adapters.rs`, alone and together, over
+  every read, error case and probe, plus the schema-less read and write adapters.
 - **PARSE TIME:** for the largest documents.
+
+Temporary files go under `$ONEPIPELINE_NODE_SCRATCH_DIR/saphyr-diff/` when that is set,
+else under the clone's gitignored `target/saphyr-diff/`.

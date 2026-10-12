@@ -6,7 +6,11 @@
 #   spikes/saphyr-diff/run.sh [external budgets.yaml ...]
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-corpus="$(mktemp -d)"
+# Temporary files go under this dispatch's scratch directory when one is given, else under
+# the clone's own gitignored target/; never the system temporary directory.
+scratch="${ONEPIPELINE_NODE_SCRATCH_DIR:-$root/target}/saphyr-diff"
+mkdir -p "$scratch"
+corpus="$(mktemp -d "$scratch/corpus.XXXXXX")"
 trap 'rm -rf "$corpus"' EXIT
 cd "$root"
 cargo build --quiet -p onebudgetspec

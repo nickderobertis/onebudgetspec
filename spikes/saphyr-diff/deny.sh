@@ -8,7 +8,11 @@
 #   spikes/saphyr-diff/deny.sh
 set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-copy="$(mktemp -d)"
+# Temporary files go under this dispatch's scratch directory when one is given, else under
+# the clone's own gitignored target/; never the system temporary directory.
+scratch="${ONEPIPELINE_NODE_SCRATCH_DIR:-$root/target}/saphyr-diff"
+mkdir -p "$scratch"
+copy="$(mktemp -d "$scratch/copy.XXXXXX")"
 trap 'rm -rf "$copy"' EXIT
 git -C "$root" archive HEAD | tar -x -C "$copy"
 cd "$copy"
