@@ -68,9 +68,18 @@ fn saphyr<T: DeserializeOwned>(text: &str, options: Options) -> Parsed<T> {
 fn read_variants() -> Vec<(&'static str, fn() -> Options)> {
     vec![
         ("default", || Options::default()),
-        ("with_snippet: false", || serde_saphyr::options! { with_snippet: false }),
-        ("strict_booleans: true", || serde_saphyr::options! { strict_booleans: true }),
-        ("no_schema: true", || serde_saphyr::options! { no_schema: true }),
+        (
+            "with_snippet: false",
+            || serde_saphyr::options! { with_snippet: false },
+        ),
+        (
+            "strict_booleans: true",
+            || serde_saphyr::options! { strict_booleans: true },
+        ),
+        (
+            "no_schema: true",
+            || serde_saphyr::options! { no_schema: true },
+        ),
         ("legacy_octal_numbers: true", || {
             serde_saphyr::options! { legacy_octal_numbers: true }
         }),
@@ -111,7 +120,11 @@ fn agreement<T: std::fmt::Debug>(a: &Parsed<T>, b: &Parsed<T>) -> Agreement {
 fn show<T: std::fmt::Debug>(outcome: &Parsed<T>) -> String {
     match outcome {
         Ok(value) => format!("Ok {value:?}"),
-        Err(failure) => format!("Err path={} :: {}", failure.path, indent(&failure.rendered())),
+        Err(failure) => format!(
+            "Err path={} :: {}",
+            failure.path,
+            indent(&failure.rendered())
+        ),
     }
 }
 
@@ -135,7 +148,10 @@ fn node(yaml: &saphyr::Yaml) -> Result<Value, String> {
         Yaml::Value(Scalar::Boolean(b)) => json!(b),
         Yaml::Value(Scalar::Integer(i)) => json!(i),
         Yaml::Value(Scalar::FloatingPoint(f)) => serde_json::Number::from_f64(f.into_inner())
-            .map_or_else(|| json!(format!("<non-finite {}>", f.into_inner())), Value::Number),
+            .map_or_else(
+                || json!(format!("<non-finite {}>", f.into_inner())),
+                Value::Number,
+            ),
         Yaml::Value(Scalar::String(s)) => json!(s),
         Yaml::Sequence(items) => Value::Array(items.iter().map(node).collect::<Result<_, _>>()?),
         Yaml::Mapping(map) => {
@@ -359,16 +375,56 @@ type Defect = fn(&mut Value);
 
 /// invalid_files.rs's DEFECTS, case for case, with the key each refusal must name.
 const DEFECTS: &[(&str, Defect, &str)] = &[
-    ("unknown top-level key", |f| f["owner"] = json!("me"), "owner"),
-    ("unknown budget key", |f| f["budgets"][0]["workload"] = json!("x"), "workload"),
-    ("unknown condition key", |f| f["conditions"][0]["shell"] = json!(true), "shell"),
-    ("malformed id", |f| f["budgets"][0]["id"] = json!("Gate_Time"), "budgets[0].id"),
-    ("malformed label", |f| f["budgets"][0]["labels"] = json!(["Fast"]), "budgets[0].labels[0]"),
-    ("repeated label", |f| f["budgets"][0]["labels"] = json!(["fast", "fast"]), "budgets[0].labels[1]"),
-    ("malformed unit", |f| f["budgets"][0]["unit"] = json!("Seconds"), "budgets[0].unit"),
-    ("empty command", |f| f["budgets"][0]["command"] = json!([]), "budgets[0].command"),
-    ("negative threshold", |f| f["budgets"][0]["threshold"] = json!(-1), "budgets[0].threshold"),
-    ("zero timeout", |f| f["budgets"][0]["timeout_seconds"] = json!(0), "budgets[0].timeout_seconds"),
+    (
+        "unknown top-level key",
+        |f| f["owner"] = json!("me"),
+        "owner",
+    ),
+    (
+        "unknown budget key",
+        |f| f["budgets"][0]["workload"] = json!("x"),
+        "workload",
+    ),
+    (
+        "unknown condition key",
+        |f| f["conditions"][0]["shell"] = json!(true),
+        "shell",
+    ),
+    (
+        "malformed id",
+        |f| f["budgets"][0]["id"] = json!("Gate_Time"),
+        "budgets[0].id",
+    ),
+    (
+        "malformed label",
+        |f| f["budgets"][0]["labels"] = json!(["Fast"]),
+        "budgets[0].labels[0]",
+    ),
+    (
+        "repeated label",
+        |f| f["budgets"][0]["labels"] = json!(["fast", "fast"]),
+        "budgets[0].labels[1]",
+    ),
+    (
+        "malformed unit",
+        |f| f["budgets"][0]["unit"] = json!("Seconds"),
+        "budgets[0].unit",
+    ),
+    (
+        "empty command",
+        |f| f["budgets"][0]["command"] = json!([]),
+        "budgets[0].command",
+    ),
+    (
+        "negative threshold",
+        |f| f["budgets"][0]["threshold"] = json!(-1),
+        "budgets[0].threshold",
+    ),
+    (
+        "zero timeout",
+        |f| f["budgets"][0]["timeout_seconds"] = json!(0),
+        "budgets[0].timeout_seconds",
+    ),
     (
         "id repeated in one file",
         |f| {
@@ -377,9 +433,21 @@ const DEFECTS: &[(&str, Defect, &str)] = &[
         },
         "budgets[1].id",
     ),
-    ("elapsed not in seconds", |f| f["budgets"][0]["measure"] = json!("elapsed"), "budgets[0].unit"),
-    ("unsupported schema_version", |f| f["schema_version"] = json!(2), "schema_version"),
-    ("empty condition command", |f| f["conditions"][0]["command"] = json!([]), "conditions[0].command"),
+    (
+        "elapsed not in seconds",
+        |f| f["budgets"][0]["measure"] = json!("elapsed"),
+        "budgets[0].unit",
+    ),
+    (
+        "unsupported schema_version",
+        |f| f["schema_version"] = json!(2),
+        "schema_version",
+    ),
+    (
+        "empty condition command",
+        |f| f["conditions"][0]["command"] = json!([]),
+        "conditions[0].command",
+    ),
     (
         "missing budgets",
         |f| {
@@ -387,7 +455,11 @@ const DEFECTS: &[(&str, Defect, &str)] = &[
         },
         "budgets",
     ),
-    ("malformed condition name", |f| f["conditions"][0]["name"] = json!("Probe"), "conditions[0].name"),
+    (
+        "malformed condition name",
+        |f| f["conditions"][0]["name"] = json!("Probe"),
+        "conditions[0].name",
+    ),
     (
         "condition name repeated",
         |f| {
@@ -396,8 +468,16 @@ const DEFECTS: &[(&str, Defect, &str)] = &[
         },
         "conditions[1].name",
     ),
-    ("condition named load1", |f| f["conditions"][0]["name"] = json!("load1"), "conditions[0].name"),
-    ("condition named cpus", |f| f["conditions"][0]["name"] = json!("cpus"), "conditions[0].name"),
+    (
+        "condition named load1",
+        |f| f["conditions"][0]["name"] = json!("load1"),
+        "conditions[0].name",
+    ),
+    (
+        "condition named cpus",
+        |f| f["conditions"][0]["name"] = json!("cpus"),
+        "conditions[0].name",
+    ),
     (
         "condition named mem_available_mib",
         |f| f["conditions"][0]["name"] = json!("mem_available_mib"),
@@ -508,15 +588,24 @@ struct Tally {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let root = PathBuf::from(args.next().expect("usage: saphyr-diff <repo root> <corpus> [external ...]"));
-    let corpus = PathBuf::from(args.next().expect("usage: saphyr-diff <repo root> <corpus> [external ...]"));
+    let root = PathBuf::from(
+        args.next()
+            .expect("usage: saphyr-diff <repo root> <corpus> [external ...]"),
+    );
+    let corpus = PathBuf::from(
+        args.next()
+            .expect("usage: saphyr-diff <repo root> <corpus> [external ...]"),
+    );
     let external: Vec<PathBuf> = args.map(PathBuf::from).collect();
 
     let values: Vec<(String, Value)> = read_dir_sorted(&corpus.join("values"), "json")
         .into_iter()
         .map(|path| {
             let text = std::fs::read_to_string(&path).unwrap();
-            (path.file_name().unwrap().to_string_lossy().into_owned(), serde_json::from_str(&text).unwrap())
+            (
+                path.file_name().unwrap().to_string_lossy().into_owned(),
+                serde_json::from_str(&text).unwrap(),
+            )
         })
         .collect();
 
@@ -544,7 +633,10 @@ fn main() {
     // packaging-e2e's write_reporting_budgets: compact JSON as the budgets file ("JSON is
     // YAML"), with the two commands its journeys pass. The Python one is an absolute venv
     // path there; a stand-in of the same shape here.
-    for command in [vec!["/tmp/venv/bin/python", "measure.py"], vec!["node", "measure.mjs"]] {
+    for command in [
+        vec!["/tmp/venv/bin/python", "measure.py"],
+        vec!["node", "measure.mjs"],
+    ] {
         let budgets: Vec<Value> = ["api-requests", "worker-requests"]
             .iter()
             .map(|id| {
@@ -576,7 +668,11 @@ fn main() {
 
     let mut out = String::new();
     let o = &mut out;
-    writeln!(o, "# saphyr-diff: serde_norway 0.9.42 vs serde-saphyr 1.3.0 (+ saphyr 0.2.1 tree)\n").unwrap();
+    writeln!(
+        o,
+        "# saphyr-diff: serde_norway 0.9.42 vs serde-saphyr 1.3.0 (+ saphyr 0.2.1 tree)\n"
+    )
+    .unwrap();
 
     // ---- READS ------------------------------------------------------------------------
     writeln!(o, "## READS into BudgetsFile (serde_path_to_error), serde_json::Value (preserve_order) and saphyr's tree\n").unwrap();
@@ -609,51 +705,89 @@ fn main() {
 
         let typed = agreement(&typed_before, &typed_after);
         if typed != Agreement::Same {
-            writeln!(o, "- [{}] {} — typed read differs ({typed:?})", doc.kind, doc.name).unwrap();
+            writeln!(
+                o,
+                "- [{}] {} — typed read differs ({typed:?})",
+                doc.kind, doc.name
+            )
+            .unwrap();
             writeln!(o, "    before: {}", show(&typed_before)).unwrap();
             writeln!(o, "    after:  {}", show(&typed_after)).unwrap();
             let fixes: Vec<_> = read_variants()
                 .into_iter()
-                .filter(|(_, make)| agreement(&typed_before, &saphyr::<BudgetsFile>(&doc.text, make())) == Agreement::Same)
+                .filter(|(_, make)| {
+                    agreement(&typed_before, &saphyr::<BudgetsFile>(&doc.text, make()))
+                        == Agreement::Same
+                })
                 .map(|(name, _)| name)
                 .collect();
             writeln!(o, "    options reproducing today exactly: {fixes:?}").unwrap();
         }
         let value = agreement(&value_before, &value_after);
         if value != Agreement::Same {
-            writeln!(o, "- [{}] {} — Value read differs ({value:?})", doc.kind, doc.name).unwrap();
+            writeln!(
+                o,
+                "- [{}] {} — Value read differs ({value:?})",
+                doc.kind, doc.name
+            )
+            .unwrap();
             writeln!(o, "    before: {}", show(&value_before)).unwrap();
             writeln!(o, "    after:  {}", show(&value_after)).unwrap();
             let fixes: Vec<_> = read_variants()
                 .into_iter()
-                .filter(|(_, make)| agreement(&value_before, &saphyr::<Value>(&doc.text, make())) == Agreement::Same)
+                .filter(|(_, make)| {
+                    agreement(&value_before, &saphyr::<Value>(&doc.text, make())) == Agreement::Same
+                })
                 .map(|(name, _)| name)
                 .collect();
             writeln!(o, "    options reproducing today exactly: {fixes:?}").unwrap();
         }
         if tree_vs_value != Agreement::Same {
-            writeln!(o, "- [{}] {} — saphyr tree differs from serde_norway's Value", doc.kind, doc.name).unwrap();
+            writeln!(
+                o,
+                "- [{}] {} — saphyr tree differs from serde_norway's Value",
+                doc.kind, doc.name
+            )
+            .unwrap();
             writeln!(o, "    before (norway Value): {}", show(&value_before)).unwrap();
             writeln!(o, "    after  (saphyr tree):  {tree_after:?}").unwrap();
         }
     }
-    writeln!(o, "\nRead tallies (docs / same / same-path-other-message / different):").unwrap();
+    writeln!(
+        o,
+        "\nRead tallies (docs / same / same-path-other-message / different):"
+    )
+    .unwrap();
     let mut total = 0;
     for (kind, (typed, value, tree)) in &tallies {
         total += typed.docs;
         writeln!(
             o,
             "  {kind:<22} typed {}/{}/{}/{}   Value {}/{}/{}/{}   tree-vs-Value {}/{}/{}/{}",
-            typed.docs, typed.same, typed.path_only, typed.different,
-            value.docs, value.same, value.path_only, value.different,
-            tree.docs, tree.same, tree.path_only, tree.different,
+            typed.docs,
+            typed.same,
+            typed.path_only,
+            typed.different,
+            value.docs,
+            value.same,
+            value.path_only,
+            value.different,
+            tree.docs,
+            tree.same,
+            tree.path_only,
+            tree.different,
         )
         .unwrap();
     }
     writeln!(o, "  total documents read: {total}").unwrap();
 
     // ---- WRITES -----------------------------------------------------------------------
-    writeln!(o, "\n## WRITES: Fixture::budgets' serde_json::Value rendered as block YAML ({} values)\n", values.len()).unwrap();
+    writeln!(
+        o,
+        "\n## WRITES: Fixture::budgets' serde_json::Value rendered as block YAML ({} values)\n",
+        values.len()
+    )
+    .unwrap();
     let mut written = values.clone();
     written.push(("invalid_files base".into(), base_value()));
     for (case, defect, _) in DEFECTS {
@@ -688,7 +822,10 @@ fn main() {
                 ("saphyr", saphyr::<Value>(text, Options::default())),
             ] {
                 if agreement(&original, &read) != Agreement::Same {
-                    round_trip_problems.push(format!("{name}: {writer}-written, {reader}-read: {}", show(&read)));
+                    round_trip_problems.push(format!(
+                        "{name}: {writer}-written, {reader}-read: {}",
+                        show(&read)
+                    ));
                 }
             }
             let typed_n = norway::<BudgetsFile>(text);
@@ -707,17 +844,47 @@ fn main() {
     for (before, after) in default_diffs.keys() {
         *classes.entry(classify(before, after)).or_default() += 1;
     }
-    writeln!(o, "Distinct differing line pairs under the default, by class: {classes:?}").unwrap();
-    writeln!(o, "\nDistinct differing line pairs under the default (count, first value, class):").unwrap();
+    writeln!(
+        o,
+        "Distinct differing line pairs under the default, by class: {classes:?}"
+    )
+    .unwrap();
+    writeln!(
+        o,
+        "\nDistinct differing line pairs under the default (count, first value, class):"
+    )
+    .unwrap();
     for ((before, after), (count, first)) in &default_diffs {
-        writeln!(o, "  x{count} [{first}] {}\n    before: {:?}\n    after:  {:?}", classify(before, after), before, after).unwrap();
+        writeln!(
+            o,
+            "  x{count} [{first}] {}\n    before: {:?}\n    after:  {:?}",
+            classify(before, after),
+            before,
+            after
+        )
+        .unwrap();
     }
-    writeln!(o, "\nByte-identical values per SerializerOptions variant (of {}):", written.len()).unwrap();
+    writeln!(
+        o,
+        "\nByte-identical values per SerializerOptions variant (of {}):",
+        written.len()
+    )
+    .unwrap();
     for ((name, _), count) in variants.iter().zip(&matches_per_variant) {
         writeln!(o, "  {count:>4}  {name}").unwrap();
     }
-    let best = matches_per_variant.iter().enumerate().max_by_key(|(_, c)| **c).unwrap().0;
-    writeln!(o, "\nRemaining differences under the best variant ({}):", variants[best].0).unwrap();
+    let best = matches_per_variant
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, c)| **c)
+        .unwrap()
+        .0;
+    writeln!(
+        o,
+        "\nRemaining differences under the best variant ({}):",
+        variants[best].0
+    )
+    .unwrap();
     let mut best_diffs: BTreeMap<(String, String), (usize, String)> = BTreeMap::new();
     for (name, value) in &written {
         let before = serde_norway::to_string(value).unwrap();
@@ -735,9 +902,20 @@ fn main() {
     }
     writeln!(o, "  by class: {best_classes:?}").unwrap();
     for ((before, after), (count, first)) in &best_diffs {
-        writeln!(o, "  x{count} [{first}] {}\n    before: {:?}\n    after:  {:?}", classify(before, after), before, after).unwrap();
+        writeln!(
+            o,
+            "  x{count} [{first}] {}\n    before: {:?}\n    after:  {:?}",
+            classify(before, after),
+            before,
+            after
+        )
+        .unwrap();
     }
-    writeln!(o, "\nEmitted-text round trips that do not give back the value or agree when typed:").unwrap();
+    writeln!(
+        o,
+        "\nEmitted-text round trips that do not give back the value or agree when typed:"
+    )
+    .unwrap();
     if round_trip_problems.is_empty() {
         writeln!(o, "  none").unwrap();
     }
@@ -754,7 +932,12 @@ fn main() {
     )
     .unwrap();
     writeln!(o, "  base, serde_norway:\n{}", fence(&base_text)).unwrap();
-    writeln!(o, "  base, serde-saphyr default:\n{}", fence(&saphyr_write(&base_value(), SerializerOptions::default()).unwrap())).unwrap();
+    writeln!(
+        o,
+        "  base, serde-saphyr default:\n{}",
+        fence(&saphyr_write(&base_value(), SerializerOptions::default()).unwrap())
+    )
+    .unwrap();
 
     // ---- ERRORS -----------------------------------------------------------------------
     writeln!(o, "\n## ERRORS: invalid_files.rs DEFECTS (written by serde_norway as today, then by serde-saphyr) and api.rs refusals\n").unwrap();
@@ -763,14 +946,22 @@ fn main() {
         let mut v = base_value();
         defect(&mut v);
         let v = sorted(v);
-        error_cases.push((format!("{case} (norway-written)"), serde_norway::to_string(&v).unwrap(), (*key).into()));
+        error_cases.push((
+            format!("{case} (norway-written)"),
+            serde_norway::to_string(&v).unwrap(),
+            (*key).into(),
+        ));
         error_cases.push((
             format!("{case} (saphyr-written)"),
             saphyr_write(&v, variants[best].1.clone()).unwrap(),
             (*key).into(),
         ));
     }
-    error_cases.push(("a list, not a mapping".into(), "- just\n- a list\n".into(), "budgets.yaml".into()));
+    error_cases.push((
+        "a list, not a mapping".into(),
+        "- just\n- a list\n".into(),
+        "budgets.yaml".into(),
+    ));
     for doc in api_literals(&root).into_iter().skip(1) {
         error_cases.push((doc.name, doc.text, "budgets.yaml".into()));
     }
@@ -794,8 +985,14 @@ fn main() {
                 writeln!(o, "    before: {}", show(&before)).unwrap();
                 writeln!(o, "    after:  {}", show(&after)).unwrap();
                 if let Err(f) = &after {
-                    writeln!(o, "    after still names `{key}`: {}", f.rendered().contains(key.as_str())).unwrap();
-                    let bare = saphyr::<BudgetsFile>(text, serde_saphyr::options! { with_snippet: false });
+                    writeln!(
+                        o,
+                        "    after still names `{key}`: {}",
+                        f.rendered().contains(key.as_str())
+                    )
+                    .unwrap();
+                    let bare =
+                        saphyr::<BudgetsFile>(text, serde_saphyr::options! { with_snippet: false });
                     writeln!(o, "    after, with_snippet: false: {}", show(&bare)).unwrap();
                 }
             }
@@ -803,7 +1000,11 @@ fn main() {
     }
 
     // ---- PROBES -----------------------------------------------------------------------
-    writeln!(o, "\n## PROBES (synthetic edge cases, not real documents): typed read\n").unwrap();
+    writeln!(
+        o,
+        "\n## PROBES (synthetic edge cases, not real documents): typed read\n"
+    )
+    .unwrap();
     let mut probe_same = 0;
     let probe_list = probes();
     for (name, text) in &probe_list {
@@ -812,7 +1013,16 @@ fn main() {
         let verdict = agreement(&before, &after);
         if verdict == Agreement::Same {
             probe_same += 1;
-            writeln!(o, "- {name}: same ({})", if before.is_ok() { "accepted" } else { "refused" }).unwrap();
+            writeln!(
+                o,
+                "- {name}: same ({})",
+                if before.is_ok() {
+                    "accepted"
+                } else {
+                    "refused"
+                }
+            )
+            .unwrap();
             continue;
         }
         writeln!(o, "- {name}: {verdict:?}").unwrap();
@@ -820,23 +1030,44 @@ fn main() {
         writeln!(o, "    after:  {}", show(&after)).unwrap();
         let fixes: Vec<_> = read_variants()
             .into_iter()
-            .filter(|(_, make)| agreement(&before, &saphyr::<BudgetsFile>(text, make())) == Agreement::Same)
+            .filter(|(_, make)| {
+                agreement(&before, &saphyr::<BudgetsFile>(text, make())) == Agreement::Same
+            })
             .map(|(name, _)| name)
             .collect();
         let path_fixes: Vec<_> = read_variants()
             .into_iter()
-            .filter(|(_, make)| agreement(&before, &saphyr::<BudgetsFile>(text, make())) <= Agreement::SamePathOtherMessage)
+            .filter(|(_, make)| {
+                agreement(&before, &saphyr::<BudgetsFile>(text, make()))
+                    <= Agreement::SamePathOtherMessage
+            })
             .map(|(name, _)| name)
             .collect();
         writeln!(o, "    options reproducing today exactly: {fixes:?}; same outcome and path: {path_fixes:?}").unwrap();
     }
-    writeln!(o, "\nprobes: {} run, {probe_same} identical", probe_list.len()).unwrap();
+    writeln!(
+        o,
+        "\nprobes: {} run, {probe_same} identical",
+        probe_list.len()
+    )
+    .unwrap();
 
     // ---- TIMING -----------------------------------------------------------------------
     // ---- ADAPTERS ---------------------------------------------------------------------
-    adapter_section(o, &docs, &error_cases, &probe_list, &written, &variants[best].1);
+    adapter_section(
+        o,
+        &docs,
+        &error_cases,
+        &probe_list,
+        &written,
+        &variants[best].1,
+    );
 
-    writeln!(o, "\n## PARSE TIME (release build; 15 rounds of 2000 parses after 200 warm-up)\n").unwrap();
+    writeln!(
+        o,
+        "\n## PARSE TIME (release build; 15 rounds of 2000 parses after 200 warm-up)\n"
+    )
+    .unwrap();
     let largest_repo = docs
         .iter()
         .filter(|d| d.kind != "external (read-only)" && norway::<BudgetsFile>(&d.text).is_ok())
@@ -844,32 +1075,56 @@ fn main() {
         .unwrap();
     let largest_committed = docs
         .iter()
-        .filter(|d| matches!(d.kind, "conformance" | "readme" | "api.rs") && norway::<BudgetsFile>(&d.text).is_ok())
+        .filter(|d| {
+            matches!(d.kind, "conformance" | "readme" | "api.rs")
+                && norway::<BudgetsFile>(&d.text).is_ok()
+        })
         .max_by_key(|d| d.text.len())
         .unwrap();
     let largest_external = docs
         .iter()
         .filter(|d| d.kind == "external (read-only)")
         .max_by_key(|d| d.text.len());
-    writeln!(o, "host: {} CPUs; timings are wall clock on a shared host, so compare within a row set\n", std::thread::available_parallelism().map_or(0, usize::from)).unwrap();
-    for doc in [largest_committed, largest_repo].into_iter().chain(largest_external) {
+    writeln!(
+        o,
+        "host: {} CPUs; timings are wall clock on a shared host, so compare within a row set\n",
+        std::thread::available_parallelism().map_or(0, usize::from)
+    )
+    .unwrap();
+    for doc in [largest_committed, largest_repo]
+        .into_iter()
+        .chain(largest_external)
+    {
         writeln!(o, "{} [{}], {} bytes:", doc.name, doc.kind, doc.text.len()).unwrap();
         let text = doc.text.as_str();
         let rounds: [(&str, Box<dyn Fn()>); 3] = [
-            ("serde_norway -> BudgetsFile", Box::new(move || {
-                std::hint::black_box(norway::<BudgetsFile>(text).unwrap());
-            })),
-            ("serde-saphyr -> BudgetsFile", Box::new(move || {
-                std::hint::black_box(saphyr::<BudgetsFile>(text, Options::default()).unwrap());
-            })),
-            ("saphyr tree", Box::new(move || {
-                use saphyr::LoadableYamlNode;
-                std::hint::black_box(saphyr::Yaml::load_from_str(text).unwrap());
-            })),
+            (
+                "serde_norway -> BudgetsFile",
+                Box::new(move || {
+                    std::hint::black_box(norway::<BudgetsFile>(text).unwrap());
+                }),
+            ),
+            (
+                "serde-saphyr -> BudgetsFile",
+                Box::new(move || {
+                    std::hint::black_box(saphyr::<BudgetsFile>(text, Options::default()).unwrap());
+                }),
+            ),
+            (
+                "saphyr tree",
+                Box::new(move || {
+                    use saphyr::LoadableYamlNode;
+                    std::hint::black_box(saphyr::Yaml::load_from_str(text).unwrap());
+                }),
+            ),
         ];
         for (name, run) in &rounds {
             let (min, median) = timed_micros(run.as_ref());
-            writeln!(o, "  {name:<30} min {min:>8.1} µs/parse   median {median:>8.1} µs/parse").unwrap();
+            writeln!(
+                o,
+                "  {name:<30} min {min:>8.1} µs/parse   median {median:>8.1} µs/parse"
+            )
+            .unwrap();
         }
     }
 
@@ -877,7 +1132,10 @@ fn main() {
 }
 
 fn fence(text: &str) -> String {
-    text.lines().map(|l| format!("      | {l}")).collect::<Vec<_>>().join("\n")
+    text.lines()
+        .map(|l| format!("      | {l}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn timed_micros(run: &dyn Fn()) -> (f64, f64) {
@@ -927,7 +1185,11 @@ fn adapter_section(
 
     let mut cases: Vec<(String, String, String)> = Vec::new();
     for doc in docs {
-        cases.push((format!("real/{}", doc.kind), doc.name.clone(), doc.text.clone()));
+        cases.push((
+            format!("real/{}", doc.kind),
+            doc.name.clone(),
+            doc.text.clone(),
+        ));
     }
     for (name, text, _) in error_cases {
         cases.push(("errors".into(), name.clone(), text.clone()));
@@ -939,7 +1201,8 @@ fn adapter_section(
     let mut tally: BTreeMap<String, [usize; 6]> = BTreeMap::new();
     for (kind, name, text) in &cases {
         let today = norway::<BudgetsFile>(text);
-        let options_only = adapters::parse::<BudgetsFile>(text, recommended, Adapters::default(), &schema);
+        let options_only =
+            adapters::parse::<BudgetsFile>(text, recommended, Adapters::default(), &schema);
         let all = adapters::parse::<BudgetsFile>(text, recommended, Adapters::ALL, &schema);
         let before = agreement(&today, &options_only);
         let after = agreement(&today, &all);
@@ -952,7 +1215,10 @@ fn adapter_section(
         let singles: Vec<String> = Adapters::singles()
             .into_iter()
             .filter_map(|(label, a)| {
-                let v = agreement(&today, &adapters::parse::<BudgetsFile>(text, recommended, a, &schema));
+                let v = agreement(
+                    &today,
+                    &adapters::parse::<BudgetsFile>(text, recommended, a, &schema),
+                );
                 (v < before).then(|| format!("{label} -> {}", verdict_name(v)))
             })
             .collect();
@@ -964,18 +1230,33 @@ fn adapter_section(
     }
     writeln!(o, "\nTallies (options only: exact / same path / different -> all adapters: exact / same path / different):").unwrap();
     for (kind, t) in &tally {
-        writeln!(o, "  {kind:<34} {}/{}/{} -> {}/{}/{}", t[0], t[1], t[2], t[3], t[4], t[5]).unwrap();
+        writeln!(
+            o,
+            "  {kind:<34} {}/{}/{} -> {}/{}/{}",
+            t[0], t[1], t[2], t[3], t[4], t[5]
+        )
+        .unwrap();
     }
 
     // Schema-less reads.
-    writeln!(o, "\n### Schema-less reads into serde_json::Value: non-finite floats as null\n").unwrap();
-    let mut value_texts: Vec<(String, String)> = docs.iter().map(|d| (format!("{} {}", d.kind, d.name), d.text.clone())).collect();
+    writeln!(
+        o,
+        "\n### Schema-less reads into serde_json::Value: non-finite floats as null\n"
+    )
+    .unwrap();
+    let mut value_texts: Vec<(String, String)> = docs
+        .iter()
+        .map(|d| (format!("{} {}", d.kind, d.name), d.text.clone()))
+        .collect();
     for (name, text) in probes {
         value_texts.push((format!("probe {name}"), text.clone()));
     }
     for (label, adapter) in [
         ("saphyr tree -> JSON, non-finite -> null", 0),
-        ("serde-saphyr Value (reject_non_finite_typeless_float: false), \".inf\"/\"-.inf\"/\".nan\" strings -> null", 1),
+        (
+            "serde-saphyr Value (reject_non_finite_typeless_float: false), \".inf\"/\"-.inf\"/\".nan\" strings -> null",
+            1,
+        ),
     ] {
         let mut same = 0;
         let mut both_refuse = 0;
@@ -1010,7 +1291,11 @@ fn adapter_section(
     }
 
     // Writes.
-    writeln!(o, "\n### Writes: serde-saphyr (prefer_block_scalars: false) re-quoted with single quotes\n").unwrap();
+    writeln!(
+        o,
+        "\n### Writes: serde-saphyr (prefer_block_scalars: false) re-quoted with single quotes\n"
+    )
+    .unwrap();
     let mut identical = 0;
     let mut remaining = Vec::new();
     let mut meaning = Vec::new();
@@ -1024,17 +1309,37 @@ fn adapter_section(
                 remaining.push((name.clone(), pair));
             }
         }
-        for (reader, read) in [("norway", norway::<Value>(&after)), ("saphyr", saphyr::<Value>(&after, Options::default()))] {
+        for (reader, read) in [
+            ("norway", norway::<Value>(&after)),
+            ("saphyr", saphyr::<Value>(&after, Options::default())),
+        ] {
             if read.as_ref().ok() != Some(value) {
-                meaning.push(format!("{name}: {reader} reads the re-quoted text as {}", show(&read)));
+                meaning.push(format!(
+                    "{name}: {reader} reads the re-quoted text as {}",
+                    show(&read)
+                ));
             }
         }
     }
-    writeln!(o, "byte-identical to serde_norway: {identical} of {}", written.len()).unwrap();
+    writeln!(
+        o,
+        "byte-identical to serde_norway: {identical} of {}",
+        written.len()
+    )
+    .unwrap();
     for (name, (before, after)) in &remaining {
-        writeln!(o, "  [{name}]\n    before: {before:?}\n    after:  {after:?}").unwrap();
+        writeln!(
+            o,
+            "  [{name}]\n    before: {before:?}\n    after:  {after:?}"
+        )
+        .unwrap();
     }
-    writeln!(o, "re-quoted texts that do not read back to their value: {}", meaning.len()).unwrap();
+    writeln!(
+        o,
+        "re-quoted texts that do not read back to their value: {}",
+        meaning.len()
+    )
+    .unwrap();
     for m in &meaning {
         writeln!(o, "  {m}").unwrap();
     }

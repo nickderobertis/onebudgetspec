@@ -33,7 +33,11 @@ fn spike_dump(kind: &str, extension: &str, text: &str) {
     text.hash(&mut hasher);
     let dir = Path::new(&root).join(kind);
     fs::create_dir_all(&dir).unwrap();
-    fs::write(dir.join(format!("{:016x}.{extension}", hasher.finish())), text).unwrap();
+    fs::write(
+        dir.join(format!("{:016x}.{extension}", hasher.finish())),
+        text,
+    )
+    .unwrap();
 }
 
 /// Spawn `command`, with whatever streams it was given, under the fork lock.
