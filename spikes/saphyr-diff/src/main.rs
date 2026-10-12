@@ -117,6 +117,33 @@ fn agreement<T: std::fmt::Debug>(a: &Parsed<T>, b: &Parsed<T>) -> Agreement {
     }
 }
 
+/// The line an error names first, in either crate's spelling (`at line N column M`,
+/// `at line N, column M` or `error: line N column M:`), if it names one.
+fn line_of(message: &str) -> Option<usize> {
+    let tail = message
+        .split_once(" at line ")
+        .or_else(|| message.split_once("error: line "))
+        .map(|(_, tail)| tail)?;
+    tail.split(|c: char| !c.is_ascii_digit())
+        .next()?
+        .parse()
+        .ok()
+}
+
+/// The user's ruling: an error may differ in wording, punctuation or column so long as it
+/// says what failed and where. This is the mechanical half of "where": both refuse at the
+/// same key path, and the candidate names the same line wherever today names one. What
+/// failed is read from the texts printed beside it.
+fn same_place<T>(today: &Parsed<T>, candidate: &Parsed<T>) -> bool {
+    match (today, candidate) {
+        (Err(a), Err(b)) => {
+            a.path == b.path
+                && line_of(&a.message).is_none_or(|line| line_of(&b.message) == Some(line))
+        }
+        _ => false,
+    }
+}
+
 fn show<T: std::fmt::Debug>(outcome: &Parsed<T>) -> String {
     match outcome {
         Ok(value) => format!("Ok {value:?}"),
@@ -994,6 +1021,13 @@ fn main() {
                     let bare =
                         saphyr::<BudgetsFile>(text, serde_saphyr::options! { with_snippet: false });
                     writeln!(o, "    after, with_snippet: false: {}", show(&bare)).unwrap();
+                    writeln!(
+                        o,
+                        "    same path and line (default, with_snippet: false): {}, {}",
+                        same_place(&before, &after),
+                        same_place(&before, &bare)
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -1044,6 +1078,12 @@ fn main() {
             .map(|(name, _)| name)
             .collect();
         writeln!(o, "    options reproducing today exactly: {fixes:?}; same outcome and path: {path_fixes:?}").unwrap();
+        let place: Vec<_> = read_variants()
+            .into_iter()
+            .filter(|(_, make)| same_place(&before, &saphyr::<BudgetsFile>(text, make())))
+            .map(|(name, _)| name)
+            .collect();
+        writeln!(o, "    options giving the same path and line: {place:?}").unwrap();
     }
     writeln!(
         o,
@@ -1161,14 +1201,6 @@ fn recommended() -> Options {
     serde_saphyr::options! { with_snippet: false, merge_keys: MergeKeyPolicy::AsOrdinary }
 }
 
-fn verdict_name(v: Agreement) -> &'static str {
-    match v {
-        Agreement::Same => "EXACT",
-        Agreement::SamePathOtherMessage => "same outcome and path",
-        Agreement::Different => "DIFFERENT",
-    }
-}
-
 /// Every small code change in `adapters.rs`, alone and together, over every real document,
 /// every error case and every probe; then the schema-less and the write adapters.
 fn adapter_section(
@@ -1198,42 +1230,55 @@ fn adapter_section(
         cases.push(("probe".into(), (*name).to_owned(), text.clone()));
     }
 
-    let mut tally: BTreeMap<String, [usize; 6]> = BTreeMap::new();
+    // Exact, same path and line (acceptable under the ruling), same path only, different.
+    let class = |today: &Parsed<BudgetsFile>, p: &Parsed<BudgetsFile>| match agreement(today, p) {
+        Agreement::Same => 0,
+        Agreement::SamePathOtherMessage if same_place(today, p) => 1,
+        Agreement::SamePathOtherMessage => 2,
+        Agreement::Different => 3,
+    };
+    const CLASS: [&str; 4] = [
+        "EXACT",
+        "same path and line",
+        "same outcome and path",
+        "DIFFERENT",
+    ];
+    let mut tally: BTreeMap<String, [usize; 8]> = BTreeMap::new();
     for (kind, name, text) in &cases {
         let today = norway::<BudgetsFile>(text);
         let options_only =
             adapters::parse::<BudgetsFile>(text, recommended, Adapters::default(), &schema);
         let all = adapters::parse::<BudgetsFile>(text, recommended, Adapters::ALL, &schema);
-        let before = agreement(&today, &options_only);
-        let after = agreement(&today, &all);
+        let before = class(&today, &options_only);
+        let after = class(&today, &all);
         let entry = tally.entry(kind.clone()).or_default();
-        entry[before as usize] += 1;
-        entry[3 + after as usize] += 1;
-        if before == Agreement::Same && after == Agreement::Same {
+        entry[before] += 1;
+        entry[4 + after] += 1;
+        if before == 0 && after == 0 {
             continue;
         }
         let singles: Vec<String> = Adapters::singles()
             .into_iter()
             .filter_map(|(label, a)| {
-                let v = agreement(
+                let v = class(
                     &today,
                     &adapters::parse::<BudgetsFile>(text, recommended, a, &schema),
                 );
-                (v < before).then(|| format!("{label} -> {}", verdict_name(v)))
+                (v < before).then(|| format!("{label} -> {}", CLASS[v]))
             })
             .collect();
-        writeln!(o, "- [{kind}] {name}: options only {}; all adapters {}; single adapters that improve it: {singles:?}", verdict_name(before), verdict_name(after)).unwrap();
-        if after != Agreement::Same {
+        writeln!(o, "- [{kind}] {name}: options only {}; all adapters {}; single adapters that improve it: {singles:?}", CLASS[before], CLASS[after]).unwrap();
+        if after != 0 {
             writeln!(o, "    today: {}", show(&today)).unwrap();
             writeln!(o, "    all adapters: {}", show(&all)).unwrap();
         }
     }
-    writeln!(o, "\nTallies (options only: exact / same path / different -> all adapters: exact / same path / different):").unwrap();
+    writeln!(o, "\nTallies (options only -> all adapters; each exact / same path and line / same path only / different):").unwrap();
     for (kind, t) in &tally {
         writeln!(
             o,
-            "  {kind:<34} {}/{}/{} -> {}/{}/{}",
-            t[0], t[1], t[2], t[3], t[4], t[5]
+            "  {kind:<34} {}/{}/{}/{} -> {}/{}/{}/{}",
+            t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7]
         )
         .unwrap();
     }

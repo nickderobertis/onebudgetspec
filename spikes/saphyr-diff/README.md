@@ -23,6 +23,8 @@ and `core/tests/api.rs`'s literals. It prints:
 - **PROBES:** synthetic edge cases.
 - **ADAPTERS:** the small code changes in `src/adapters.rs`, alone and together, over
   every read, error case and probe, plus the schema-less read and write adapters.
+  Wording, punctuation or column alone is an acceptable error difference, so no adapter
+  rewords messages; a refusal at the same key path and line counts as "same path and line".
 - **PARSE TIME:** for the largest documents.
 
 Every file either script writes lands in the clone or under

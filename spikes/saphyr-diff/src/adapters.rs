@@ -10,7 +10,7 @@
 
 use std::borrow::Cow;
 
-use saphyr::{AnnotatedMapping, MarkedYaml, ScalarStyle, YamlData, YamlLoader};
+use saphyr::{MarkedYaml, ScalarStyle, YamlData, YamlLoader};
 use serde_json::Value;
 
 use crate::Failure;
@@ -28,8 +28,6 @@ pub struct Adapters {
     pub null_strings: bool,
     /// Drop serde_path_to_error's `?` segments (an unknown map key) from the path.
     pub path: bool,
-    /// Rewrite serde-saphyr's messages into serde_norway's wording and locations.
-    pub message: bool,
 }
 
 impl Adapters {
@@ -38,7 +36,6 @@ impl Adapters {
         shape: true,
         null_strings: true,
         path: true,
-        message: true,
     };
 
     pub fn singles() -> Vec<(&'static str, Self)> {
@@ -54,13 +51,6 @@ impl Adapters {
                 },
             ),
             ("path", Self { path: true, ..off }),
-            (
-                "message",
-                Self {
-                    message: true,
-                    ..off
-                },
-            ),
         ]
     }
 }
@@ -139,15 +129,6 @@ fn key_text<'a>(node: &'a MarkedYaml) -> Option<&'a str> {
     raw(node).map(|(text, _)| text)
 }
 
-fn get<'a, 'b>(
-    map: &'b AnnotatedMapping<'a, MarkedYaml<'a>>,
-    key: &str,
-) -> Option<&'b MarkedYaml<'a>> {
-    map.iter()
-        .find(|(k, _)| key_text(k) == Some(key))
-        .map(|(_, v)| v)
-}
-
 #[derive(Debug, Clone, PartialEq)]
 enum Seg {
     Key(String),
@@ -171,23 +152,6 @@ fn segments(path: &str) -> Vec<Seg> {
         }
     }
     out
-}
-
-fn node_at<'a, 'b>(root: &'b MarkedYaml<'a>, path: &[Seg]) -> Option<&'b MarkedYaml<'a>> {
-    let mut node = root;
-    for seg in path {
-        node = match (&node.data, seg) {
-            (YamlData::Mapping(map), Seg::Key(key)) => get(map, key)?,
-            (YamlData::Sequence(items), Seg::Index(i)) => items.get(*i)?,
-            _ => return None,
-        };
-    }
-    Some(node)
-}
-
-fn parent(path: &str) -> String {
-    let segs = segments(path);
-    render(&segs[..segs.len().saturating_sub(1)])
 }
 
 fn render(segs: &[Seg]) -> String {
@@ -516,9 +480,6 @@ pub fn parse<T: serde::de::DeserializeOwned>(
     if adapters.path {
         failure.path = strip_unknown_keys(&failure.path);
     }
-    if adapters.message {
-        failure = reword(failure, text, tree.as_ref(), schema, options);
-    }
     Err(failure)
 }
 
@@ -552,133 +513,6 @@ fn location(message: &str) -> Option<(usize, usize)> {
         parts.next()?.trim().parse().ok()?,
         parts.next()?.trim().parse().ok()?,
     ))
-}
-
-fn split_location(message: &str) -> (&str, Option<(usize, usize)>) {
-    match message.rsplit_once(" at line ") {
-        Some((head, _)) => (head, location(message)),
-        None => (message, None),
-    }
-}
-
-/// serde's own `expected` phrasing for a list of alternatives.
-fn one_of(list: &str, kind: &str) -> String {
-    let names: Vec<_> = list.split(", ").filter(|n| !n.is_empty()).collect();
-    match names.as_slice() {
-        [] => format!("there are no {kind}"),
-        [a] => format!("expected `{a}`"),
-        [a, b] => format!("expected `{a}` or `{b}`"),
-        _ => format!(
-            "expected one of {}",
-            names
-                .iter()
-                .map(|n| format!("`{n}`"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-    }
-}
-
-fn reword(
-    failure: Failure,
-    text: &str,
-    tree: Option<&MarkedYaml>,
-    schema: &Schema,
-    options: impl Fn() -> serde_saphyr::Options,
-) -> Failure {
-    let (message, loc) = split_location(&failure.message);
-    let segs = segments(&failure.path);
-    let loc_text = loc.map_or(String::new(), |(l, c)| format!(" at line {l} column {c}"));
-    let prefixed = |prefix: &str, message: String| {
-        if prefix == "." {
-            message
-        } else {
-            format!("{prefix}: {message}")
-        }
-    };
-    let node_start = |segs: &[Seg]| tree.and_then(|t| node_at(t, segs)).map(start);
-    let reworded = if let Some(rest) = message.strip_prefix("unknown field `") {
-        let (name, list) = rest
-            .split_once("`, expected one of ")
-            .unwrap_or((rest.trim_end_matches('`'), ""));
-        let parent = parent(&failure.path);
-        Some(prefixed(
-            &parent,
-            format!(
-                "unknown field `{name}`, {}{loc_text}",
-                one_of(list, "fields")
-            ),
-        ))
-    } else if let Some(rest) = message.strip_prefix("unknown variant `") {
-        let (name, list) = rest
-            .split_once("`, expected one of ")
-            .unwrap_or((rest.trim_end_matches('`'), ""));
-        Some(prefixed(
-            &failure.path,
-            format!(
-                "unknown variant `{name}`, {}{loc_text}",
-                one_of(list, "variants")
-            ),
-        ))
-    } else if message.starts_with("missing field `") {
-        let pos = node_start(&segs).map_or(loc_text.clone(), at);
-        Some(prefixed(&failure.path, format!("{message}{pos}")))
-    } else if let Some(rest) = message.strip_prefix("duplicate mapping key: ") {
-        let key = rest
-            .split(", set DuplicateKeyPolicy")
-            .next()
-            .unwrap_or(rest);
-        let owner = strip_unknown_keys(&failure.path);
-        let pos = node_start(&segments(&owner)).map_or(String::new(), at);
-        Some(prefixed(&owner, format!("duplicate field `{key}`{pos}")))
-    } else if message == "unexpected end of input" {
-        // An empty document reads as an empty mapping today: the first field it misses.
-        let first = crate::saphyr::<onebudgetspec_core::BudgetsFile>("{}", options())
-            .err()
-            .map(|f| split_location(&f.message).0.to_owned());
-        let end = Pos {
-            index: text.chars().count(),
-            line: text.lines().count() + 1,
-            col: 1,
-        };
-        first.map(|m| format!("{m}{}", at(end)))
-    } else if message == "expected mapping start"
-        || message == "expected sequence start"
-        || message.starts_with("invalid ")
-    {
-        tree.and_then(|t| node_at(t, &segs)).and_then(|node| {
-            let found = describe(node, schema.at(&segs).and_then(numeric))?;
-            Some(prefixed(
-                &failure.path,
-                format!(
-                    "invalid type: {found}, expected {}{}",
-                    schema.expected(&segs),
-                    at(start(node))
-                ),
-            ))
-        })
-    } else if message.starts_with("multiple YAML documents detected") {
-        Some("deserializing from YAML containing more than one document is not supported".into())
-    } else {
-        None
-    };
-    match reworded {
-        Some(message) => Failure { message, ..failure },
-        None => failure,
-    }
-}
-
-/// How serde_norway names a node it refused.
-fn describe(node: &MarkedYaml, want: Option<&str>) -> Option<String> {
-    Some(match &node.data {
-        YamlData::Sequence(_) => "sequence".into(),
-        YamlData::Mapping(_) => "map".into(),
-        YamlData::Representation(text, style, None) => match want {
-            Some(want) => misread_number(text, *style, want)?,
-            None => format!("string {text:?}"),
-        },
-        _ => return None,
-    })
 }
 
 // ---------------------------------------------------------------------------------------
