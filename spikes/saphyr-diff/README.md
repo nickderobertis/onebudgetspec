@@ -31,4 +31,5 @@ Every file either script writes lands in the clone or under
 `$ONEPIPELINE_NODE_SCRATCH_DIR/saphyr-diff/` when that is set, else the clone's gitignored
 `target/saphyr-diff/`: `TMPDIR` and `CARGO_HOME` point there, and `RUSTC_WRAPPER` is
 cleared so no shared compile cache is written. `confined.sh` checks it, running a script
-with everything else read-only and listing each write that was refused.
+with everything else read-only and listing each write that was refused and each run of
+sccache or ccache, whose daemon would write outside the sandbox where it cannot see.
