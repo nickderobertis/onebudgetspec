@@ -11,7 +11,11 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 # Temporary files go under this dispatch's scratch directory when one is given, else under
 # the clone's own gitignored target/; never the system temporary directory.
 scratch="${ONEPIPELINE_NODE_SCRATCH_DIR:-$root/target}/saphyr-diff"
-mkdir -p "$scratch"
+mkdir -p "$scratch/tmp" "$scratch/cargo-home"
+# So do the tools': the journeys' and rustc's temporary files through TMPDIR, the registry
+# and cargo-deny's advisory database through CARGO_HOME, and no rustc wrapper, since a
+# ~/.cargo/config.toml above the clone may route rustc through a shared compile cache.
+export TMPDIR="$scratch/tmp" CARGO_HOME="$scratch/cargo-home" RUSTC_WRAPPER=""
 copy="$(mktemp -d "$scratch/copy.XXXXXX")"
 trap 'rm -rf "$copy"' EXIT
 git -C "$root" archive HEAD | tar -x -C "$copy"
