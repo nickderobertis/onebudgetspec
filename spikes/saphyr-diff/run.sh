@@ -23,5 +23,5 @@ if ! ONEBUDGETSPEC_SPIKE_CORPUS="$corpus" cargo test --quiet -p onebudgetspec-e2
   echo "error: the journeys failed while collecting the corpus; fix them, then re-run" >&2
   exit 1
 fi
-cargo run --quiet --locked --release --manifest-path spikes/saphyr-diff/Cargo.toml \
+cargo run --quiet --release --manifest-path spikes/saphyr-diff/Cargo.toml \
   --target-dir "$root/target/saphyr-diff-harness" -- "$root" "$corpus" "$@"

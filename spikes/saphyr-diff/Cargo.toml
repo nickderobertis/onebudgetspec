@@ -1,7 +1,6 @@
 # A throwaway differential harness: what serde_norway (today's YAML crate) and
 # serde-saphyr / saphyr read, write and refuse on this repository's real YAML. Its own
 # workspace, so nothing it pulls in reaches the product's lockfile, lints or deny.toml.
-# llmlint: ignore-file[crates_stay_in_one_cargo_workspace] spike only, never lands: this harness measures what serde-saphyr and saphyr resolve to beside today's serde_norway, so it is deliberately its own workspace with its own lock, keeping those candidate crates out of the root Cargo.lock, its lints and the deny gate the product ships under; a member could not hold serde_norway and the candidates apart, and could not inherit the root's pins without dragging the candidates in.
 [package]
 name = "saphyr-diff"
 version = "0.0.0"
