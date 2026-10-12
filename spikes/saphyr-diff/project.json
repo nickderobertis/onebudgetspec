@@ -1,0 +1,31 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "saphyr-diff",
+  "projectType": "application",
+  "tags": ["lang:rust", "lang:bash", "type:tooling"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "rust"]
+  },
+  "//": "Spike only, never lands: the differential harness that measures serde-saphyr against serde_norway on this repository's YAML. It reads onebudgetspec-core's types and the corpus the e2e journeys write, so a change to either selects it. Its own cargo workspace, so its targets name its manifest.",
+  "implicitDependencies": ["onebudgetspec-core", "onebudgetspec-e2e"],
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt --manifest-path spikes/saphyr-diff/Cargo.toml"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo fmt --manifest-path spikes/saphyr-diff/Cargo.toml -- --check"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash -c \"uv run --frozen --no-sync shellcheck spikes/saphyr-diff/*.sh\""
+      }
+    }
+  }
+}
