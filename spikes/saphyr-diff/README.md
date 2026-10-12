@@ -7,6 +7,7 @@ never see it.
 
     spikes/saphyr-diff/run.sh [external budgets.yaml ...]   # every read/write/error difference
     spikes/saphyr-diff/deny.sh                              # deny.toml with serde_norway replaced
+    spikes/saphyr-diff/confined.sh <script> [args ...]      # where that script writes
 
 `run.sh` builds the CLI and runs the e2e journeys with `ONEBUDGETSPEC_SPIKE_CORPUS` set. A
 spike-only hook in `crates/onebudgetspec-e2e/tests/journeys/common.rs` then keeps every
@@ -24,5 +25,8 @@ and `core/tests/api.rs`'s literals. It prints:
   every read, error case and probe, plus the schema-less read and write adapters.
 - **PARSE TIME:** for the largest documents.
 
-Temporary files go under `$ONEPIPELINE_NODE_SCRATCH_DIR/saphyr-diff/` when that is set,
-else under the clone's gitignored `target/saphyr-diff/`.
+Every file either script writes lands in the clone or under
+`$ONEPIPELINE_NODE_SCRATCH_DIR/saphyr-diff/` when that is set, else the clone's gitignored
+`target/saphyr-diff/`: `TMPDIR` and `CARGO_HOME` point there, and `RUSTC_WRAPPER` is
+cleared so no shared compile cache is written. `confined.sh` checks it, running a script
+with everything else read-only and listing each write that was refused.
