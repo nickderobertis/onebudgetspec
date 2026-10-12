@@ -531,6 +531,31 @@ fn main() {
             text: base_text.replace("threshold: 5", &format!("threshold: {spelling}")),
         });
     }
+    // packaging-e2e's write_reporting_budgets: compact JSON as the budgets file ("JSON is
+    // YAML"), with the two commands its journeys pass. The Python one is an absolute venv
+    // path there; a stand-in of the same shape here.
+    for command in [vec!["/tmp/venv/bin/python", "measure.py"], vec!["node", "measure.mjs"]] {
+        let budgets: Vec<Value> = ["api-requests", "worker-requests"]
+            .iter()
+            .map(|id| {
+                json!({ "id": id, "measure": "reported", "command": command, "unit": "requests",
+                        "direction": "max", "threshold": 20 })
+            })
+            .collect();
+        docs.push(Doc {
+            kind: "packaging-written (JSON)",
+            name: format!("write_reporting_budgets {command:?}"),
+            text: sorted(json!({ "schema_version": 1, "budgets": budgets })).to_string(),
+        });
+    }
+    // Every journey value as compact JSON too, the same JSON-is-YAML route.
+    for (name, value) in &values {
+        docs.push(Doc {
+            kind: "journey values as JSON",
+            name: name.clone(),
+            text: value.to_string(),
+        });
+    }
     for path in &external {
         docs.push(Doc {
             kind: "external (read-only)",
