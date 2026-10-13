@@ -14,6 +14,15 @@ confidence-threshold = 0.9
 unused-allowed-license = "allow"
 
 [bans]
+deny = [
+    { name = "serde_yaml", reason = "RUSTSEC-2024-0449: avoid the unsafe libyaml translation" },
+    { name = "serde_yaml_ng", reason = "RUSTSEC-2024-0449: avoid the unsafe libyaml translation" },
+    { name = "serde_norway", reason = "RUSTSEC-2024-0449: avoid the unsafe libyaml translation" },
+    { name = "serde_yml", reason = "RUSTSEC-2024-0449: avoid the unsafe libyaml translation" },
+    { name = "unsafe-libyaml", reason = "RUSTSEC-2024-0449: avoid the unsafe libyaml translation" },
+    { name = "unsafe-libyaml-norway", reason = "RUSTSEC-2024-0449: avoid the unsafe libyaml translation" },
+    { name = "libyml", reason = "RUSTSEC-2024-0449: avoid the unsafe libyaml translation" },
+]
 multiple-versions = "allow"
 wildcards = "deny"
 allow-wildcard-paths = true

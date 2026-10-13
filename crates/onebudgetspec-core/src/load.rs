@@ -259,10 +259,19 @@ fn read_file(found: &Discovered) -> Result<LoadedFile, Vec<String>> {
 
 /// Parse a budgets file's text, naming the file and the key on failure.
 fn parse(shown: &str, text: &str) -> Result<BudgetsFile, String> {
-    let deserializer = serde_norway::Deserializer::from_str(text);
-    serde_path_to_error::deserialize(deserializer).map_err(|error| {
-        let path = error.path().to_string();
-        let inner = error.into_inner();
+    let mut path = None;
+    let options = serde_saphyr::options! {
+        with_snippet: false,
+        merge_keys: serde_saphyr::MergeKeyPolicy::AsOrdinary,
+    };
+    serde_saphyr::with_deserializer_from_str_with_options(text, options, |deserializer| {
+        serde_path_to_error::deserialize(deserializer).map_err(|error| {
+            path = Some(error.path().to_string());
+            error.into_inner()
+        })
+    })
+    .map_err(|inner| {
+        let path = path.unwrap_or_else(|| ".".into());
         if path == "." {
             format!("{shown}: {inner}")
         } else {
@@ -418,7 +427,27 @@ fn validate_budget<'a>(
 mod tests {
     use std::path::Path;
 
-    use super::shown;
+    use super::{parse, shown};
+
+    #[test]
+    fn non_finite_thresholds_keep_their_numeric_meaning() {
+        for (scalar, expected) in [
+            (".inf", f64::INFINITY),
+            ("-.inf", f64::NEG_INFINITY),
+            (".nan", f64::NAN),
+        ] {
+            let text = format!(
+                "schema_version: 1\nbudgets:\n  - id: probe\n    measure: reported\n    command: [node, probe.js]\n    unit: count\n    direction: max\n    threshold: {scalar}\n"
+            );
+            let actual = parse("budgets.yaml", &text).unwrap().budgets[0].threshold;
+            if expected.is_nan() {
+                assert!(actual.is_nan());
+            } else {
+                assert!(actual.is_infinite());
+                assert_eq!(actual.is_sign_negative(), expected.is_sign_negative());
+            }
+        }
+    }
 
     #[test]
     fn a_discovered_file_reads_with_forward_slashes_after_its_root() {

@@ -182,7 +182,11 @@ impl Fixture {
 
     /// Write a budgets file from a JSON value, rendered as block YAML.
     pub fn budgets(&self, relative: &str, contents: &Value) -> PathBuf {
-        let yaml = serde_norway::to_string(contents).expect("the value renders as YAML");
+        let yaml = serde_saphyr::to_string_with_options(
+            contents,
+            serde_saphyr::ser_options! { prefer_block_scalars: false },
+        )
+        .expect("the value renders as YAML");
         self.write(relative, &yaml)
     }
 
