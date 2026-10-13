@@ -790,7 +790,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "onebudgetspec"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "clap",
  "onebudgetspec-core",
@@ -800,7 +800,7 @@ dependencies = [
 
 [[package]]
 name = "onebudgetspec-conformance"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "jsonschema",
  "serde_json",
@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "onebudgetspec-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "ignore",
@@ -827,7 +827,7 @@ dependencies = [
 
 [[package]]
 name = "onebudgetspec-e2e"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "chrono",
  "jsonschema",
@@ -840,7 +840,7 @@ dependencies = [
 
 [[package]]
 name = "onebudgetspec-packaging-e2e"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "serde_json",
  "tempfile",
