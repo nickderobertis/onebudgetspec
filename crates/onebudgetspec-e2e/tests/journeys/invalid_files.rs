@@ -192,7 +192,7 @@ fn a_non_finite_threshold_is_refused() {
     for infinite in [".inf", "-.inf", ".nan"] {
         let fixture = Fixture::new();
         let contents = base(&fixture);
-        let yaml = serde_norway::to_string(&contents)
+        let yaml = serde_saphyr::to_string(&contents)
             .unwrap()
             .replace("threshold: 5", &format!("threshold: {infinite}"));
         assert!(yaml.contains(infinite));
@@ -259,4 +259,34 @@ fn a_budgets_file_that_cannot_be_read_is_refused() {
     }
     assert_refused(&fixture, "unreadable", "cannot read");
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+}
+
+#[test]
+fn yaml_refusals_explain_the_problem_and_its_location() {
+    for (text, location, problem) in [
+        (
+            "schema_version: 1\nbudgets: []\nowner: me\n",
+            "owner",
+            "unknown field",
+        ),
+        (
+            "schema_version: 1\nbudgets:\n  - id: ok\n    measure: reported\n    command: [node, budget.js]\n    unit: ms\n    direction: max\n    threshold: wrong\n",
+            "budgets[0].threshold",
+            "float",
+        ),
+        (
+            "schema_version: 1\nbudgets: [\n",
+            "line 2, column 10",
+            "unclosed bracket",
+        ),
+    ] {
+        let fixture = Fixture::new();
+        base(&fixture);
+        fixture.write("budgets.yaml", text);
+        assert_refused(&fixture, problem, location);
+        for verb in ["validate", "check"] {
+            let run = fixture.run([verb]);
+            assert!(run.stderr.contains(problem), "{}", run.stderr);
+        }
+    }
 }

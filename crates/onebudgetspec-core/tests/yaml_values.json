@@ -1,0 +1,413 @@
+{
+  "conformance/cases/command-stderr/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "explain.cjs"],
+        "direction": "max",
+        "id": "explained",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      },
+      {
+        "command": ["node", "raw.cjs"],
+        "direction": "max",
+        "id": "raw",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      },
+      {
+        "command": ["node", "verbose.cjs"],
+        "direction": "max",
+        "id": "verbose",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      },
+      {
+        "command": ["node", "unreadable.cjs"],
+        "direction": "max",
+        "id": "unreadable",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      },
+      {
+        "command": ["node", "noisy.cjs"],
+        "direction": "max",
+        "id": "noisy-success",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/declared-conditions/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "report.cjs", "{\"value\": 1}"],
+        "direction": "max",
+        "id": "first",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 2}"],
+        "direction": "max",
+        "id": "second",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      }
+    ],
+    "conditions": [
+      {
+        "command": ["node", "-e", "console.log('  eu-west  ')"],
+        "name": "region"
+      },
+      {
+        "command": ["node", "-e", "process.exit(1)"],
+        "name": "broken"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/elapsed-failing/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "-e", "process.exit(4)"],
+        "direction": "max",
+        "id": "fails",
+        "measure": "elapsed",
+        "threshold": 60.0,
+        "unit": "seconds"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/elapsed/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "-e", "setTimeout(() => {}, 100)"],
+        "direction": "max",
+        "id": "nap",
+        "measure": "elapsed",
+        "threshold": 60.0,
+        "unit": "seconds"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/invalid-file/budgets.yaml": {
+    "refused": "workload"
+  },
+  "conformance/cases/max-verdicts/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "report.cjs", "{\"value\": 1395}"],
+        "direction": "max",
+        "id": "within",
+        "labels": ["api"],
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 1800}"],
+        "direction": "max",
+        "id": "equal",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 2000, \"detail\": \"two retries\"}"],
+        "direction": "max",
+        "id": "over",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/min-verdicts/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "report.cjs", "{\"value\": 250}"],
+        "direction": "min",
+        "id": "within",
+        "measure": "reported",
+        "threshold": 200.0,
+        "unit": "requests/s"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 200}"],
+        "direction": "min",
+        "id": "equal",
+        "measure": "reported",
+        "threshold": 200.0,
+        "unit": "requests/s"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 150}"],
+        "direction": "min",
+        "id": "over",
+        "measure": "reported",
+        "threshold": 200.0,
+        "unit": "requests/s"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 3}"],
+        "direction": "min",
+        "id": "zero-threshold",
+        "measure": "reported",
+        "threshold": 0.0,
+        "unit": "requests/s"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/nested-files/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "-e", "process.exit(1)"],
+        "direction": "max",
+        "id": "outside",
+        "measure": "reported",
+        "threshold": 1.0,
+        "unit": "items"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/nested-files/services/api/budgets.yaml": {
+    "budgets": [
+      {
+        "command": [
+          "node",
+          "-e",
+          "require('node:fs').writeFileSync(process.env.ONEBUDGETSPEC_RESULT, JSON.stringify({ value: 150 }))"
+        ],
+        "direction": "max",
+        "id": "api-latency",
+        "labels": ["api"],
+        "measure": "reported",
+        "threshold": 200.0,
+        "unit": "ms"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/nested-files/services/web/budgets.yaml": {
+    "budgets": [
+      {
+        "command": [
+          "node",
+          "-e",
+          "require('node:fs').writeFileSync(process.env.ONEBUDGETSPEC_RESULT, JSON.stringify({ value: 300, detail: 'vendor chunk' }))"
+        ],
+        "direction": "max",
+        "id": "web-bundle",
+        "labels": ["web"],
+        "measure": "reported",
+        "threshold": 250.0,
+        "unit": "kib"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/reported-errors/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "-e", ""],
+        "direction": "max",
+        "id": "empty-result",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      },
+      {
+        "command": ["node", "report.cjs", "value: 3"],
+        "direction": "max",
+        "id": "not-json",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"detail\": \"forgot\"}"],
+        "direction": "max",
+        "id": "no-value",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 2}"],
+        "direction": "max",
+        "id": "within",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/returned-condition-collides/budgets.yaml": {
+    "budgets": [
+      {
+        "command": [
+          "node",
+          "report.cjs",
+          "{\"value\": 1, \"conditions\": {\"dispatches\": \"9\", \"gate_load\": \"2.1\"}}"
+        ],
+        "direction": "max",
+        "id": "collides",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 1, \"conditions\": {\"load1\": \"0.0\"}}"],
+        "direction": "max",
+        "id": "host-value",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 1}"],
+        "direction": "max",
+        "id": "fine",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      }
+    ],
+    "conditions": [
+      {
+        "command": ["node", "-e", "console.log('3')"],
+        "name": "dispatches"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/returned-condition-malformed/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "report.cjs", "{\"value\": 1, \"conditions\": {\"Gate-Load\": \"1\"}}"],
+        "direction": "max",
+        "id": "bad-name",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 1, \"conditions\": {\"gate_runs\": 6}}"],
+        "direction": "max",
+        "id": "not-a-string",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 1, \"conditions\": [\"gate_runs\"]}"],
+        "direction": "max",
+        "id": "not-an-object",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/returned-conditions/budgets.yaml": {
+    "budgets": [
+      {
+        "command": [
+          "node",
+          "report.cjs",
+          "{\"value\": 1395, \"conditions\": {\"gate_load\": \"2.1\", \"dispatches_max\": \"6\"}}"
+        ],
+        "direction": "max",
+        "id": "gate-time",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 10}"],
+        "direction": "max",
+        "id": "plain",
+        "measure": "reported",
+        "threshold": 1800.0,
+        "unit": "seconds"
+      }
+    ],
+    "conditions": [
+      {
+        "command": ["node", "-e", "console.log('3')"],
+        "name": "dispatches"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/selection/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "report.cjs", "{\"value\": 120}"],
+        "direction": "max",
+        "id": "api-latency",
+        "labels": ["api"],
+        "measure": "reported",
+        "threshold": 200.0,
+        "unit": "ms"
+      },
+      {
+        "command": ["node", "-e", "process.exit(1)"],
+        "direction": "max",
+        "id": "api-retries",
+        "labels": ["api", "slow"],
+        "measure": "reported",
+        "threshold": 3.0,
+        "unit": "retries"
+      },
+      {
+        "command": ["node", "report.cjs", "{\"value\": 180}"],
+        "direction": "max",
+        "id": "web-bundle",
+        "labels": ["web"],
+        "measure": "reported",
+        "threshold": 250.0,
+        "unit": "kib"
+      },
+      {
+        "command": ["node", "-e", "process.exit(1)"],
+        "direction": "min",
+        "id": "batch-throughput",
+        "labels": ["batch"],
+        "measure": "reported",
+        "threshold": 1000.0,
+        "unit": "rows/s"
+      }
+    ],
+    "schema_version": 1
+  },
+  "conformance/cases/unknown-id/budgets.yaml": {
+    "budgets": [
+      {
+        "command": ["node", "report.cjs", "{\"value\": 1}"],
+        "direction": "max",
+        "id": "known",
+        "measure": "reported",
+        "threshold": 10.0,
+        "unit": "items"
+      }
+    ],
+    "schema_version": 1
+  }
+}
