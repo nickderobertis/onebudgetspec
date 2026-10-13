@@ -6,7 +6,8 @@
   "workspaces": [
     "sdks/typescript",
     "npm/cli",
-    "npm/platforms/*"
+    "npm/platforms/*",
+    ".github"
   ],
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

@@ -33,7 +33,7 @@ class Requirement:
 
 #: Every credentialed job, and exactly what enables it. A job missing here fails the test.
 REQUIRED = {
-    "ci.yml:llmlint": Requirement(
+    "ci.yml:llmlint-proof": Requirement(
         ("CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY"), ("pull_request",), any_secret=True
     ),
     "release-plz.yml:release-plz": Requirement(

@@ -21,8 +21,6 @@ jobs:
         include:
           - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
           - { os: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu }
-          - { os: macos-latest, target: aarch64-apple-darwin }
-          - { os: macos-latest, target: x86_64-apple-darwin }
           - { os: windows-latest, target: x86_64-pc-windows-msvc }
           - { os: windows-11-arm, target: aarch64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
@@ -54,6 +52,102 @@ jobs:
         with:
           name: carrier-${{ matrix.target }}
           path: dist/carriers/*.tgz
+
+  darwin:
+    name: Darwin build and local install proofs
+    env:
+      TAG: ${{ github.event.release.tag_name }}
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: astral-sh/setup-uv@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - name: Prepare the launcher and Rosetta
+        run: |
+          bash scripts/build-dist.sh npm-launcher dist/launcher
+          sudo softwareupdate --install-rosetta --agree-to-license
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          architecture: x64
+      - name: Build and install x86_64 products under Rosetta
+        run: |
+          python_request="cpython-$(cat .python-version)-macos-x86_64-none"
+          uv python install "$python_request"
+          ONEBUDGETSPEC_PYTHON="$(uv python find "$python_request")" bash scripts/release/native/native-products.sh x86_64-apple-darwin dist/darwin-x64 "$PWD"/dist/launcher/*.tgz
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          architecture: arm64
+      - name: Build and install native aarch64 products
+        run: |
+          python_request="cpython-$(cat .python-version)-macos-aarch64-none"
+          uv python install "$python_request"
+          ONEBUDGETSPEC_PYTHON="$(uv python find "$python_request")" bash scripts/release/native/native-products.sh aarch64-apple-darwin dist/darwin-arm64 "$PWD"/dist/launcher/*.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-x86_64-apple-darwin
+          path: dist/darwin-x64/wheels/*.whl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-aarch64-apple-darwin
+          path: dist/darwin-arm64/wheels/*.whl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carrier-x86_64-apple-darwin
+          path: dist/darwin-x64/carriers/*.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carrier-aarch64-apple-darwin
+          path: dist/darwin-arm64/carriers/*.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: darwin-payload-hashes
+          path: dist/darwin-*/payload-hashes.json
+
+  darwin-arm-carrier:
+    name: native (aarch64-apple-darwin)
+    needs: [darwin]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Darwin staged build and install proofs passed before publication
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: node .github/job-results.mjs darwin
+
+  darwin-x64-carrier:
+    name: native (x86_64-apple-darwin)
+    needs: [darwin]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Darwin staged build and install proofs passed before publication
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: node .github/job-results.mjs darwin
+
+  darwin-install-carrier:
+    name: install path (macos-latest)
+    needs: [darwin]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Darwin staged build and install proofs passed before publication
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: node .github/job-results.mjs darwin
 
   distributions:
     runs-on: ubuntu-latest
@@ -101,7 +195,7 @@ jobs:
 
   # Target `crate`: onebudgetspec-core, then the onebudgetspec binary crate.
   publish-crates:
-    needs: [guard, native]
+    needs: [guard, native, darwin]
     if: needs.guard.outputs.cargo == 'true' && vars.CARGO_PUBLISH == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -113,7 +207,7 @@ jobs:
 
   # Target `pypi`: the onebudgetspec-cli wheels.
   publish-pypi:
-    needs: [guard, native]
+    needs: [guard, native, darwin]
     if: needs.guard.outputs.pypi == 'true' && vars.PYPI_PUBLISH == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -130,7 +224,7 @@ jobs:
 
   # Target `sdk-pypi`: the onebudgetspec-sdk wheel.
   publish-sdk-pypi:
-    needs: [guard, distributions]
+    needs: [guard, darwin, distributions]
     if: needs.guard.outputs.pypi == 'true' && vars.PYPI_PUBLISH == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -146,7 +240,7 @@ jobs:
 
   # Target `npm`: every platform carrier, then the launcher that pins them.
   publish-npm:
-    needs: [guard, native, distributions]
+    needs: [guard, native, darwin, distributions]
     if: needs.guard.outputs.npm == 'true' && vars.NPM_PUBLISH == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -166,7 +260,7 @@ jobs:
 
   # Target `sdk-npm`: the @onebudgetspec/sdk package.
   publish-sdk-npm:
-    needs: [guard, distributions]
+    needs: [guard, darwin, distributions]
     if: needs.guard.outputs.npm == 'true' && vars.NPM_PUBLISH == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -189,7 +283,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:

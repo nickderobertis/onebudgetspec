@@ -314,11 +314,14 @@ def test_the_carrier_build_sets_up_pinned_node() -> None:
                 "        with:\n"
                 "          node-version-file: .node-version\n",
                 "",
+                1,
             ),
             "release.yml job native packs an npm carrier without first running actions/setup-node",
         ),
         (
-            lambda text: text.replace("node-version-file: .node-version", "node-version: latest"),
+            lambda text: text.replace(
+                "node-version-file: .node-version", "node-version: latest", 1
+            ),
             "release.yml job native packs an npm carrier without first running actions/setup-node",
         ),
     ],

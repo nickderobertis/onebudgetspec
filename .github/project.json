@@ -1,0 +1,83 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "github-workflows",
+  "projectType": "library",
+  "tags": ["lang:typescript", "type:tooling"],
+  "namedInputs": {
+    "default": [
+      "{projectRoot}/**/*",
+      "!{projectRoot}/.telemetry/**/*",
+      "!{projectRoot}/node_modules/**/*",
+      "js",
+      "{workspaceRoot}/.node-version"
+    ]
+  },
+  "targets": {
+    "bootstrap": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bun install --frozen-lockfile"
+      },
+      "dependsOn": ["sdk-typescript:build"]
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bun run biome check --error-on-warnings .github",
+          "uv run --frozen --no-sync actionlint .github/workflows/ci.yml .github/workflows/release.yml",
+          "uv run --frozen --no-sync ruff check --config scripts/ci-tests/ruff.toml .github/semantic-version.py .github/version_contract.py"
+        ],
+        "parallel": false
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bun run tsc --noEmit -p .github/tsconfig.json",
+          "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 .github/semantic-version.py .github/version_contract.py"
+        ],
+        "parallel": false
+      },
+      "dependsOn": ["bootstrap"]
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash -c \"node --test .github/tests/*.test.mjs\""
+      },
+      "dependsOn": ["bootstrap"],
+      "cache": false,
+      "outputs": ["{projectRoot}/.telemetry/macos-policy.json"]
+    },
+    "budgets": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo run --quiet --locked -p onebudgetspec -- check .github/budgets.yaml"
+      },
+      "dependsOn": ["test"],
+      "cache": false
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bun run biome format .github",
+          "uv run --frozen --no-sync ruff format --check --config scripts/ci-tests/ruff.toml .github/semantic-version.py .github/version_contract.py"
+        ],
+        "parallel": false
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bun run biome format --write .github",
+          "uv run --frozen --no-sync ruff format --config scripts/ci-tests/ruff.toml .github/semantic-version.py .github/version_contract.py"
+        ],
+        "parallel": false
+      }
+    }
+  }
+}

@@ -101,12 +101,16 @@ case "$ARTIFACT" in
     [ -n "$TARGET" ] || TARGET="$(host_target)"
     platform="$(npm_platform "$TARGET")"
     binary="$(binary_name "$TARGET")"
-    quietly cargo build --release --locked --quiet -p onebudgetspec --target "$TARGET" \
-      --manifest-path "$ROOT/Cargo.toml"
+    if [ -z "${ONEBUDGETSPEC_BINARY:-}" ]; then
+      quietly cargo build --release --locked --quiet -p onebudgetspec --target "$TARGET" \
+        --manifest-path "$ROOT/Cargo.toml"
+    elif [ ! -x "$ONEBUDGETSPEC_BINARY" ] || ! cmp -s "$ONEBUDGETSPEC_BINARY" "$ROOT/target/$TARGET/release/$binary"; then
+      usage "ONEBUDGETSPEC_BINARY '$ONEBUDGETSPEC_BINARY' must match the compiled CLI for $TARGET at $ROOT/target/$TARGET/release/$binary; supply that binary or unset ONEBUDGETSPEC_BINARY"
+    fi
     stage="$(mktemp -d)"
     mkdir -p "$stage/bin"
     cp "$ROOT/npm/platforms/$platform/package.json" "$stage/package.json"
-    cp "$ROOT/target/$TARGET/release/$binary" "$stage/bin/$binary"
+    cp "${ONEBUDGETSPEC_BINARY:-$ROOT/target/$TARGET/release/$binary}" "$stage/bin/$binary"
     quietly npm pack "$stage" --silent --pack-destination "$OUT"
     rm -rf "$stage"
     written_since_start "$OUT" '*.tgz'

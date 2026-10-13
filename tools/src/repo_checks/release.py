@@ -182,7 +182,15 @@ def platform_problems(root: Path = ROOT) -> list[str]:
     )
     release = yaml.safe_load((root / ".github/workflows/release.yml").read_text())
     matrix = release["jobs"]["native"]["strategy"]["matrix"]["include"]
-    in_release = sorted(mapping.get(row["target"], f"unmapped {row['target']}") for row in matrix)
+    release_targets = [row["target"] for row in matrix]
+    for body in release["jobs"].values():
+        for step in body.get("steps", []):
+            release_targets.extend(
+                re.findall(
+                    r"scripts/release/native/native-products\.sh (\S+)", str(step.get("run", ""))
+                )
+            )
+    in_release = sorted(mapping.get(target, f"unmapped {target}") for target in release_targets)
     toolchain = tomllib.loads((root / "rust-toolchain.toml").read_text())["toolchain"]
     in_toolchain = sorted(
         mapping.get(target, f"unmapped {target}") for target in toolchain.get("targets", [])

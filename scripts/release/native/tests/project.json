@@ -1,0 +1,52 @@
+{
+  "$schema": "../../../../node_modules/nx/schemas/project-schema.json",
+  "name": "native-products-integration",
+  "projectType": "library",
+  "tags": ["lang:python", "type:integration"],
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "python"]
+  },
+  "implicitDependencies": ["native-products"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff check --quiet --config scripts/release/ruff.toml scripts/release/native/tests"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check --config scripts/release/ruff.toml scripts/release/native/tests"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --config scripts/release/ruff.toml scripts/release/native/tests"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 scripts/release/native/tests"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider scripts/release/native/tests"
+      },
+      "cache": false,
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/tools/src/repo_checks/programs.py",
+        "{workspaceRoot}/Cargo.toml",
+        "{workspaceRoot}/Cargo.lock",
+        "{workspaceRoot}/package.json",
+        "{workspaceRoot}/bun.lock"
+      ]
+    }
+  }
+}

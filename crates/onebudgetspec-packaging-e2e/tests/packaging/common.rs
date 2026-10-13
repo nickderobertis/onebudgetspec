@@ -51,7 +51,7 @@ fn on_path(name: &str) -> Option<PathBuf> {
 /// The bash `scripts/build-dist.sh` is written for: on Windows, Git's, two directories
 /// above its exec path under `bin`. A bare `bash` there finds the WSL launcher in Windows'
 /// system directory first, which runs nothing without a Linux distribution.
-fn bash() -> PathBuf {
+pub fn bash() -> PathBuf {
     if !cfg!(windows) {
         return PathBuf::from("bash");
     }
