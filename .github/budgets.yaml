@@ -1,5 +1,7 @@
 schema_version: 1
 budgets:
+  # Kept separate from its sibling: the brief bounds both Mac jobs per run and Mac-spending
+  # runs per change, and the manager approved one budget for each scheduling constraint.
   - id: onebudgetspec-macos-jobs-per-run
     description: >-
       Maximum Mac runner job instances per resolved workflow run.
@@ -10,6 +12,8 @@ budgets:
     unit: jobs
     direction: max
     threshold: 1
+  # Kept separate from its sibling: the brief bounds both Mac jobs per run and Mac-spending
+  # runs per change, and the manager approved one budget for each scheduling constraint.
   - id: onebudgetspec-macos-runs-per-change
     description: >-
       Maximum distinct Mac-spending automatic workflow runs across the single-push
