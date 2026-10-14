@@ -3,6 +3,7 @@
 import json
 import sys
 import tomllib
+from collections.abc import Mapping
 from typing import Any
 
 from version_contract import VERSION
@@ -15,7 +16,7 @@ def table(value: object, site: str) -> dict[str, Any]:
     return value
 
 
-def local_source(source: dict[str, Any], keys: tuple[str, ...]) -> bool:
+def local_source(source: Mapping[str, object], keys: tuple[str, ...]) -> bool:
     """Whether a source names a local checkout; a present key must hold a non-empty path."""
     present = [key for key in keys if key in source]
     for key in present:
