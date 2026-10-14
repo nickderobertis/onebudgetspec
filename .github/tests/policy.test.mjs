@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
-import { root } from "../workflow-graph.mjs";
+import { evaluate, root, workflows } from "../workflow-graph.mjs";
 
 import { event, history, runClassifier } from "./fixtures.mjs";
 
@@ -197,6 +197,8 @@ test("changelog content, added/deleted files, diagnostic authorization and malfo
 });
 
 test("production event adapter emits classifier outputs and unreadable PR inputs require the Mac lane", () => {
+  const ci = workflows().find((workflow) => workflow.document.name === "ci");
+  assert.ok(ci);
   const h = history();
   try {
     /** @type {[string,boolean][]} */
@@ -223,9 +225,34 @@ test("production event adapter emits classifier outputs and unreadable PR inputs
         encoding: "utf8",
       });
       assert.equal(invoked.status, 0, invoked.stderr);
-      assert.match(readFileSync(output, "utf8"), new RegExp(`macosRequired=${required}\\n`));
-      assert.match(readFileSync(output, "utf8"), new RegExp(`isReleaseOnly=${!required}\\n`));
+      // ci.yml's policy job re-exports these step outputs by name; evaluate its real mapping
+      // over what the adapter wrote, so a key renamed on either side fails here.
+      const written = Object.fromEntries(
+        readFileSync(output, "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => line.split("=")),
+      );
+      /** @type {Record<string, import("../contracts.js").Json>} */
+      const exported = Object.fromEntries(
+        Object.entries(ci.document.jobs.policy.outputs ?? {}).map(([key, expression]) => [
+          key,
+          evaluate(expression, { steps: { policy: { outputs: written } } }),
+        ]),
+      );
+      assert.deepEqual(exported, {
+        macosRequired: String(required),
+        isReleaseOnly: String(!required),
+        diagnostic: "false",
+      });
     }
+    const consumed = new Set(
+      [...readFileSync(ci.file, "utf8").matchAll(/needs\.policy\.outputs\.(\w+)/g)].map(
+        (match) => match[1],
+      ),
+    );
+    assert.ok(consumed.size > 0);
+    for (const key of consumed) assert.ok(key in (ci.document.jobs.policy.outputs ?? {}), key);
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

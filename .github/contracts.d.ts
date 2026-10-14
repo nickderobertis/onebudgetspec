@@ -96,4 +96,5 @@ export type Context = {
   matrix?: Record<string, Json>;
   inputs?: Record<string, Json>;
   vars?: Record<string, string>;
+  steps?: Record<string, { outputs: Record<string, string> }>;
 };
