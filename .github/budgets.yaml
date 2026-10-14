@@ -1,7 +1,5 @@
 schema_version: 1
 budgets:
-  # Both Mac bounds are required, so this one is not folded into runs-per-change: one run
-  # can hold several shared Mac slots at once while the lifecycle count stays within its bound.
   - id: onebudgetspec-macos-jobs-per-run
     description: >-
       Maximum Mac runner job instances per resolved workflow run.
@@ -12,8 +10,6 @@ budgets:
     unit: jobs
     direction: max
     threshold: 1
-  # Both Mac bounds are required, so this one is not folded into jobs-per-run: each run can
-  # stay at one Mac job while a change still queues for the shared pool run after run.
   - id: onebudgetspec-macos-runs-per-change
     description: >-
       Maximum distinct Mac-spending automatic workflow runs across the single-push
