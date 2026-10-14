@@ -21,7 +21,8 @@
       "{workspaceRoot}/pyproject.toml",
       "{workspaceRoot}/uv.lock",
       "{workspaceRoot}/.python-version"
-    ]
+    ],
+    "production": ["default"]
   },
   "targetDefaults": {
     "format-check": {
@@ -51,6 +52,19 @@
       "cache": false
     },
     "bootstrap": {
+      "cache": false
+    },
+    "budgets": {
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/**/*",
+        "^production",
+        {
+          "dependentTasksOutputFiles": "**/telemetry/*.json"
+        }
+      ]
+    },
+    "budgets-host": {
       "cache": false
     }
   }

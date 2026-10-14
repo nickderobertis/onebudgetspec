@@ -1,0 +1,14 @@
+schema_version: 1
+budgets:
+  - id: onebudgetspec-pool-maintenance-seconds
+    description: |
+      Wall-clock seconds of one steady-state pass of this repository's declared pool
+      maintenance, the pass after one ordinary run's worth of new superseded builds. It is
+      how long a regular post-run pass holds one of this repository's warm slots out of
+      service. The detail breaks it down and gives the untimed backlog pass's seconds.
+    labels: [host]
+    measure: reported
+    command: ["./measure.sh"]
+    unit: seconds
+    direction: max
+    threshold: 20

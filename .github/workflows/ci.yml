@@ -80,6 +80,12 @@ jobs:
         if: ${{ startsWith(github.head_ref, 'release-plz-') && matrix.os == 'ubuntu-latest' }}
         run: just check-all
 
+      # Every project's budgets, after that gate. Too slow for every change: the
+      # pool-maintenance budget builds the workspace twice.
+      - name: Check every budget before a release
+        if: ${{ startsWith(github.head_ref, 'release-plz-') && matrix.os == 'ubuntu-latest' }}
+        run: just budgets
+
   # Supply chain, Linux-only: the dependency graph is the same on every platform.
   deny:
     runs-on: ubuntu-latest

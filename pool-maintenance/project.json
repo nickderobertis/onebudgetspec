@@ -1,0 +1,21 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "pool-maintenance",
+  "projectType": "library",
+  "tags": ["type:tooling"],
+  "//": "The pool-maintenance budget: one steady-state `just pool-maintenance` pass. Its check builds the workspace twice, so only `just budgets` runs it, on the release pull request; `check` and the affected run reach only the lint of its script.",
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync shellcheck pool-maintenance/measure.sh"
+      }
+    },
+    "budgets-host": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo run --quiet --locked -p onebudgetspec -- check pool-maintenance/budgets.yaml --label host"
+      }
+    }
+  }
+}

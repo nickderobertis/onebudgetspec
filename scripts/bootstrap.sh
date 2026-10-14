@@ -21,3 +21,10 @@ done
 run bun install --frozen-lockfile
 run uv sync --frozen --all-packages
 run cargo fetch --locked
+
+# The pruner `just pool-maintenance` runs, at the one version pinned here; skipped when that
+# version is already the one on PATH.
+readonly PRUNE_SUPERSEDED_VERSION=0.1.1
+if [ "$(cargo-prune-superseded --version 2>/dev/null)" != "cargo-prune-superseded $PRUNE_SUPERSEDED_VERSION" ]; then
+  run cargo install --locked --quiet cargo-prune-superseded --version "$PRUNE_SUPERSEDED_VERSION"
+fi
