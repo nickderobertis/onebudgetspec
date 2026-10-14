@@ -80,6 +80,10 @@ test("every published platform is a carrier, and nothing else is", () => {
 
 test("Intel macOS is refused by the launcher as no longer supported, fetching nothing", () => {
   expect([...DISCONTINUED.keys()]).toEqual(["darwin-x64"]);
+  // Resolving would refuse with 69 and name the carrier; 64 shows nothing was resolved.
+  const found = refused(locate("darwin", "x64", notInstalled));
+  expect(found.status).toBe(64);
+  expect(found.message).toContain("Intel macOS is no longer supported (darwin-x64)");
   // The real entry point, in a real process that reports itself as Intel macOS.
   const bin = join(__dirname, "..", "bin", "onebudgetspec.js");
   const ran = runScript(
