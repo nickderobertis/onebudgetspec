@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
@@ -87,26 +87,6 @@ test("carriers exercise the real command with success, cancellation, missing wor
     const outcome = invoke({ gate: { result }, deny: { result: "success" } }, ["gate", "deny"]);
     assert.equal(outcome.status === 0, result === "success");
   }
-  assert.equal(
-    invoke(
-      {
-        "llmlint-guard": { result: "success", outputs: { enabled: "false" } },
-        "llmlint-proof": { result: "skipped" },
-      },
-      ["llmlint-guard", "llmlint-proof"],
-    ).status,
-    0,
-  );
-  assert.notEqual(
-    invoke(
-      {
-        "llmlint-guard": { result: "success", outputs: { enabled: "true" } },
-        "llmlint-proof": { result: "skipped" },
-      },
-      ["llmlint-guard", "llmlint-proof"],
-    ).status,
-    0,
-  );
 });
 
 test("each semantic version surface admits only version content over real git diffs", () => {
@@ -412,6 +392,48 @@ test("malformed admitted manifest structures fail closed at the actual classifie
     const result = runClassifier(h, malformed);
     assert.equal(result.macosRequired, true);
     assert.match(result.reason ?? "", /identity not established/);
+  } finally {
+    rmSync(h.dir, { recursive: true, force: true });
+  }
+});
+
+test("a release written by the repository's own version tool is release-only at every place it owns", () => {
+  /** @param {string[]} args @param {string} code */
+  const tool = (code, ...args) =>
+    execFileSync(
+      "uv",
+      [
+        ...["run", "--quiet", "--frozen", "--no-sync", "--package", "onebudgetspec-repo-checks"],
+        ...["python", "-c", code, ...args],
+      ],
+      { cwd: root, encoding: "utf8" },
+    );
+  // The places come from versions.py, so a place added there that this classifier does not
+  // admit fails here rather than turning every later release pull request into an ordinary one.
+  /** @type {string[]} */
+  const owned = JSON.parse(
+    tool(
+      "import json; from repo_checks.versions import WORKSPACE, places; " +
+        "print(json.dumps(sorted({p.path for p in [WORKSPACE, *places()]})))",
+    ),
+  );
+  assert.ok(owned.length > 5 && owned.includes("bun.lock"));
+  const h = history();
+  try {
+    for (const path of owned) {
+      mkdirSync(dirname(resolve(h.dir, path)), { recursive: true });
+      writeFileSync(resolve(h.dir, path), readFileSync(resolve(root, path)));
+    }
+    h.base = h.commit();
+    tool(
+      "import sys; from pathlib import Path; from repo_checks.versions import main; " +
+        "sys.exit(main(['set', '987.65.4'], Path(sys.argv[1])))",
+      h.dir,
+    );
+    const written = h.git("diff", "--name-only", "HEAD").split("\n").sort();
+    assert.deepEqual(written, owned);
+    const policy = runClassifier(h, event(), h.commit());
+    assert.equal(policy.isReleaseOnly, true, policy.reason ?? "no reason");
   } finally {
     rmSync(h.dir, { recursive: true, force: true });
   }

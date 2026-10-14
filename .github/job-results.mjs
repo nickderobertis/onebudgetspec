@@ -46,11 +46,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       needs.policy.outputs?.macosRequired === "false" &&
       needs.policy.outputs?.diagnostic !== "true";
   }
-  if (required.includes("llmlint-proof")) {
-    optional["llmlint-proof"] =
-      needs["llmlint-guard"]?.result === "success" &&
-      needs["llmlint-guard"].outputs?.enabled === "false";
-  }
   assertResults(needs, required, optional);
   if (optional["mac-proof"] && needs["mac-proof"]?.result === "skipped")
     console.log("Mac proof intentionally omitted: verified routing policy; no Mac tests ran.");

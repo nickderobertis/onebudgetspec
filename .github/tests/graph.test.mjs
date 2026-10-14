@@ -511,7 +511,7 @@ test("declared guard outputs use the real producer with credentials present or a
   for (const provisioned of [false, true]) {
     const run = resolveRun(ci, { ...event("feature"), provisioned }, { macosRequired: true });
     assert.equal(run.results["llmlint-guard"].outputs?.enabled, String(provisioned));
-    assert.equal(run.rows.find((row) => row.job === "llmlint-proof")?.skipped, !provisioned);
+    assert.equal(run.rows.find((row) => row.job === "llmlint")?.skipped, !provisioned);
     const built = resolveRun(
       release,
       {

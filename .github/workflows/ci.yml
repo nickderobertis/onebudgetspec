@@ -222,7 +222,7 @@ jobs:
 
   # The LLM-judge tier over the files this pull request changed. Separate from `check`
   # because it is non-deterministic and needs an authenticated harness.
-  llmlint-proof:
+  llmlint:
     needs: [llmlint-guard]
     if: needs.llmlint-guard.outputs.enabled == 'true'
     runs-on: ubuntu-latest
@@ -248,13 +248,3 @@ jobs:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: just lint-llm-diff origin/main
-
-  llmlint:
-    needs: [llmlint-guard, llmlint-proof]
-    if: ${{ always() && github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - env:
-          NEEDS: ${{ toJSON(needs) }}
-        run: node .github/job-results.mjs llmlint-guard llmlint-proof
