@@ -52,7 +52,7 @@ uv pip install --quiet --offline --no-deps --python "$out/venv/bin/python" "$whe
 mkdir -p "$out/npm"
 printf '{"name":"release-consumer","private":true}\n' > "$out/npm/package.json"
 (cd "$out/npm" && npm install --offline --ignore-scripts --no-audit --no-fund --silent "$launcher" "$carrier")
-CARGO_TARGET_DIR="$root/target" cargo install --quiet --message-format json --path crates/onebudgetspec --target "$target" --root "$out/cargo" --locked --offline > "$out/cargo-build.jsonl"
+CARGO_TARGET_DIR="$root/target" cargo install --quiet --message-format json-render-diagnostics --path crates/onebudgetspec --target "$target" --root "$out/cargo" --locked --offline > "$out/cargo-build.jsonl"
 python3 scripts/release/native/verify-fresh.py "$out/cargo-build.jsonl"
 mkdir -p "$out/case"
 ./scripts/nx run sdk-typescript:build > "$out/sdk-build.log" 2>&1 \
