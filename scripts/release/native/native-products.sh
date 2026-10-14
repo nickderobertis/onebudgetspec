@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build a wheel once, reuse its stripped payload in the carrier, and prove local installs.
+# Build a wheel once, reuse its binary (stripped by the release profile) in the carrier and the
+# Cargo install, and prove local installs.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$root"

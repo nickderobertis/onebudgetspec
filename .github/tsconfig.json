@@ -6,7 +6,6 @@
     "module": "nodenext",
     "target": "es2022",
     "strict": true,
-    "skipLibCheck": true,
     "types": ["bun"]
   },
   "include": ["*.mjs", "tests/*.mjs", "contracts.d.ts"]
