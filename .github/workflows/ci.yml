@@ -155,10 +155,10 @@ jobs:
           NX_HEAD: HEAD
         run: just check
 
-  # Keeps the macOS lane's existing check name, on Linux: it passes only when mac-proof
-  # passed or the routing policy authorized its omission, and then says no Mac tests ran.
+  # llmlint: ignore-block[names_match_behavior] this Linux carrier keeps the former macOS gate lane's check name byte-for-byte, as every Mac job folded into another keeps its name on a Linux carrier; it passes only when mac-proof passed or the routing policy authorized its omission, and then says no Mac tests ran.
   mac-carrier:
     name: gate (macos-latest)
+  # llmlint: ignore-end[names_match_behavior]
     needs: [policy, mac-proof]
     if: ${{ always() }}
     runs-on: ubuntu-latest

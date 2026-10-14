@@ -93,10 +93,10 @@ jobs:
           name: darwin-payload-hashes
           path: dist/darwin-arm64/payload-hashes.json
 
-  # The two carriers keep the former Darwin native and Mac install-path check names, on
-  # Linux: each passes only when the one darwin job built, packed and installed them.
+  # llmlint: ignore-block[names_match_behavior] this Linux carrier keeps the former Apple Silicon native build's check name byte-for-byte; it passes only when the one darwin job built, packed and installed the aarch64 products before publication.
   darwin-arm-carrier:
     name: native (aarch64-apple-darwin)
+  # llmlint: ignore-end[names_match_behavior]
     needs: [darwin]
     if: ${{ always() }}
     runs-on: ubuntu-latest
@@ -107,8 +107,10 @@ jobs:
           NEEDS: ${{ toJSON(needs) }}
         run: node .github/job-results.mjs
 
+  # llmlint: ignore-block[names_match_behavior] this Linux carrier keeps the former macOS install-path check name byte-for-byte; it passes only when the one darwin job installed and ran the wheel, npm launcher and carrier, and Cargo CLI before publication.
   darwin-install-carrier:
     name: install path (macos-latest)
+  # llmlint: ignore-end[names_match_behavior]
     needs: [darwin]
     if: ${{ always() }}
     runs-on: ubuntu-latest
