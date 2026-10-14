@@ -8,15 +8,15 @@ name: ci
 on:
   push:
     branches: [main]
-  # The defaults, without `ready_for_review`: a draft's runs already report the required
-  # checks on its head commit, and marking it ready changes no commit, so a run on the
-  # lift would only repeat them.
   workflow_dispatch:
     inputs:
       diagnostic:
         description: Run one explicit Mac diagnostic outside the automatic lifecycle
         type: boolean
         default: false
+  # The defaults, without `ready_for_review`: a draft's runs already report the required
+  # checks on its head commit, and marking it ready changes no commit, so a run on the
+  # lift would only repeat them.
   pull_request:
     types: [opened, synchronize, reopened]
 
