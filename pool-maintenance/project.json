@@ -2,13 +2,35 @@
   "$schema": "../node_modules/nx/schemas/project-schema.json",
   "name": "pool-maintenance",
   "projectType": "library",
-  "tags": ["type:tooling"],
-  "//": "The pool-maintenance budget: one steady-state `just pool-maintenance` pass. Its check builds the workspace twice, so only `just budgets` runs it, on the release pull request; `check` and the affected run reach only the lint of its script.",
+  "tags": ["lang:python", "type:tooling"],
+  "namedInputs": {
+    "default": [
+      "{projectRoot}/**/*",
+      "{workspaceRoot}/justfile",
+      "{workspaceRoot}/.cargo/config.toml",
+      "{workspaceRoot}/rust-toolchain.toml"
+    ]
+  },
+  "//": "The pool-maintenance budget: one steady-state `just pool-maintenance` pass. Its check builds the workspace twice, so only `just budgets` runs it, on the release pull request; `check` and the affected run reach only its script's lint and the test that drives that script over a one-crate workspace in seconds.",
   "targets": {
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "uv run --frozen --no-sync shellcheck pool-maintenance/measure.sh"
+        "commands": [
+          "uv run --frozen --no-sync shellcheck measure.sh",
+          "uv run --frozen --no-sync ruff check --quiet .",
+          "uv run --frozen --no-sync ruff format --quiet --check ."
+        ],
+        "cwd": "pool-maintenance",
+        "parallel": false
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["onebudgetspec:build"],
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider tests",
+        "cwd": "pool-maintenance"
       }
     },
     "budgets-host": {
