@@ -26,9 +26,11 @@ fn the_wheel_installs_a_binary_that_behaves_like_the_cargo_build() {
 #[cfg(unix)]
 #[test]
 fn staged_native_products_reuse_one_binary_and_run_every_local_install() {
-    use crate::common::{bash, root, run, succeed};
+    use crate::common::{bash, build_alone, root, run, succeed};
     let dir = tempfile::tempdir().unwrap();
     let launcher = artifact("npm-launcher");
+    // Its wheel build and source touch share `target/` with every other wheel build here.
+    let _alone = build_alone();
     let target = succeed("rustc", &["-vV"], &root());
     let target = target
         .lines()

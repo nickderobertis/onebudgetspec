@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use serde_json::Value;
 
@@ -98,6 +98,15 @@ fn dist() -> &'static Path {
         .path()
 }
 
+/// Hold while building into the shared `target/` outside [`artifact`]: two release builds
+/// of one target at once let one maturin read a binary the other is replacing.
+pub fn build_alone() -> MutexGuard<'static, ()> {
+    static BUILD: Mutex<()> = Mutex::new(());
+    BUILD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 /// Build `artifact` with `scripts/build-dist.sh` (once per run) and return its path.
 pub fn artifact(artifact: &str) -> PathBuf {
     static BUILT: Mutex<Vec<(String, PathBuf)>> = Mutex::new(Vec::new());
@@ -108,6 +117,7 @@ pub fn artifact(artifact: &str) -> PathBuf {
         return path.clone();
     }
     let out = dist().join(artifact);
+    let _alone = build_alone();
     let output = Command::new(bash())
         .arg(bash_path(&root().join("scripts/build-dist.sh")))
         .arg(artifact)
