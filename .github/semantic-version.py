@@ -24,7 +24,7 @@ def local_source(source: dict[str, Any], keys: tuple[str, ...]) -> bool:
     return bool(present)
 
 
-def version(record: dict[str, Any], key: str = "version", *, allow_pin: bool = False) -> None:
+def erase_version(record: dict[str, Any], key: str = "version", *, allow_pin: bool = False) -> None:
     """Erase one version; Any retains all unrelated heterogeneous TOML fields unchanged."""
     if key in record:
         value = record[key]
@@ -41,10 +41,10 @@ def normalize(path: str, text: str) -> dict[str, Any]:
     match path:
         case _ if path.endswith("Cargo.toml"):
             workspace = table(doc.get("workspace", {}), "Cargo workspace")
-            version(table(workspace.get("package", {}), "workspace package"))
+            erase_version(table(workspace.get("package", {}), "workspace package"))
             package = table(doc.get("package", {}), "Cargo package")
             if isinstance(package.get("version"), str):
-                version(package)
+                erase_version(package)
             targets = table(doc.get("target", {}), "Cargo targets")
             groups = [doc, workspace, *(table(value, "Cargo target") for value in targets.values())]
             for group in groups:
@@ -57,10 +57,10 @@ def normalize(path: str, text: str) -> dict[str, Any]:
                         if "path" in dependency:
                             if not isinstance(dependency["path"], str):
                                 raise ValueError("Cargo path must be a string")
-                            version(dependency, allow_pin=True)
+                            erase_version(dependency, allow_pin=True)
         case _ if path.endswith("pyproject.toml"):
             project = table(doc.get("project", {}), "Python project")
-            version(project)
+            erase_version(project)
             tool = table(doc.get("tool", {}), "Python tool")
             uv = table(tool.get("uv", {}), "uv tool")
             sources = table(uv.get("sources", {}), "Python sources")
@@ -96,7 +96,7 @@ def normalize(path: str, text: str) -> dict[str, Any]:
                     )
                 )
                 if local:
-                    version(package)
+                    erase_version(package)
         case _:
             raise ValueError("unrecognized TOML surface")
     return doc

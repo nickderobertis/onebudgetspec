@@ -55,7 +55,8 @@ printf '{"name":"release-consumer","private":true}\n' > "$out/npm/package.json"
 CARGO_TARGET_DIR="$root/target" cargo install --quiet --message-format json --path crates/onebudgetspec --target "$target" --root "$out/cargo" --locked --offline > "$out/cargo-build.jsonl"
 python3 scripts/release/native/verify-fresh.py "$out/cargo-build.jsonl"
 mkdir -p "$out/case"
-./scripts/nx run sdk-typescript:build
+./scripts/nx run sdk-typescript:build > "$out/sdk-build.log" 2>&1 \
+  || { cat "$out/sdk-build.log" >&2; fail "sdk-typescript:build failed (output above)"; }
 node --input-type=module - "$root/sdks/typescript/dist/index.js" "$out/case/budgets.yaml" <<'JS'
 import {writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
