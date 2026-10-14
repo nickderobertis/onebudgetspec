@@ -53,7 +53,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node .github/ci-policy.mjs
-  # The gate on every platform the release ships: Linux, macOS and Windows.
+  # The gate on Linux and Windows; macOS, the third shipped platform, is mac-proof below.
   gate:
     needs: [policy]
     name: gate (${{ matrix.os }})
@@ -61,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Every platform gates a pull request; a merged commit, already gated, runs once.
+        # Linux and Windows gate a pull request; a merged commit, already gated, runs once.
         os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
     # Git Bash on Windows, so every lane runs the recipes and scripts the same way.
     defaults:
@@ -155,6 +155,8 @@ jobs:
           NX_HEAD: HEAD
         run: just check
 
+  # Keeps the macOS lane's existing check name, on Linux: it passes only when mac-proof
+  # passed or the routing policy authorized its omission, and then says no Mac tests ran.
   mac-carrier:
     name: gate (macos-latest)
     needs: [policy, mac-proof]
