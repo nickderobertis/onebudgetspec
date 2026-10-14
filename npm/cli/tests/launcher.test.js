@@ -4,7 +4,7 @@ const { spawnSync } = require("node:child_process");
 const { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
-const { CARRIERS, finish, locate } = require("../lib/launcher.js");
+const { CARRIERS, DISCONTINUED, finish, locate } = require("../lib/launcher.js");
 
 /**
  * A carrier package on disk holding `bin/<name>`. `locate` reads only the files, never runs
@@ -61,7 +61,6 @@ test("every published platform is a carrier, and nothing else is", () => {
   expect(CARRIERS).toEqual([
     "linux-x64",
     "linux-arm64",
-    "darwin-x64",
     "darwin-arm64",
     "win32-x64",
     "win32-arm64",
@@ -77,6 +76,27 @@ test("every published platform is a carrier, and nothing else is", () => {
     expect(found.message).toContain(`no build for ${platform}-${arch}`);
     expect(found.message).toContain("cargo install onebudgetspec");
   }
+});
+
+test("Intel macOS is refused by the launcher as no longer supported, fetching nothing", () => {
+  expect([...DISCONTINUED.keys()]).toEqual(["darwin-x64"]);
+  // Resolving would refuse with 69 and name the carrier; 64 shows nothing was resolved.
+  const found = refused(locate("darwin", "x64", notInstalled));
+  expect(found.status).toBe(64);
+  expect(found.message).toContain("Intel macOS is no longer supported (darwin-x64)");
+  // The real entry point, in a real process that reports itself as Intel macOS.
+  const bin = join(__dirname, "..", "bin", "onebudgetspec.js");
+  const ran = runScript(
+    `Object.defineProperty(process, "platform", { value: "darwin" });
+     Object.defineProperty(process, "arch", { value: "x64" });
+     require(${JSON.stringify(bin)});`,
+  );
+  expect(ran.status).toBe(64);
+  expect(ran.stdout.toString()).toBe("");
+  const stderr = ran.stderr.toString();
+  expect(stderr).toContain("Intel macOS is no longer supported (darwin-x64)");
+  expect(stderr).toContain("cargo install onebudgetspec");
+  expect(stderr).not.toContain("@onebudgetspec/cli-darwin-x64");
 });
 
 test.each([

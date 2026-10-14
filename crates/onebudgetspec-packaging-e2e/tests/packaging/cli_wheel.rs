@@ -20,3 +20,57 @@ fn the_wheel_installs_a_binary_that_behaves_like_the_cargo_build() {
     );
     behaves_like_the_binary(&installed, dir.path());
 }
+
+// The sequential pre-publication installer targets Darwin; its host-native subprocess
+// proof uses the same Unix layout on Linux. Windows keeps its existing wheel journey.
+#[cfg(unix)]
+#[test]
+fn staged_native_products_reuse_one_binary_and_run_every_local_install() {
+    use crate::common::{bash, build_alone, root, run, succeed};
+    let dir = tempfile::tempdir().unwrap();
+    let launcher = artifact("npm-launcher");
+    // Its wheel build and source touch share `target/` with every other wheel build here.
+    let _alone = build_alone();
+    let target = succeed("rustc", &["-vV"], &root());
+    let target = target
+        .lines()
+        .find_map(|line| line.strip_prefix("host: "))
+        .unwrap();
+    // A release runner compiles from a clean tree, so the CLI's source is newer than any
+    // earlier build here: Cargo install must reuse the wheel's fresh build, not an older one.
+    std::fs::File::options()
+        .write(true)
+        .open(root().join("crates/onebudgetspec/src/main.rs"))
+        .unwrap()
+        .set_modified(std::time::SystemTime::now())
+        .unwrap();
+    succeed(
+        bash(),
+        &[
+            "scripts/release/native/native-products.sh",
+            target,
+            dir.path().to_str().unwrap(),
+            launcher.to_str().unwrap(),
+        ],
+        &root(),
+    );
+    let hashes: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.path().join("payload-hashes.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(hashes["wheel"], hashes["npm"]);
+    assert_eq!(hashes["wheel"], hashes["cargo"]);
+    assert_eq!(hashes["wheel"].as_str().unwrap().len(), 64);
+    let refused = run(
+        bash(),
+        &[
+            "scripts/release/native/native-products.sh",
+            "unsupported-target",
+            dir.path().to_str().unwrap(),
+            launcher.to_str().unwrap(),
+        ],
+        &root(),
+    );
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("not a Rust target"));
+}

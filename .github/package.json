@@ -1,0 +1,10 @@
+{
+  "name": "onebudgetspec-github-tooling",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@actions/expressions": "0.3.61",
+    "@onebudgetspec/sdk": "workspace:*",
+    "yaml": "2.8.1"
+  }
+}

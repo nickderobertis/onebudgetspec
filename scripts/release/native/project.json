@@ -1,0 +1,46 @@
+{
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "name": "native-products",
+  "projectType": "library",
+  "tags": ["lang:bash", "lang:python", "type:tooling"],
+  "namedInputs": {
+    "default": [
+      "{projectRoot}/*.sh",
+      "{projectRoot}/*.py",
+      "{projectRoot}/project.json",
+      "python",
+      "{workspaceRoot}/scripts/build-dist.sh",
+      "{workspaceRoot}/rust-toolchain.toml"
+    ]
+  },
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bash -c \"uv run --frozen --no-sync shellcheck scripts/release/native/*.sh\"",
+          "uv run --frozen --no-sync ruff check --quiet --config scripts/release/ruff.toml scripts/release/native/validate-products.py scripts/release/native/verify-fresh.py scripts/release/native/verify-interpreter.py"
+        ],
+        "parallel": false
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 scripts/release/native/validate-products.py scripts/release/native/verify-fresh.py scripts/release/native/verify-interpreter.py"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check --config scripts/release/ruff.toml scripts/release/native/validate-products.py scripts/release/native/verify-fresh.py scripts/release/native/verify-interpreter.py"
+      }
+    },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --config scripts/release/ruff.toml scripts/release/native/validate-products.py scripts/release/native/verify-fresh.py scripts/release/native/verify-interpreter.py"
+      }
+    }
+  }
+}

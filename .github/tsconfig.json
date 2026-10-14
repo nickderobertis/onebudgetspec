@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "module": "nodenext",
+    "target": "es2022",
+    "strict": true,
+    "types": ["bun"]
+  },
+  "include": ["*.mjs", "tests/*.mjs", "contracts.d.ts"]
+}

@@ -348,9 +348,9 @@ class NpmTarget(NamedTuple):
 
 
 def npm_target(tmp_path: Path) -> NpmTarget:
-    """Two packed carriers and the packed launcher, in the directories release.yml passes."""
+    """Every released carrier and the launcher, in the directories release.yml passes."""
     carriers = tmp_path / "carriers"
-    for platform in ("linux-x64", "darwin-arm64"):
+    for platform in sorted(path.name for path in (ROOT / "npm/platforms").iterdir()):
         packed = pack(tmp_path / platform, f"@onebudgetspec/cli-{platform}", VERSION)
         carriers.mkdir(exist_ok=True)
         for tarball in packed.iterdir():
@@ -363,16 +363,19 @@ def test_publish_uploads_the_carriers_before_the_launcher(registry: str, tmp_pat
     env = npm_registry_env(registry, tmp_path)
     done = publish("npm", str(target.carriers), str(target.launcher), **env)
     assert done.returncode == 0, done.stderr
-    assert UPLOADS == [
-        "/@onebudgetspec/cli-darwin-arm64",
-        "/@onebudgetspec/cli-linux-x64",
+    expected = [
+        *(
+            f"/@onebudgetspec/cli-{path.name}"
+            for path in sorted((ROOT / "npm/platforms").iterdir())
+        ),
         "/@onebudgetspec/cli",
     ]
+    assert expected == UPLOADS
 
 
 def test_publish_resumes_a_partly_published_release(registry: str, tmp_path: Path) -> None:
     target = npm_target(tmp_path)
-    for platform in ("linux-x64", "darwin-arm64"):
+    for platform in sorted(path.name for path in (ROOT / "npm/platforms").iterdir()):
         name = f"@onebudgetspec/cli-{platform}"
         ANSWERS[f"/{name}"] = packument(VERSION, name)
     done = publish(
@@ -380,7 +383,10 @@ def test_publish_resumes_a_partly_published_release(registry: str, tmp_path: Pat
     )
     assert done.returncode == 0, done.stderr
     assert UPLOADS == ["/@onebudgetspec/cli"]
-    assert "skipped: @onebudgetspec/cli-darwin-arm64 @onebudgetspec/cli-linux-x64" in done.stdout
+    skipped = " ".join(
+        f"@onebudgetspec/cli-{path.name}" for path in sorted((ROOT / "npm/platforms").iterdir())
+    )
+    assert f"skipped: {skipped}" in done.stdout
 
 
 def wheel_of(directory: Path, file_name: str, name: str, version: str) -> Path:

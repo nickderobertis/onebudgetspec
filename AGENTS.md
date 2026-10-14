@@ -28,10 +28,11 @@ and npm, with Python and TypeScript SDKs, all released at one version.
   distribution is the compiled binary in a maturin `bin` wheel, with no Python console
   entry point, and the `cli_wheel.rs` journey installs and drives it); asdf/direnv (CI pins tools through setup actions and
   `rust-toolchain.toml`); GitHub Release archives (every install surface is a registry).
-- **Platforms:** Linux, macOS and Windows, each on x86_64 and aarch64. A timeout ends a
-  command's process group on Unix and its Job Object on Windows. Every measuring command in
-  the journeys and conformance cases is Node (`node` on `PATH`), never a POSIX shell, so
-  they run on all three; a test gated to Unix states why beside its gate. Windows checks
+- **Platforms:** Linux and Windows, each on x86_64 and aarch64, and macOS on Apple Silicon
+  (aarch64) only; the launcher refuses Intel macOS by name. A timeout ends a command's
+  process group on Unix and its Job Object on Windows. Every measuring command in the
+  journeys and conformance cases is Node (`node` on `PATH`), never a POSIX shell, so they
+  run on all three; a test gated to Unix states why beside its gate. Windows checks
   out LF (`.gitattributes`), `just` exports `PYTHONUTF8=1`, and its gate lane holds no Rust
   coverage floor (`scripts/rust-coverage.sh` says why).
 - **Modelled on onetaskgraph:** the crate split, the maturin `bin` wheel, the npm launcher
@@ -105,7 +106,7 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 - `crates/onebudgetspec-e2e/tests/journeys/json_flag.rs` — `--json` equals `--output json` on every verb.
 - `crates/onebudgetspec-e2e/tests/journeys/list.rs` — `list` under every selection, running nothing.
 - `crates/onebudgetspec-e2e/tests/journeys/validate.rs` — `validate` accepts a good file, running nothing.
-- `crates/onebudgetspec-packaging-e2e/tests/packaging/cli_wheel.rs` — the wheel's binary checks a case exactly as the cargo build does.
+- `crates/onebudgetspec-packaging-e2e/tests/packaging/cli_wheel.rs` — the wheel's binary checks a case exactly as the cargo build does; the sequential native release builder installs wheel, npm and Cargo products, drives a real check, and proves payload reuse.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs` — the launcher runs its carrier like the cargo build, and refuses a missing, broken or killed one.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` — the SDK wheel pins `onebudgetspec-cli` at the workspace version, and installed beside it answers a conformance case through every call, typed; a Python runner's `report` reaches that binary's check.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` — the SDK tarball takes `@onebudgetspec/cli` as an optional dependency at the workspace version, answers a conformance case through every call beside the launcher, and type-checks a consumer; a JavaScript runner's `report` reaches the launcher's check.

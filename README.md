@@ -29,7 +29,8 @@ npm install --save-dev @onebudgetspec/cli
 cargo install onebudgetspec
 ```
 
-Each installs a native binary for Linux, macOS and Windows, on x86_64 and aarch64.
+Each installs a native binary for Linux and Windows, on x86_64 and aarch64, and for macOS on
+Apple Silicon (aarch64). Intel macOS is no longer supported; `cargo install` still builds there.
 
 ## The budgets file
 
@@ -156,7 +157,7 @@ detail, or an empty one, is its line alone.
 | 3 | at least one measurement errored (its reason is that result's `error`, in the report), or the report could not be written (that reason is on stderr) |
 
 The npm launcher adds three of its own, each with the reason on stderr: `64` on a platform
-no carrier is published for, `69` when the carrier package is missing or its binary
+no carrier is published for (Intel macOS among them, said so by name), `69` when the carrier package is missing or its binary
 cannot run, and `70` when the binary was ended by a signal.
 
 ## SDKs

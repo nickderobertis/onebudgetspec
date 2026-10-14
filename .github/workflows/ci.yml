@@ -8,6 +8,12 @@ name: ci
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      diagnostic:
+        description: Run one explicit Mac diagnostic outside the automatic lifecycle
+        type: boolean
+        default: false
   # The defaults, without `ready_for_review`: a draft's runs already report the required
   # checks on its head commit, and marking it ready changes no commit, so a run on the
   # lift would only repeat them.
@@ -23,15 +29,40 @@ permissions:
   contents: read
 
 jobs:
-  # The gate on every platform the release ships: Linux, macOS and Windows.
+  policy:
+    runs-on: ubuntu-latest
+    outputs:
+      macosRequired: ${{ steps.policy.outputs.macosRequired }}
+      isReleaseOnly: ${{ steps.policy.outputs.isReleaseOnly }}
+      diagnostic: ${{ steps.policy.outputs.diagnostic }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - run: ./scripts/nx run github-workflows:bootstrap
+      - id: policy
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          DIAGNOSTIC: ${{ github.event_name == 'workflow_dispatch' && inputs.diagnostic }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .github/ci-policy.mjs
+  # The gate on Linux and Windows; macOS, the third shipped platform, is mac-proof below.
   gate:
+    needs: [policy]
     name: gate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # Every platform gates a pull request; a merged commit, already gated, runs once.
-        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest", "macos-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        # Linux and Windows gate a pull request; a merged commit, already gated, runs once.
+        os: ${{ github.event_name == 'pull_request' && fromJSON('["ubuntu-latest", "windows-latest"]') || fromJSON('["ubuntu-latest"]') }}
     # Git Bash on Windows, so every lane runs the recipes and scripts the same way.
     defaults:
       run:
@@ -68,7 +99,7 @@ jobs:
         run: bash scripts/ci-base.sh
 
       - name: Check the affected projects
-        if: ${{ !startsWith(github.head_ref, 'release-plz-') || matrix.os != 'ubuntu-latest' }}
+        if: ${{ needs.policy.outputs.isReleaseOnly != 'true' || matrix.os != 'ubuntu-latest' }}
         env:
           NX_BASE: ${{ steps.base.outputs.base }}
           NX_HEAD: HEAD
@@ -77,8 +108,65 @@ jobs:
       # The broader tier, once, on one lane of the pull request whose merge releases; the
       # other lane runs the affected tier as on any pull request.
       - name: Check every project before a release
-        if: ${{ startsWith(github.head_ref, 'release-plz-') && matrix.os == 'ubuntu-latest' }}
+        if: ${{ needs.policy.outputs.isReleaseOnly == 'true' && matrix.os == 'ubuntu-latest' }}
         run: just check-all
+
+  mac-proof:
+    name: Mac gate proof
+    needs: [policy]
+    if: needs.policy.outputs.macosRequired == 'true' || (github.event_name == 'workflow_dispatch' && inputs.diagnostic)
+    runs-on: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The merge base is derived below; a shallow checkout cannot resolve it.
+          fetch-depth: 0
+      - uses: extractions/setup-just@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      # Reads rust-toolchain.toml, so CI and local builds use the same rustc, clippy and rustfmt.
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov,cargo-nextest
+
+      - name: Bootstrap
+        run: just bootstrap
+
+      - name: Derive the comparison base
+        id: base
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: bash scripts/ci-base.sh
+
+      - name: Check the affected projects
+        if: ${{ success() }}
+        env:
+          NX_BASE: ${{ steps.base.outputs.base }}
+          NX_HEAD: HEAD
+        run: just check
+
+  # llmlint: ignore-block[names_match_behavior] this Linux carrier keeps the former macOS gate lane's check name byte-for-byte, as every Mac job folded into another keeps its name on a Linux carrier; it passes only when mac-proof passed or the routing policy authorized its omission, and then says no Mac tests ran.
+  mac-carrier:
+    name: gate (macos-latest)
+  # llmlint: ignore-end[names_match_behavior]
+    needs: [policy, mac-proof]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: node .github/job-results.mjs
 
   # Supply chain, Linux-only: the dependency graph is the same on every platform.
   deny:
@@ -99,19 +187,14 @@ jobs:
   # The one required gate context: green only when every lane above is.
   check:
     if: ${{ always() }}
-    needs: [gate, deny]
+    needs: [policy, gate, mac-carrier, deny]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v7
       - name: Every gate lane passed
         env:
-          RESULTS: ${{ join(needs.*.result, ' ') }}
-        run: |
-          for result in $RESULTS; do
-            if [ "$result" != success ]; then
-              echo "::error::a gate lane finished '$result'; open the failed lane above for its report" >&2
-              exit 1
-            fi
-          done
+          NEEDS: ${{ toJSON(needs) }}
+        run: node .github/job-results.mjs
 
   # The PR title becomes the squash commit release-plz reads, so a malformed one must not merge.
   pr-title:

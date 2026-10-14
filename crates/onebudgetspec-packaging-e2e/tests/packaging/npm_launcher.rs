@@ -32,7 +32,6 @@ fn host_platform() -> &'static str {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("linux", "x86_64") => "linux-x64",
         ("linux", "aarch64") => "linux-arm64",
-        ("macos", "x86_64") => "darwin-x64",
         ("macos", "aarch64") => "darwin-arm64",
         ("windows", "x86_64") => "win32-x64",
         ("windows", "aarch64") => "win32-arm64",

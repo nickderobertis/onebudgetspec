@@ -1,0 +1,21 @@
+schema_version: 1
+budgets:
+  - id: onebudgetspec-macos-jobs-per-run
+    description: >-
+      Maximum Mac runner job instances per resolved workflow run.
+      inner_measure_reason: one run can occupy several shared Mac slots even when
+      the lifecycle run count stays within its bound. This constrains simultaneous slots separately from repeated lifecycle queue entries.
+    measure: reported
+    command: [node, macos-budget.mjs, --metric, jobs-per-run, --telemetry, .telemetry/macos-policy.json]
+    unit: jobs
+    direction: max
+    threshold: 1
+  - id: onebudgetspec-macos-runs-per-change
+    description: >-
+      Maximum distinct Mac-spending automatic workflow runs across the single-push
+      lifecycle, excluding explicitly opted-in manual diagnostics. This constrains repeated lifecycle queue entries separately from simultaneous slots.
+    measure: reported
+    command: [node, macos-budget.mjs, --metric, runs-per-change, --telemetry, .telemetry/macos-policy.json]
+    unit: runs
+    direction: max
+    threshold: 2

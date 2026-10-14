@@ -125,7 +125,7 @@ def test_a_missing_version_and_a_missing_carrier_are_named(tmp_path: Path) -> No
     sdk.write_text("export const NOTHING = 1;\n")
     launcher = root / "npm/cli/package.json"
     launcher.write_text(
-        launcher.read_text().replace('    "@onebudgetspec/cli-darwin-x64": "workspace:*",\n', "")
+        launcher.read_text().replace('    "@onebudgetspec/cli-darwin-arm64": "workspace:*",\n', "")
     )
     problems = versions.disagreements(root)
     workspace = versions.workspace_version()

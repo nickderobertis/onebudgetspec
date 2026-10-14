@@ -22,7 +22,6 @@ build-backend = "maturin"
 [tool.maturin]
 bindings = "bin"
 manifest-path = "crates/onebudgetspec/Cargo.toml"
-strip = true
 
 [tool.uv.workspace]
 members = ["sdks/python", "tools"]
