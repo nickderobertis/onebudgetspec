@@ -344,24 +344,25 @@ test("release graph retains every target, artifact, pre-publication Darwin insta
   );
   assert.ok(darwin);
   assert.deepEqual([...native, ...darwin].sort(), declared.sort());
+  // Apple Silicon only: one native target, no Intel target, cross-compile or Rosetta step.
+  assert.deepEqual(darwin, ["aarch64-apple-darwin"]);
+  assert.ok(!declared.includes("x86_64-apple-darwin"), "no Intel macOS target is declared");
+  const releaseText = readFileSync(resolve(root, ".github/workflows/release.yml"), "utf8");
+  assert.doesNotMatch(releaseText, /x86_64-apple-darwin|darwin-x64|rosetta/i);
+  const rustTargets = release.document.jobs.darwin.steps?.find((s) =>
+    s.uses?.startsWith("actions-rust-lang/setup-rust-toolchain@"),
+  )?.with?.target;
+  assert.equal(rustTargets, "aarch64-apple-darwin");
   let nodeArchitecture;
-  let rosetta = false;
   for (const step of release.document.jobs.darwin.steps ?? []) {
-    if (step.run?.includes("softwareupdate --install-rosetta")) rosetta = true;
     if (step.uses?.startsWith("actions/setup-node@")) nodeArchitecture = step.with?.architecture;
     const target = /native-products\.sh (\S+)/.exec(step.run ?? "")?.[1];
     if (target) {
-      assert.equal(nodeArchitecture, target.startsWith("x86_64") ? "x64" : "arm64");
+      assert.equal(nodeArchitecture, "arm64");
       assert.ok(step.run?.includes('uv python install "$python_request"'));
       assert.ok(step.run?.includes('ONEBUDGETSPEC_PYTHON="$(uv python find "$python_request")"'));
-      assert.ok(
-        step.run?.includes(
-          target.startsWith("x86_64") ? "macos-x86_64-none" : "macos-aarch64-none",
-        ),
-      );
+      assert.ok(step.run?.includes("macos-aarch64-none"));
       assert.ok(step.run?.includes("cat .python-version"));
-      if (target.startsWith("x86_64"))
-        assert.equal(rosetta, true, "Rosetta precedes x86_64 install/run work");
     }
   }
   for (const target of darwin) {
@@ -387,7 +388,6 @@ test("release graph retains every target, artifact, pre-publication Darwin insta
     assert.equal(job[1]["runs-on"], "ubuntu-latest");
   for (const [id, name] of Object.entries({
     "darwin-arm-carrier": "native (aarch64-apple-darwin)",
-    "darwin-x64-carrier": "native (x86_64-apple-darwin)",
     "darwin-install-carrier": "install path (macos-latest)",
   })) {
     /** @type {import('../contracts.js').Job} */

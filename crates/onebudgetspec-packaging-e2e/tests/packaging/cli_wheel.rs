@@ -34,6 +34,14 @@ fn staged_native_products_reuse_one_binary_and_run_every_local_install() {
         .lines()
         .find_map(|line| line.strip_prefix("host: "))
         .unwrap();
+    // A release runner compiles from a clean tree, so the CLI's source is newer than any
+    // earlier build here: Cargo install must reuse the wheel's fresh build, not an older one.
+    std::fs::File::options()
+        .write(true)
+        .open(root().join("crates/onebudgetspec/src/main.rs"))
+        .unwrap()
+        .set_modified(std::time::SystemTime::now())
+        .unwrap();
     succeed(
         bash(),
         &[

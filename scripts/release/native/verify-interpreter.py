@@ -15,7 +15,7 @@ def main() -> None:
         parser.exit(
             1,
             f"Python architecture {machine} != {args.expected}; "
-            "select the target's managed Python and enable Rosetta for Darwin x86_64\n",
+            "select the managed Python for the target's architecture\n",
         )
 
 

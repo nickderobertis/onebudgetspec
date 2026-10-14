@@ -65,45 +65,25 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          target: aarch64-apple-darwin,x86_64-apple-darwin
+          target: aarch64-apple-darwin
       - uses: astral-sh/setup-uv@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Prepare the launcher and Rosetta
-        run: |
-          bash scripts/build-dist.sh npm-launcher dist/launcher
-          sudo softwareupdate --install-rosetta --agree-to-license
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .node-version
-          architecture: x64
-      - name: Build and install x86_64 products under Rosetta
-        run: |
-          python_request="cpython-$(cat .python-version)-macos-x86_64-none"
-          uv python install "$python_request"
-          ONEBUDGETSPEC_PYTHON="$(uv python find "$python_request")" bash scripts/release/native/native-products.sh x86_64-apple-darwin dist/darwin-x64 "$PWD"/dist/launcher/*.tgz
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
           architecture: arm64
       - name: Build and install native aarch64 products
         run: |
+          bash scripts/build-dist.sh npm-launcher dist/launcher
           python_request="cpython-$(cat .python-version)-macos-aarch64-none"
           uv python install "$python_request"
           ONEBUDGETSPEC_PYTHON="$(uv python find "$python_request")" bash scripts/release/native/native-products.sh aarch64-apple-darwin dist/darwin-arm64 "$PWD"/dist/launcher/*.tgz
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-x86_64-apple-darwin
-          path: dist/darwin-x64/wheels/*.whl
-      - uses: actions/upload-artifact@v4
-        with:
           name: wheels-aarch64-apple-darwin
           path: dist/darwin-arm64/wheels/*.whl
-      - uses: actions/upload-artifact@v4
-        with:
-          name: carrier-x86_64-apple-darwin
-          path: dist/darwin-x64/carriers/*.tgz
       - uses: actions/upload-artifact@v4
         with:
           name: carrier-aarch64-apple-darwin
@@ -111,22 +91,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: darwin-payload-hashes
-          path: dist/darwin-*/payload-hashes.json
+          path: dist/darwin-arm64/payload-hashes.json
 
   darwin-arm-carrier:
     name: native (aarch64-apple-darwin)
-    needs: [darwin]
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Darwin staged build and install proofs passed before publication
-        env:
-          NEEDS: ${{ toJSON(needs) }}
-        run: node .github/job-results.mjs darwin
-
-  darwin-x64-carrier:
-    name: native (x86_64-apple-darwin)
     needs: [darwin]
     if: ${{ always() }}
     runs-on: ubuntu-latest

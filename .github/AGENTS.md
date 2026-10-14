@@ -8,6 +8,7 @@ numeric cost limits in budgets.yaml. Unsupported routing must fail explicitly.
 
 `.github/macos-policy.mjs classify` verifies same-repository `release-plz-` branches
 by parsed version/changelog content; authors never authorize omission. Unknown CI
-names and unreadable PRs require Mac coverage. The one PR Mac lane and one sequential
-Darwin release job are the automatic locations; manual CI diagnostics default off.
+names and unreadable PRs require Mac coverage. The one PR Mac lane and one Apple
+Silicon Darwin release job (no Intel macOS target) are the automatic locations; manual
+CI diagnostics default off.
 

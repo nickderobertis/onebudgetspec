@@ -71,7 +71,6 @@ def test_it_reads_every_shipped_part_and_resolves_dependencies() -> None:
         for platform in (
             "linux-x64",
             "linux-arm64",
-            "darwin-x64",
             "darwin-arm64",
             "win32-x64",
             "win32-arm64",

@@ -78,6 +78,20 @@ def test_a_wheel_target_the_release_does_not_ship_is_refused(tmp_path: Path) -> 
     assert list(tmp_path.iterdir()) == []
 
 
+def test_an_intel_macos_target_is_refused_as_no_longer_supported(tmp_path: Path) -> None:
+    for artifact in ("cli-wheel", "npm-carrier"):
+        refused = subprocess.run(
+            [bash(), BUILD_DIST, artifact, str(tmp_path), "x86_64-apple-darwin"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert refused.returncode == 64
+        assert "Intel macOS (x86_64-apple-darwin) is no longer supported" in refused.stderr
+        assert "aarch64-apple-darwin" in refused.stderr
+        assert list(tmp_path.iterdir()) == []
+
+
 def test_a_missing_or_unrelated_precompiled_carrier_binary_is_refused(tmp_path: Path) -> None:
     """The carrier accepts only bytes from its target's compiled CLI."""
     for candidate in (tmp_path / "missing", tmp_path / "unrelated"):

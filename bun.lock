@@ -27,7 +27,6 @@
       },
       "optionalDependencies": {
         "@onebudgetspec/cli-darwin-arm64": "workspace:*",
-        "@onebudgetspec/cli-darwin-x64": "workspace:*",
         "@onebudgetspec/cli-linux-arm64": "workspace:*",
         "@onebudgetspec/cli-linux-x64": "workspace:*",
         "@onebudgetspec/cli-win32-arm64": "workspace:*",
@@ -36,10 +35,6 @@
     },
     "npm/platforms/darwin-arm64": {
       "name": "@onebudgetspec/cli-darwin-arm64",
-      "version": "0.1.5",
-    },
-    "npm/platforms/darwin-x64": {
-      "name": "@onebudgetspec/cli-darwin-x64",
       "version": "0.1.5",
     },
     "npm/platforms/linux-arm64": {
@@ -132,8 +127,6 @@
     "@onebudgetspec/cli": ["@onebudgetspec/cli@workspace:npm/cli"],
 
     "@onebudgetspec/cli-darwin-arm64": ["@onebudgetspec/cli-darwin-arm64@workspace:npm/platforms/darwin-arm64"],
-
-    "@onebudgetspec/cli-darwin-x64": ["@onebudgetspec/cli-darwin-x64@workspace:npm/platforms/darwin-x64"],
 
     "@onebudgetspec/cli-linux-arm64": ["@onebudgetspec/cli-linux-arm64@workspace:npm/platforms/linux-arm64"],
 

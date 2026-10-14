@@ -37,6 +37,9 @@ def products(tmp_path_factory: pytest.TempPathFactory) -> NativeProducts:
         cwd=ROOT,
         text=True,
     ).strip()
+    # A release runner compiles from a clean tree, so the CLI's source is newer than any
+    # earlier build here: Cargo install must reuse the wheel's fresh build, not an older one.
+    os.utime(ROOT / "crates/onebudgetspec/src/main.rs")
     subprocess.run(
         [
             bash(),
@@ -362,7 +365,7 @@ def test_node_architecture_mismatch_is_refused(products: NativeProducts, tmp_pat
     assert refused.returncode == 1
     assert (
         "Node architecture" in refused.stderr
-        and "select the target's Node architecture" in refused.stderr
+        and "select the Node build for the target's architecture" in refused.stderr
     )
     assert not (tmp_path / "wheels").exists()
 
@@ -400,7 +403,7 @@ def test_real_python_architecture_mismatch_is_refused() -> None:
     assert refused.returncode == 1
     assert (
         "Python architecture" in refused.stderr
-        and "select the target's managed Python" in refused.stderr
+        and "select the managed Python for the target's architecture" in refused.stderr
     )
 
 

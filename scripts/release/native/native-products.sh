@@ -22,7 +22,7 @@ case "$target" in
   aarch64-*) expected_cpu=arm64 ;;
   *) expected_cpu="$node_cpu" ;;
 esac
-[ "$node_cpu" = "$expected_cpu" ] || fail "Node architecture $node_cpu != $expected_cpu; select the target's Node architecture and enable Rosetta for Darwin x86_64"
+[ "$node_cpu" = "$expected_cpu" ] || fail "Node architecture $node_cpu != $expected_cpu; select the Node build for the target's architecture"
 python="${ONEBUDGETSPEC_PYTHON:-python3}"
 "$python" scripts/release/native/verify-interpreter.py "$expected_cpu"
 wheel="$(bash scripts/build-dist.sh cli-wheel "$out/wheels" "$target")"

@@ -28,10 +28,11 @@ and npm, with Python and TypeScript SDKs, all released at one version.
   distribution is the compiled binary in a maturin `bin` wheel, with no Python console
   entry point, and the `cli_wheel.rs` journey installs and drives it); asdf/direnv (CI pins tools through setup actions and
   `rust-toolchain.toml`); GitHub Release archives (every install surface is a registry).
-- **Platforms:** Linux, macOS and Windows, each on x86_64 and aarch64. A timeout ends a
-  command's process group on Unix and its Job Object on Windows. Every measuring command in
-  the journeys and conformance cases is Node (`node` on `PATH`), never a POSIX shell, so
-  they run on all three; a test gated to Unix states why beside its gate. Windows checks
+- **Platforms:** Linux and Windows, each on x86_64 and aarch64, and macOS on Apple Silicon
+  (aarch64) only; the launcher refuses Intel macOS by name. A timeout ends a command's
+  process group on Unix and its Job Object on Windows. Every measuring command in the
+  journeys and conformance cases is Node (`node` on `PATH`), never a POSIX shell, so they
+  run on all three; a test gated to Unix states why beside its gate. Windows checks
   out LF (`.gitattributes`), `just` exports `PYTHONUTF8=1`, and its gate lane holds no Rust
   coverage floor (`scripts/rust-coverage.sh` says why).
 - **Modelled on onetaskgraph:** the crate split, the maturin `bin` wheel, the npm launcher
