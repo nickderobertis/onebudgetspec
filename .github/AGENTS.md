@@ -11,4 +11,3 @@ by parsed version/changelog content; authors never authorize omission. Unknown C
 names and unreadable PRs require Mac coverage. The one PR Mac lane and one Apple
 Silicon Darwin release job (no Intel macOS target) are the automatic locations; manual
 CI diagnostics default off.
-

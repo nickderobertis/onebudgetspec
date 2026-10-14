@@ -380,6 +380,17 @@ test("malformed admitted manifest structures fail closed at the actual classifie
       'version=4\n[[package]]\nname="local"\nversion="0.1.4"\n',
       "version=4\npackage=[42]\n",
     ],
+    // A version-only edit whose local-source claim is not a path is not admitted as local.
+    ...[0, 42, ""].map((path) => {
+      const manifest = (/** @type {string} */ v) =>
+        `[project]\nname="example"\nversion="${v}"\ndependencies=["dep==${v}"]\n[tool.uv.sources]\ndep={path=${JSON.stringify(path)}}\n`;
+      return ["sdks/python/pyproject.toml", manifest("0.1.4"), manifest("0.1.5")];
+    }),
+    ...["editable", "virtual", "directory"].map((key) => {
+      const lock = (/** @type {string} */ v) =>
+        `version=1\n[[package]]\nname="local"\nversion="${v}"\nsource={${key}=42}\n`;
+      return ["uv.lock", lock("0.1.4"), lock("0.1.5")];
+    }),
   ];
   for (const [path, before, after] of cases) {
     const h = history();

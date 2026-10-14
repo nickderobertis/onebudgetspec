@@ -15,6 +15,15 @@ def table(value: object, site: str) -> dict[str, Any]:
     return value
 
 
+def local_source(source: dict[str, Any], keys: tuple[str, ...]) -> bool:
+    """Whether a source names a local checkout; a present key must hold a non-empty path."""
+    present = [key for key in keys if key in source]
+    for key in present:
+        if not isinstance(source[key], str) or not source[key]:
+            raise ValueError(f"dependency source {key} must be a non-empty path")
+    return bool(present)
+
+
 def version(record: dict[str, Any], key: str = "version", *, allow_pin: bool = False) -> None:
     """Erase one version; Any retains all unrelated heterogeneous TOML fields unchanged."""
     if key in record:
@@ -65,7 +74,9 @@ def normalize(path: str, text: str) -> dict[str, Any]:
             for index, dependency in enumerate(dependencies):
                 name, separator, value = dependency.partition("==")
                 source = sources.get(name, {})
-                if separator and (source.get("workspace") is True or "path" in source):
+                if separator and (
+                    source.get("workspace") is True or local_source(source, ("path",))
+                ):
                     if not VERSION.fullmatch(value):
                         raise ValueError("invalid local dependency version")
                     dependencies[index] = name + "==<local-version>"
@@ -79,9 +90,9 @@ def normalize(path: str, text: str) -> dict[str, Any]:
                 local = (
                     source is None
                     if path == "Cargo.lock"
-                    else (
-                        isinstance(source, dict)
-                        and bool(set(source) & {"editable", "virtual", "directory"})
+                    else isinstance(source, dict)
+                    and local_source(
+                        table(source, "lockfile source"), ("editable", "virtual", "directory")
                     )
                 )
                 if local:
