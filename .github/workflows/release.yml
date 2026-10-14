@@ -103,7 +103,7 @@ jobs:
       - name: Darwin staged build and install proofs passed before publication
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: node .github/job-results.mjs darwin
+        run: node .github/job-results.mjs
 
   darwin-install-carrier:
     name: install path (macos-latest)
@@ -115,7 +115,7 @@ jobs:
       - name: Darwin staged build and install proofs passed before publication
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: node .github/job-results.mjs darwin
+        run: node .github/job-results.mjs
 
   distributions:
     runs-on: ubuntu-latest

@@ -164,7 +164,7 @@ jobs:
       - uses: actions/checkout@v7
       - env:
           NEEDS: ${{ toJSON(needs) }}
-        run: node .github/job-results.mjs policy mac-proof
+        run: node .github/job-results.mjs
 
   # Supply chain, Linux-only: the dependency graph is the same on every platform.
   deny:
@@ -192,7 +192,7 @@ jobs:
       - name: Every gate lane passed
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: node .github/job-results.mjs policy gate mac-carrier deny
+        run: node .github/job-results.mjs
 
   # The PR title becomes the squash commit release-plz reads, so a malformed one must not merge.
   pr-title:

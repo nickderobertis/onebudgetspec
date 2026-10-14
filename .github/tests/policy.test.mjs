@@ -57,7 +57,7 @@ test("real git histories authorize only same-repository release branches and sem
 
 test("carriers exercise the real command with success, cancellation, missing work and authorized skips", () => {
   /** @param {import("../contracts.js").Needs} needs @param {string[]} args */
-  const invoke = (needs, args = ["policy", "mac-proof"]) =>
+  const invoke = (needs, args = []) =>
     spawnSync("node", [resolve(root, ".github/job-results.mjs"), ...args], {
       env: { ...process.env, NEEDS: JSON.stringify(needs) },
       encoding: "utf8",
@@ -84,9 +84,13 @@ test("carriers exercise the real command with success, cancellation, missing wor
       0,
     );
   for (const result of ["success", "failure", "cancelled", "skipped", undefined]) {
-    const outcome = invoke({ gate: { result }, deny: { result: "success" } }, ["gate", "deny"]);
+    const outcome = invoke({ gate: { result }, deny: { result: "success" } });
     assert.equal(outcome.status === 0, result === "success");
   }
+  // Job names restated as arguments could drift from the needs list, so they are refused.
+  const restated = invoke({ policy, "mac-proof": { result: "success" } }, ["policy"]);
+  assert.notEqual(restated.status, 0);
+  assert.match(restated.stderr, /every job in NEEDS is required/);
 });
 
 test("each semantic version surface admits only version content over real git diffs", () => {
@@ -184,13 +188,10 @@ test("changelog content, added/deleted files, diagnostic authorization and malfo
     });
   assert.notEqual(invoke({}).status, 0);
   assert.notEqual(
-    invoke(
-      {
-        policy: { result: "success", outputs: { macosRequired: "false", diagnostic: "true" } },
-        "mac-proof": { result: "skipped" },
-      },
-      ["policy", "mac-proof"],
-    ).status,
+    invoke({
+      policy: { result: "success", outputs: { macosRequired: "false", diagnostic: "true" } },
+      "mac-proof": { result: "skipped" },
+    }).status,
     0,
   );
 });
@@ -237,11 +238,10 @@ test("result commands reject malformed roots and outputs before deriving skip pe
     { policy: { result: "success", outputs: { macosRequired: false } } },
     { policy: { result: ["success"] } },
   ]) {
-    const refused = spawnSync(
-      "node",
-      [resolve(root, ".github/job-results.mjs"), "policy", "mac-proof"],
-      { env: { ...process.env, NEEDS: JSON.stringify(needs) }, encoding: "utf8" },
-    );
+    const refused = spawnSync("node", [resolve(root, ".github/job-results.mjs")], {
+      env: { ...process.env, NEEDS: JSON.stringify(needs) },
+      encoding: "utf8",
+    });
     assert.notEqual(refused.status, 0);
     assert.match(refused.stderr, /NEEDS must be|invalid outputs|invalid outcome/);
     assert.doesNotMatch(refused.stderr, /TypeError/);
@@ -250,7 +250,7 @@ test("result commands reject malformed roots and outputs before deriving skip pe
 
 test("release carriers reject every non-successful Darwin proof using the actual result command", () => {
   for (const result of ["success", "failure", "cancelled", "skipped", undefined]) {
-    const run = spawnSync("node", [resolve(root, ".github/job-results.mjs"), "darwin"], {
+    const run = spawnSync("node", [resolve(root, ".github/job-results.mjs")], {
       env: { ...process.env, NEEDS: JSON.stringify({ darwin: { result } }) },
       encoding: "utf8",
     });

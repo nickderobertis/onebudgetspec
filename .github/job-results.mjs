@@ -37,7 +37,9 @@ export function assertResults(needs, required, optional = {}) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const needs = JSON.parse(process.env.NEEDS ?? "{}");
   assertNeeds(needs);
-  const required = process.argv.slice(2);
+  // The job's own needs list is the required set, so a need added there is enforced here.
+  if (process.argv.length > 2) throw new Error("pass no job names; every job in NEEDS is required");
+  const required = Object.keys(needs);
   /** @type {Record<string, boolean>} */
   const optional = {};
   if (required.includes("mac-proof")) {
