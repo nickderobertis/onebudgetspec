@@ -1,15 +1,11 @@
-import { relative } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { assertNeeds } from "./job-results.mjs";
 import { diffs, events, lifecycle as lifecycleOrder } from "./scenarios.mjs";
-import { root, workflows } from "./workflow-graph.mjs";
+import { workflowPath, workflows } from "./workflow-graph.mjs";
 import { isRecord } from "./workflow-input.mjs";
 
 const declaredJobs = new Map(
-  workflows().map((workflow) => [
-    relative(root, workflow.file),
-    Object.keys(workflow.document.jobs),
-  ]),
+  workflows().map((workflow) => [workflowPath(workflow), Object.keys(workflow.document.jobs)]),
 );
 
 // llmlint: ignore-block[boundary_inputs_validated] The reporter contract forbids re-evaluating scenarios: exact matrix, condition and trigger correctness is proved by github-workflows:test against real workflows. Here the cached JSON boundary rejects missing/stale/empty per-job evidence; it deliberately does not repeat routing to attest every recorded row.

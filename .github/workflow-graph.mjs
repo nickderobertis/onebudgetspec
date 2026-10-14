@@ -3,7 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import { data, Evaluator, Lexer, Parser } from "@actions/expressions";
 import { parse } from "yaml";
 import { guardOutputs } from "./guard-outputs.mjs";
@@ -247,7 +247,11 @@ export function resolveRun(workflow, scenario, policy, overrides = {}, stack = [
     }
     if (!progress) throw new Error("unresolved/cyclic workflow prerequisites");
   }
-  return { workflow: relative(root, workflow.file), event: scenario.event_name, rows, results };
+  return { workflow: workflowPath(workflow), event: scenario.event_name, rows, results };
+}
+/** The workflow's repository path with forward slashes on every platform, as telemetry records it. @param {{ file: string }} workflow */
+export function workflowPath(workflow) {
+  return relative(root, workflow.file).split(sep).join("/");
 }
 export function digest() {
   const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
