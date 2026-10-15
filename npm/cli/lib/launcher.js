@@ -5,14 +5,10 @@ const { realpathSync } = require("node:fs");
 const { dirname, join, sep } = require("node:path");
 
 /** The platforms a carrier is published for, as `${process.platform}-${process.arch}`. */
-const CARRIERS = [
-  "linux-x64",
-  "linux-arm64",
-  "darwin-x64",
-  "darwin-arm64",
-  "win32-x64",
-  "win32-arm64",
-];
+const CARRIERS = ["linux-x64", "linux-arm64", "darwin-arm64", "win32-x64", "win32-arm64"];
+
+/** Platforms a carrier was once published for and no longer is, with what to say instead. */
+const DISCONTINUED = new Map([["darwin-x64", "Intel macOS is no longer supported"]]);
 
 /**
  * The file name of a carrier's binary on `platform`: Windows runs only a named executable.
@@ -31,7 +27,14 @@ function binaryName(platform) {
  */
 function locate(platform, arch, resolve) {
   const key = `${platform}-${arch}`;
-  // llmlint: ignore[changed_behavior_has_e2e] reaching this branch through the installed launcher needs a host outside the six platforms the release ships, which no runner here provides; tests/launcher.test.js drives the decision with real files, and the packaging journeys drive every other refusal through the installed launcher.
+  const discontinued = DISCONTINUED.get(key);
+  if (discontinued) {
+    return {
+      status: 64,
+      message: `onebudgetspec: ${discontinued} (${key}); install it with 'cargo install onebudgetspec' instead`,
+    };
+  }
+  // llmlint: ignore[changed_behavior_has_e2e] reaching this branch through the installed launcher needs a host outside the five platforms the release ships, which no runner here provides; tests/launcher.test.js drives the decision with real files, and the packaging journeys drive every other refusal through the installed launcher.
   if (!CARRIERS.includes(key)) {
     return {
       status: 64,
@@ -74,4 +77,4 @@ function finish(result, binary, carrier) {
   return { status: result.status };
 }
 
-module.exports = { CARRIERS, finish, locate };
+module.exports = { CARRIERS, DISCONTINUED, finish, locate };

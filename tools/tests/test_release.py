@@ -34,7 +34,6 @@ def test_the_platform_lists_agree() -> None:
     assert release.carrier_platforms() == {
         "linux-x64",
         "linux-arm64",
-        "darwin-x64",
         "darwin-arm64",
         "win32-x64",
         "win32-arm64",
@@ -60,7 +59,7 @@ def test_an_unpublished_target_and_a_stale_cover_are_named(tmp_path: Path) -> No
     workflow = root / ".github/workflows/release.yml"
     workflow.write_text(workflow.read_text().replace("scripts/release/publish.sh sdk-pypi", "true"))
     path = root / "release-targets.toml"
-    path.write_text(path.read_text().replace('    "npm:@onebudgetspec/cli-darwin-x64",\n', ""))
+    path.write_text(path.read_text().replace('    "npm:@onebudgetspec/cli-darwin-arm64",\n', ""))
     path.write_text(
         path.read_text().replace('probe = "scripts/release/release-probe.py"', 'probe = "nope"')
     )
@@ -74,7 +73,7 @@ def test_an_unpublished_target_and_a_stale_cover_are_named(tmp_path: Path) -> No
 def test_a_platform_missing_anywhere_is_named(tmp_path: Path) -> None:
     root = copy_tree(tmp_path, *FILES)
     launcher = root / "npm/cli/lib/launcher.js"
-    launcher.write_text(launcher.read_text().replace(', "darwin-x64"', ""))
+    launcher.write_text(launcher.read_text().replace('"darwin-arm64", ', ""))
     manifest = root / "npm/cli/package.json"
     document = json.loads(manifest.read_text())
     del document["optionalDependencies"]["@onebudgetspec/cli-linux-arm64"]
@@ -84,19 +83,19 @@ def test_a_platform_missing_anywhere_is_named(tmp_path: Path) -> None:
         build.read_text().replace("    aarch64-apple-darwin) echo darwin-arm64 ;;\n", "")
     )
     problems = release.platform_problems(root)
-    # The launcher, its manifest, the build script, and the release matrix and toolchain
-    # (which the build script no longer maps), five places in all.
-    assert len(problems) == 5, problems
+    # The launcher, its manifest, the build script, and its host_target, the release matrix
+    # and the toolchain (which the build script no longer maps), six places in all.
+    assert len(problems) == 6, problems
 
 
 def test_a_release_target_missing_from_the_toolchain_is_named(tmp_path: Path) -> None:
     root = copy_tree(tmp_path, *FILES)
     toolchain = root / "rust-toolchain.toml"
-    toolchain.write_text(toolchain.read_text().replace('    "x86_64-apple-darwin",\n', ""))
+    toolchain.write_text(toolchain.read_text().replace('    "x86_64-pc-windows-msvc",\n', ""))
     assert release.platform_problems(root) == [
-        "rust-toolchain.toml lists ['darwin-arm64', 'linux-arm64', 'linux-x64', 'win32-arm64', "
-        "'win32-x64']; npm/platforms holds ['darwin-arm64', 'darwin-x64', 'linux-arm64', "
-        "'linux-x64', 'win32-arm64', 'win32-x64']"
+        "rust-toolchain.toml lists ['darwin-arm64', 'linux-arm64', 'linux-x64', 'win32-arm64']; "
+        "npm/platforms holds ['darwin-arm64', 'linux-arm64', 'linux-x64', 'win32-arm64', "
+        "'win32-x64']"
     ]
 
 
@@ -166,9 +165,9 @@ def test_a_windows_platform_missing_from_the_version_check_is_named(
         tuple(p for p in release.versions.PLATFORMS if p != "win32-x64"),
     )
     assert release.platform_problems() == [
-        "tools/src/repo_checks/versions.py lists ['darwin-arm64', 'darwin-x64', 'linux-arm64', "
-        "'linux-x64', 'win32-arm64']; npm/platforms holds ['darwin-arm64', 'darwin-x64', "
-        "'linux-arm64', 'linux-x64', 'win32-arm64', 'win32-x64']"
+        "tools/src/repo_checks/versions.py lists ['darwin-arm64', 'linux-arm64', 'linux-x64', "
+        "'win32-arm64']; npm/platforms holds ['darwin-arm64', 'linux-arm64', 'linux-x64', "
+        "'win32-arm64', 'win32-x64']"
     ]
 
 
@@ -314,11 +313,14 @@ def test_the_carrier_build_sets_up_pinned_node() -> None:
                 "        with:\n"
                 "          node-version-file: .node-version\n",
                 "",
+                1,
             ),
             "release.yml job native packs an npm carrier without first running actions/setup-node",
         ),
         (
-            lambda text: text.replace("node-version-file: .node-version", "node-version: latest"),
+            lambda text: text.replace(
+                "node-version-file: .node-version", "node-version: latest", 1
+            ),
             "release.yml job native packs an npm carrier without first running actions/setup-node",
         ),
     ],

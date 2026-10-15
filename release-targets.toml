@@ -30,7 +30,6 @@ manifest = "npm/cli/package.json"
 covers = [
     "npm:@onebudgetspec/cli-linux-x64",
     "npm:@onebudgetspec/cli-linux-arm64",
-    "npm:@onebudgetspec/cli-darwin-x64",
     "npm:@onebudgetspec/cli-darwin-arm64",
     "npm:@onebudgetspec/cli-win32-x64",
     "npm:@onebudgetspec/cli-win32-arm64",

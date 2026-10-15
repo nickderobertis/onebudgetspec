@@ -27,14 +27,14 @@ check: format-check lint typecheck test
 # The broader tier: the same gate over every project. CI runs it on the release pull request.
 check-all:
     @./scripts/nx run-many -t format-check lint typecheck --all
-    @./scripts/nx run-many -t test coverage --all
+    @./scripts/nx run-many -t test coverage budgets --all
 
 # Tests for the affected projects, and the coverage floors over them, in one run: every
 # instrumented test runs once, after the coverage data is cleared, and each floor (95% lines
 # for Rust and for Python, over the union of those runs) reports after its tests. Each
 # TypeScript project's test holds its own 95%.
 test:
-    @./scripts/nx affected -t test coverage
+    @./scripts/nx affected -t test coverage budgets
 
 # The end-to-end tier on its own: the journeys and the packaging journeys, whatever changed.
 test-e2e:

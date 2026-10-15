@@ -12,7 +12,6 @@
     "npm-cli",
     "npm-cli-linux-x64",
     "npm-cli-linux-arm64",
-    "npm-cli-darwin-x64",
     "npm-cli-darwin-arm64",
     "npm-cli-win32-x64",
     "npm-cli-win32-arm64",
@@ -54,6 +53,11 @@
         "default",
         "^default",
         "{workspaceRoot}/scripts/build-dist.sh",
+        "{workspaceRoot}/scripts/release/native/native-products.sh",
+        "{workspaceRoot}/scripts/release/native/validate-products.py",
+        "{workspaceRoot}/scripts/release/native/verify-fresh.py",
+        "{workspaceRoot}/scripts/release/native/verify-installed.sh",
+        "{workspaceRoot}/scripts/release/native/verify-interpreter.py",
         "{workspaceRoot}/pyproject.toml"
       ]
     }

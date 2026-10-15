@@ -19,7 +19,6 @@
     "conformance",
     "npm-cli-linux-x64",
     "npm-cli-linux-arm64",
-    "npm-cli-darwin-x64",
     "npm-cli-darwin-arm64",
     "onebudgetspec-conformance",
     "scripts-integration",

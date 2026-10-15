@@ -18,7 +18,6 @@
   "optionalDependencies": {
     "@onebudgetspec/cli-linux-x64": "workspace:*",
     "@onebudgetspec/cli-linux-arm64": "workspace:*",
-    "@onebudgetspec/cli-darwin-x64": "workspace:*",
     "@onebudgetspec/cli-darwin-arm64": "workspace:*",
     "@onebudgetspec/cli-win32-x64": "workspace:*",
     "@onebudgetspec/cli-win32-arm64": "workspace:*"

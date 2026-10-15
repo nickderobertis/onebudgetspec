@@ -51,7 +51,7 @@ host_target() {
   case "$(uname -s)-$(uname -m)" in
     Linux-x86_64) echo x86_64-unknown-linux-gnu ;;
     Linux-aarch64 | Linux-arm64) echo aarch64-unknown-linux-gnu ;;
-    Darwin-x86_64) echo x86_64-apple-darwin ;;
+    Darwin-x86_64) usage "Intel macOS is no longer supported; build an Apple Silicon (aarch64-apple-darwin) host's products instead" ;;
     Darwin-arm64) echo aarch64-apple-darwin ;;
     MINGW*-x86_64 | MSYS*-x86_64 | CYGWIN*-x86_64) echo x86_64-pc-windows-msvc ;;
     MINGW*-aarch64 | MSYS*-aarch64 | CYGWIN*-aarch64 | MINGW*-arm64 | MSYS*-arm64 | CYGWIN*-arm64) echo aarch64-pc-windows-msvc ;;
@@ -63,7 +63,7 @@ npm_platform() {
   case "$1" in
     x86_64-unknown-linux-gnu) echo linux-x64 ;;
     aarch64-unknown-linux-gnu) echo linux-arm64 ;;
-    x86_64-apple-darwin) echo darwin-x64 ;;
+    x86_64-apple-darwin) usage "Intel macOS (x86_64-apple-darwin) is no longer supported; the release ships aarch64-apple-darwin" ;;
     aarch64-apple-darwin) echo darwin-arm64 ;;
     x86_64-pc-windows-msvc) echo win32-x64 ;;
     aarch64-pc-windows-msvc) echo win32-arm64 ;;
@@ -101,12 +101,16 @@ case "$ARTIFACT" in
     [ -n "$TARGET" ] || TARGET="$(host_target)"
     platform="$(npm_platform "$TARGET")"
     binary="$(binary_name "$TARGET")"
-    quietly cargo build --release --locked --quiet -p onebudgetspec --target "$TARGET" \
-      --manifest-path "$ROOT/Cargo.toml"
+    if [ -z "${ONEBUDGETSPEC_BINARY:-}" ]; then
+      quietly cargo build --release --locked --quiet -p onebudgetspec --target "$TARGET" \
+        --manifest-path "$ROOT/Cargo.toml"
+    elif [ ! -x "$ONEBUDGETSPEC_BINARY" ] || ! cmp -s "$ONEBUDGETSPEC_BINARY" "$ROOT/target/$TARGET/release/$binary"; then
+      usage "ONEBUDGETSPEC_BINARY '$ONEBUDGETSPEC_BINARY' must match the compiled CLI for $TARGET at $ROOT/target/$TARGET/release/$binary; supply that binary or unset ONEBUDGETSPEC_BINARY"
+    fi
     stage="$(mktemp -d)"
     mkdir -p "$stage/bin"
     cp "$ROOT/npm/platforms/$platform/package.json" "$stage/package.json"
-    cp "$ROOT/target/$TARGET/release/$binary" "$stage/bin/$binary"
+    cp "${ONEBUDGETSPEC_BINARY:-$ROOT/target/$TARGET/release/$binary}" "$stage/bin/$binary"
     quietly npm pack "$stage" --silent --pack-destination "$OUT"
     rm -rf "$stage"
     written_since_start "$OUT" '*.tgz'
