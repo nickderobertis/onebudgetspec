@@ -1,0 +1,63 @@
+{
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "name": "pool-maintenance",
+  "projectType": "library",
+  "tags": ["lang:python", "type:tooling"],
+  "namedInputs": {
+    "default": [
+      "{projectRoot}/**/*",
+      "{workspaceRoot}/justfile",
+      "{workspaceRoot}/.cargo/config.toml",
+      "{workspaceRoot}/rust-toolchain.toml"
+    ]
+  },
+  "//": "The pool-maintenance budget: one steady-state `just pool-maintenance` pass. Its check builds the workspace twice, so only `just budgets` runs it, on the release pull request; `check` and the affected run reach only the format, lint and type checks of its scripts and the test that drives measure.sh over a one-crate workspace in seconds.",
+  "targets": {
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet .",
+        "cwd": "pool-maintenance"
+      }
+    },
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ruff format --quiet --check .",
+        "cwd": "pool-maintenance"
+      }
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "uv run --frozen --no-sync shellcheck measure.sh",
+          "uv run --frozen --no-sync ruff check --quiet ."
+        ],
+        "cwd": "pool-maintenance",
+        "parallel": false
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run --frozen --no-sync ty check --quiet --error-on-warning --python-version 3.12 .",
+        "cwd": "pool-maintenance"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["onebudgetspec:build"],
+      "options": {
+        "command": "uv run --frozen --no-sync pytest -q -p no:cacheprovider tests",
+        "cwd": "pool-maintenance"
+      }
+    },
+    "budgets-host": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "cargo run --quiet --locked -p onebudgetspec -- check pool-maintenance/budgets.yaml --label host"
+      }
+    }
+  }
+}

@@ -22,7 +22,8 @@
     "npm-cli-darwin-arm64",
     "onebudgetspec-conformance",
     "scripts-integration",
-    "release-scripts"
+    "release-scripts",
+    "pool-maintenance"
   ],
   "targets": {
     "format": {

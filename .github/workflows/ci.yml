@@ -111,6 +111,12 @@ jobs:
         if: ${{ needs.policy.outputs.isReleaseOnly == 'true' && matrix.os == 'ubuntu-latest' }}
         run: just check-all
 
+      # Every project's budgets, after that gate. Too slow for every change: the
+      # pool-maintenance budget builds the workspace twice.
+      - name: Check every budget before a release
+        if: ${{ needs.policy.outputs.isReleaseOnly == 'true' && matrix.os == 'ubuntu-latest' }}
+        run: just budgets
+
   mac-proof:
     name: Mac gate proof
     needs: [policy]

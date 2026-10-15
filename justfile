@@ -68,6 +68,20 @@ upgrade:
     @./scripts/nx run workspace:upgrade
     @just check-all
 
+# Prune this clone's superseded cargo builds: per profile directory, each unit's builds
+# modified more than 2 days ago that a newer build of it supersedes. onevcs runs it in this
+# repository's idle pool slots (onevcs.toml); `just bootstrap` installs the pinned pruner.
+# Its target dirs are every one a `.cargo/config.toml` here sets: `target`.
+pool-maintenance:
+    @cargo-prune-superseded --keep-within 2d target
+
+# Every project's budgets, then the root `budgets.yaml` where there is one, checked by this
+# workspace's own build of the CLI. No per-change path runs it: the pool-maintenance budget
+# builds the workspace twice, so CI runs this on the release pull request after its gate.
+budgets:
+    @./scripts/nx run-many -t budgets budgets-host
+    @[ ! -f budgets.yaml ] || cargo run --quiet --locked -p onebudgetspec -- check budgets.yaml
+
 # Print the JSON Schema bundle the contract is emitted as.
 # llmlint: ignore[tool_output_is_signal] stdout is the schema bundle itself, consumed by generators.
 schema:
