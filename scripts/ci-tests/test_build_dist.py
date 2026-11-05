@@ -143,3 +143,51 @@ def test_concurrent_wheels_keep_their_payloads(tmp_path: Path) -> None:
         )
         assert invoked.returncode == 0, invoked.stderr
         assert invoked.stdout.strip() == f"onebudgetspec {workspace_version()}"
+
+
+def test_native_builds_reenter_the_invoking_shell(tmp_path: Path) -> None:
+    """A different bash on PATH must never receive the locked build."""
+    shell = bash()
+    impostors = tmp_path / "other-shell"
+    impostors.mkdir()
+    marker = tmp_path / "wrong-shell"
+    # Compile a native forwarding shell so Python can launch it on Windows too.
+    source = tmp_path / "forward.rs"
+    source.write_text(
+        r"""use std::{env, fs, process::{Command, exit}};
+fn main() {
+    let args: Vec<_> = env::args_os().skip(1).collect();
+    if args.iter().any(|arg| arg.to_string_lossy().ends_with("build-dist.sh")) {
+        fs::write(env::var_os("WRONG_SHELL_MARKER").unwrap(), b"wrong shell").unwrap();
+        eprintln!("PATH bash received build-dist.sh instead of the invoking shell");
+        exit(97);
+    }
+    let status = Command::new(env::var_os("INVOKING_SHELL").unwrap())
+        .args(args).status().unwrap();
+    exit(status.code().unwrap_or(1));
+}
+"""
+    )
+    subprocess.run(
+        ["rustc", str(source), "-o", str(impostors / ("bash.exe" if os.name == "nt" else "bash"))],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    for artifact in ("cli-wheel", "npm-carrier"):
+        built = subprocess.run(
+            [shell, BUILD_DIST, artifact, str(tmp_path / artifact)],
+            env={
+                **os.environ,
+                "PATH": str(impostors) + os.pathsep + os.environ["PATH"],
+                "INVOKING_SHELL": shell,
+                "WRONG_SHELL_MARKER": str(marker),
+            },
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        assert built.returncode == 0, built.stderr
+        assert Path(built.stdout.strip()).is_file()
+    assert not marker.exists(), "the lock resolved bash through PATH"

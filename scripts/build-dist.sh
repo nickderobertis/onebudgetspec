@@ -33,7 +33,7 @@ readonly ARTIFACT="$1"
 case "$ARTIFACT" in
   cli-wheel | npm-carrier)
     if [ "${ONEBUDGETSPEC_NATIVE_BUILD_LOCK:-}" != 1 ]; then
-      exec uv run --frozen --no-sync python "$ROOT/scripts/native-build-lock.py" bash "$0" "$@"
+      exec uv run --frozen --no-sync python "$ROOT/scripts/native-build-lock.py" "$BASH" "$0" "$@"
     fi
     ;;
 esac
