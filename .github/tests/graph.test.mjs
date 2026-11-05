@@ -9,6 +9,7 @@ import { event, history, runClassifier } from "./fixtures.mjs";
 
 test("actual workflow graph records event/diff/ownership/publish workloads and required names", () => {
   const h = history();
+  const unrelated = resolve(root, `telemetry-unrelated-${process.pid}.txt`);
   const documents = workflows();
   /** @type {import("../contracts.js").Scenario[]} */
   const scenarios = [];
@@ -163,6 +164,8 @@ test("actual workflow graph records event/diff/ownership/publish workloads and r
       resolve(root, ".github/.telemetry/macos-policy.json"),
       JSON.stringify(telemetry, null, 2),
     );
+    // Another Nx task may write an unignored output after telemetry is recorded.
+    writeFileSync(unrelated, "concurrent task output\n");
     for (const [metric, key] of [
       ["jobs-per-run", "jobsPerRun"],
       ["runs-per-change", "runsPerChange"],
@@ -182,6 +185,26 @@ test("actual workflow graph records event/diff/ownership/publish workloads and r
       const result = JSON.parse(readFileSync(resultFile, "utf8"));
       assert.equal(result.value, telemetry[key === "jobsPerRun" ? "jobsPerRun" : "runsPerChange"]);
       assert.match(result.detail, /release.yml/);
+    }
+    const dependency = resolve(root, ".github/scenarios.mjs");
+    const original = readFileSync(dependency);
+    try {
+      writeFileSync(dependency, `${original}\n// changed workload\n`);
+      const changed = spawnSync(
+        "node",
+        [
+          resolve(root, ".github/macos-budget.mjs"),
+          "--metric",
+          "jobs-per-run",
+          "--telemetry",
+          resolve(root, ".github/.telemetry/macos-policy.json"),
+        ],
+        { encoding: "utf8" },
+      );
+      assert.notEqual(changed.status, 0);
+      assert.match(changed.stderr, /stale Mac telemetry/);
+    } finally {
+      writeFileSync(dependency, original);
     }
     const stale = resolve(h.dir, ".git/stale.json");
     writeFileSync(stale, JSON.stringify({ ...telemetry, sourceDigest: "old" }));
@@ -281,6 +304,7 @@ test("actual workflow graph records event/diff/ownership/publish workloads and r
       `recorded jobs/run=${telemetry.jobsPerRun}; runs/change=${telemetry.runsPerChange} (no test cost thresholds)`,
     );
   } finally {
+    rmSync(unrelated, { force: true });
     rmSync(h.dir, { recursive: true, force: true });
   }
 });
