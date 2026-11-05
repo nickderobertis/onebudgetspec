@@ -106,6 +106,7 @@ fn subprocess_delivery_preserves_real_failures_and_updates_one_standing_history(
     assert_eq!(request["head_sha"], input.current.head_sha);
     assert_eq!(request["attempt"], input.current.attempt);
     assert_eq!(request["flags"][0]["constant_baseline_change"], true);
+    assert_numeric_delivery(&fixture, input.clone(), reporter);
     let mut improved = input;
     improved.current.attempt = 2;
     improved.current.results.results[0].actual = Some(1.0);
@@ -119,6 +120,43 @@ fn subprocess_delivery_preserves_real_failures_and_updates_one_standing_history(
     let body = std::fs::read_to_string(fixture.path().join("standing.md")).unwrap();
     assert!(body.contains("current (attempt 2): 0 adverse flag(s)"));
     assert!(!body.contains("current (attempt 1)"));
+}
+
+fn assert_numeric_delivery(fixture: &Fixture, mut input: ComparisonInput, reporter: &str) {
+    for (index, run) in input.baseline.iter_mut().enumerate() {
+        let result = &mut run.results.results[0];
+        let actual = 10.0 + f64::from(u32::try_from(index % 5).unwrap());
+        let (verdict, headroom, percent) =
+            onebudgetspec_core::judge(result.direction, result.threshold, actual);
+        result.actual = Some(actual);
+        result.verdict = verdict;
+        result.headroom = Some(headroom);
+        result.headroom_percent = percent;
+    }
+    fixture.write("numeric.json", &serde_json::to_string(&input).unwrap());
+    let run = fixture.run([
+        "report",
+        "--input",
+        "numeric.json",
+        "--json",
+        "--reporter",
+        reporter,
+    ]);
+    let report: Value = serde_json::from_str(&run.expect_status(1).stdout).unwrap();
+    let request: Value = serde_json::from_str(
+        &std::fs::read_to_string(fixture.path().join("publish-request.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(request["flags"][0]["constant_baseline_change"], false);
+    assert_eq!(
+        request["flags"][0]["sigma_change"],
+        report["rows"][0]["sigma_change"]
+    );
+    assert!(
+        request["flags"][0]["sigma_change"]
+            .as_f64()
+            .is_some_and(|sigma| sigma >= 1.0)
+    );
 }
 
 #[test]

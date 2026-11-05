@@ -141,6 +141,17 @@ fn unavailable_and_rejected_samples_keep_their_precise_reasons() {
         assert_eq!(row.baseline_n, 4, "{scope}");
         assert!(row.unavailable.as_ref().unwrap().contains("scope mismatch"));
     }
+    let mut changed_threshold = saved(5);
+    for run in &mut changed_threshold.baseline {
+        run.catalog[0].threshold = 5.0;
+        run.results.results[0].threshold = 5.0;
+        set_actual(run, 10.0);
+        assert_eq!(run.results.results[0].verdict, Verdict::Over);
+    }
+    let row = &compare_json(&encode(&changed_threshold)).unwrap().rows[0];
+    assert_eq!(row.baseline_n, 5);
+    assert_eq!(row.mean, Some(10.0));
+    assert!((row.threshold - 12.0).abs() < f64::EPSILON);
 }
 
 #[test]
@@ -164,6 +175,12 @@ fn malformed_current_artifacts_are_refused_and_bad_baselines_are_diagnostic() {
         ("/current/catalog/0/threshold", json!(-1)),
         ("/current/catalog/0/timeout_seconds", json!(0)),
         ("/current/catalog/0/command", json!([])),
+        ("/current/catalog/0/command/0", json!("")),
+        ("/current/results/results/0/id", json!("unlisted")),
+        (
+            "/current/results/results/0/ended_at",
+            json!("2020-01-01T00:00:00Z"),
+        ),
         ("/current/catalog/0/labels", json!(["BAD"])),
         ("/current/results/results/0/unit", json!("bytes")),
         ("/current/results/results/0/threshold", json!(1)),
@@ -190,6 +207,11 @@ fn malformed_current_artifacts_are_refused_and_bad_baselines_are_diagnostic() {
         array.push(array[0].clone());
         assert!(compare_json(&serde_json::to_vec(&input).unwrap()).is_err());
     }
+    let mut mismatched = saved(5);
+    mismatched.current.results.results[0].direction = Direction::Min;
+    set_actual(&mut mismatched.current, 15.0);
+    let mismatch = compare_json(&encode(&mismatched)).unwrap_err();
+    assert!(mismatch.contains("mismatched result"));
     let mut invalid = valid;
     invalid["baseline"][0]["results"]["results"][0]["verdict"] = json!("over");
     let report = compare_json(&serde_json::to_vec(&invalid).unwrap()).unwrap();
