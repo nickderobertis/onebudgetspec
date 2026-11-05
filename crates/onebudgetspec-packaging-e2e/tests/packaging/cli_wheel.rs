@@ -29,20 +29,12 @@ fn staged_native_products_reuse_one_binary_and_run_every_local_install() {
     use crate::common::{bash, build_alone, root, run, succeed};
     let dir = tempfile::tempdir().unwrap();
     let launcher = artifact("npm-launcher");
-    // Its wheel build and source touch share `target/` with every other wheel build here.
+    // Its wheel build shares `target/` with every other wheel build here.
     let _alone = build_alone();
     let target = succeed("rustc", &["-vV"], &root());
     let target = target
         .lines()
         .find_map(|line| line.strip_prefix("host: "))
-        .unwrap();
-    // A release runner compiles from a clean tree, so the CLI's source is newer than any
-    // earlier build here: Cargo install must reuse the wheel's fresh build, not an older one.
-    std::fs::File::options()
-        .write(true)
-        .open(root().join("crates/onebudgetspec/src/main.rs"))
-        .unwrap()
-        .set_modified(std::time::SystemTime::now())
         .unwrap();
     succeed(
         bash(),

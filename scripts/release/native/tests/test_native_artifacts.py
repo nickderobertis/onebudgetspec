@@ -38,9 +38,6 @@ def products(tmp_path_factory: pytest.TempPathFactory) -> NativeProducts:
         cwd=ROOT,
         text=True,
     ).strip()
-    # A release runner compiles from a clean tree, so the CLI's source is newer than any
-    # earlier build here: Cargo install must reuse the wheel's fresh build, not an older one.
-    os.utime(ROOT / "crates/onebudgetspec/src/main.rs")
     subprocess.run(
         [
             bash(),
@@ -255,35 +252,29 @@ def test_staged_and_cargo_payload_corruption_is_refused(
 
 def test_real_recompilation_is_refused(products: NativeProducts, tmp_path: Path) -> None:
     """Force Cargo to rebuild the CLI and feed its actual messages to the release guard."""
-    source = ROOT / "crates/onebudgetspec/src/main.rs"
-    stamp = source.stat()
-    try:
-        # Touch only this checkout's file timestamp, restoring it below; contents never change.
-        source.touch()
-        completed = subprocess.run(
-            [
-                "cargo",
-                "install",
-                "--quiet",
-                "--message-format",
-                "json",
-                "--path",
-                "crates/onebudgetspec",
-                "--target",
-                products.target,
-                "--root",
-                str(tmp_path / "cargo"),
-                "--locked",
-                "--offline",
-            ],
-            cwd=ROOT,
-            text=True,
-            capture_output=True,
-            check=True,
-            env={**os.environ, "CARGO_TARGET_DIR": str(ROOT / "target")},
-        )
-    finally:
-        os.utime(source, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+    # An empty private target forces real compilation without invalidating other builders.
+    completed = subprocess.run(
+        [
+            "cargo",
+            "install",
+            "--quiet",
+            "--message-format",
+            "json",
+            "--path",
+            "crates/onebudgetspec",
+            "--target",
+            products.target,
+            "--root",
+            str(tmp_path / "cargo"),
+            "--locked",
+            "--offline",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+        env={**os.environ, "CARGO_TARGET_DIR": str(tmp_path / "target")},
+    )
     records = [json.loads(line) for line in completed.stdout.splitlines() if line.startswith("{")]
     assert any(
         record.get("reason") == "compiler-artifact" and record.get("fresh") is False
