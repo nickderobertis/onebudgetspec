@@ -337,11 +337,25 @@ fn a_refusal_reads_as_its_problems_and_a_next_step() {
 }
 
 #[test]
-fn the_schema_bundle_has_the_three_roots() {
+fn the_schema_bundle_preserves_old_roots_and_adds_saved_report_roots() {
     let bundle = schema_bundle();
     let roots = bundle["roots"].as_object().unwrap();
     let names: Vec<_> = roots.keys().map(String::as_str).collect();
-    assert_eq!(names, ["budgets-file", "check-report", "list-report"]);
+    assert_eq!(
+        names,
+        [
+            "budget-run",
+            "budgets-file",
+            "check-report",
+            "comparison-input",
+            "comparison-report",
+            "delivery-result",
+            "list-report",
+            "publish-request",
+            "report-history",
+            "rolling-history"
+        ]
+    );
 }
 
 #[test]

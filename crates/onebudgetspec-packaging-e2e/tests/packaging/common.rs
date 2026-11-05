@@ -459,3 +459,90 @@ pub fn assert_reports(program: &Path, args: &[&str], dir: &Path) {
         assert_eq!(result["verdict"], verdict, "{result:#}");
     }
 }
+
+/// A saved synthetic 100-budget, 20-base-commit workload for installed consumers.
+pub fn saved_comparison(dir: &Path) -> PathBuf {
+    let mut current: Value = serde_json::from_str(include_str!(
+        "../../../onebudgetspec-core/tests/fixtures/budget-run.json"
+    ))
+    .unwrap();
+    let budget = current["catalog"][0].clone();
+    let result = current["results"]["results"][0].clone();
+    current["catalog"] = (0..100)
+        .map(|i| {
+            let mut b = budget.clone();
+            b["id"] = format!("budget-{i}").into();
+            b
+        })
+        .collect();
+    current["results"]["results"] = (0..100)
+        .map(|i| {
+            let mut r = result.clone();
+            r["id"] = format!("budget-{i}").into();
+            r
+        })
+        .collect();
+    current["enforcement_exclude_labels"] = serde_json::json!([]);
+    let runs: Vec<Value> = (0..20)
+        .map(|i| {
+            let mut run = current.clone();
+            run["head_sha"] = format!("base-{i}").into();
+            for result in run["results"]["results"].as_array_mut().unwrap() {
+                result["actual"] = 10.into();
+            }
+            run
+        })
+        .collect();
+    let history = serde_json::json!({ "schema_version": 1, "repository": current["repository"], "base_ref": current["base_ref"], "runs": runs });
+    fs::write(dir.join("history.json"), history.to_string()).unwrap();
+    let input =
+        serde_json::json!({ "schema_version": 1, "current": current, "baseline": history["runs"] });
+    let path = dir.join("comparison.json");
+    fs::write(&path, input.to_string()).unwrap();
+    path
+}
+
+/// Build an external Rust SDK consumer which also implements the reporter protocol.
+pub fn comparison_consumer() -> &'static Path {
+    static CONSUMER: OnceLock<PathBuf> = OnceLock::new();
+    CONSUMER.get_or_init(|| {
+        let dir = dist().join("rust-comparison-consumer");
+        fs::create_dir_all(dir.join("src")).unwrap();
+        let core = serde_json::to_string(&root().join("crates/onebudgetspec-core")).unwrap();
+        let manifest = format!("[package]\nname = \"saved-comparison-consumer\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[workspace]\n[dependencies]\nonebudgetspec-core = {{ path = {core} }}\nserde_json = \"1\"\n");
+        fs::write(dir.join("Cargo.toml"), manifest).unwrap();
+        fs::write(dir.join("src/main.rs"), RUST_COMPARISON_CONSUMER).unwrap();
+        let _building = build_alone();
+        succeed("cargo", &["build", "--quiet", "--offline", "--manifest-path", dir.join("Cargo.toml").to_str().unwrap(), "--target-dir", root().join("target").to_str().unwrap()], &dir);
+        root().join("target/debug").join(exe("saved-comparison-consumer"))
+    })
+}
+
+const RUST_COMPARISON_CONSUMER: &str = r#"
+use std::io::{Read, Write};
+use onebudgetspec_core::comparison::{RollingHistory, ComparisonInput, compare, validate_history};
+use onebudgetspec_core::delivery::{PublishRequest, DeliveryResult, merge_standing_report};
+fn main() {
+    if let Some(input) = std::env::args().nth(1) {
+        let input: ComparisonInput = serde_json::from_slice(&std::fs::read(input).unwrap()).unwrap();
+        let history = RollingHistory { schema_version: 1, repository: input.current.repository.clone(), base_ref: input.current.base_ref.clone(), runs: input.baseline.clone() };
+        let history: RollingHistory = serde_json::from_str(&serde_json::to_string(&history).unwrap()).unwrap();
+        validate_history(&history).unwrap();
+        println!("{}", serde_json::to_string(&compare(&input)).unwrap());
+        return;
+    }
+    let mut bytes = Vec::new();
+    std::io::stdin().read_to_end(&mut bytes).unwrap();
+    let request: PublishRequest = serde_json::from_slice(&bytes).unwrap();
+    match request.key.as_str() {
+        "exit" => std::process::exit(7),
+        "malformed" => { println!("not JSON"); return; }
+        _ => {}
+    }
+    let previous = std::fs::read_to_string(&request.destination).ok();
+    let markdown = merge_standing_report(previous.as_deref(), &request, 4096);
+    std::fs::write(&request.destination, markdown).unwrap();
+    let result = DeliveryResult { delivered: true, url: Some(request.run_url), diagnostic: None };
+    std::io::stdout().write_all(&serde_json::to_vec(&result).unwrap()).unwrap();
+}
+"#;

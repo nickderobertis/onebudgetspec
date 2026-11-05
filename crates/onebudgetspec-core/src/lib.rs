@@ -19,11 +19,13 @@
 //! ```
 //!
 //! Every selected budget is measured exactly once, in file order, one at a time: there is
-//! no retry, repeat, sampling or baseline. Over budget is a result, not something to
-//! re-measure until it passes.
+//! no retry or repeat. Saved comparisons never execute a measuring command. Over budget
+//! is a result, not something to re-measure until it passes.
 //!
 //! A `reported` budget's command, when written in Rust, writes its result with [`report()`].
 
+pub mod comparison;
+pub mod delivery;
 mod error;
 mod host;
 mod load;
@@ -42,3 +44,6 @@ pub use report::{CheckReport, CheckResult, Host, ListReport, ListedBudget, Verdi
 pub use reporter::report;
 pub use schema::{SCHEMA_BUNDLE_VERSION, schema_bundle};
 pub use select::{Selected, SelectedBudgets, Selection};
+
+pub use comparison::{compare, render_markdown};
+pub use delivery::merge_standing_report;

@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "repository": "owner/repo",
+  "head_sha": "current",
+  "base_ref": "main",
+  "run_id": "run-current",
+  "run_url": "https://example.test/run/current",
+  "attempt": 1,
+  "completed_at": "2026-11-01T00:00:02Z",
+  "catalog": [
+    {
+      "id": "latency",
+      "file": "budgets.yaml",
+      "description": null,
+      "labels": [
+        "report"
+      ],
+      "measure": "reported",
+      "command": [
+        "node",
+        "measure.js"
+      ],
+      "unit": "ms",
+      "direction": "max",
+      "threshold": 12,
+      "timeout_seconds": null
+    }
+  ],
+  "results": {
+    "schema_version": 1,
+    "results": [
+      {
+        "id": "latency",
+        "file": "budgets.yaml",
+        "labels": [
+          "report"
+        ],
+        "unit": "ms",
+        "direction": "max",
+        "threshold": 12,
+        "verdict": "over",
+        "actual": 15,
+        "headroom": -3,
+        "headroom_percent": -25,
+        "detail": null,
+        "error": null,
+        "started_at": "2026-11-01T00:00:00Z",
+        "ended_at": "2026-11-01T00:00:01Z",
+        "host": {
+          "load1": null,
+          "cpus": 1,
+          "mem_available_mib": null,
+          "conditions": {}
+        }
+      }
+    ]
+  },
+  "unavailable": [],
+  "enforcement_exclude_labels": [
+    "report"
+  ]
+}

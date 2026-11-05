@@ -61,21 +61,22 @@ regenerates them, and each generator's `--check` runs under its project's `lint`
 0, 1 and 3 return the report; 2 raises or rejects `OnebudgetspecError` with the CLI's message.
 
 - **Rust** — `onebudgetspec-core` (`cargo add onebudgetspec-core`): `load`, `select`,
-  `check`, `list_report`, `schema_bundle`, `report`, in process. Owes
+  `check`, `list_report`, `schema_bundle`, `report`, `compare`, `render_markdown` and
+  `merge_standing_report`, in process. Owes
   `crates/onebudgetspec-core/tests/` and, through the binary, every journey and conformance
   case; `report` the `rust_report.rs` journey.
 - **Python** — `onebudgetspec-sdk` (`pip install onebudgetspec-sdk`, requiring
   `onebudgetspec-cli==` the workspace version): `check`, `validate`, `list_budgets`,
-  `schema`, and `report`, which runs no binary. Binary: `binary=`, `ONEBUDGETSPEC_BIN`, the cli wheel's (`bin/onebudgetspec`,
+  `schema`, `compare`, `render_markdown`, and `report`, which runs no binary. Binary: `binary=`, `ONEBUDGETSPEC_BIN`, the cli wheel's (`bin/onebudgetspec`,
   or `Scripts/onebudgetspec.exe` on Windows), `PATH`. Owes
   `sdks/python/tests/test_conformance.py` (every case), `test_binary.py` (resolution,
-  refusals), `test_generate.py` (the generator), `test_report.py` (`report`) and the
+  refusals), `test_generate.py` (the generator), `test_report.py` (`report`), `test_comparison.py` (saved reports) and the
   `sdk_python.rs` journey.
 - **TypeScript** — `@onebudgetspec/sdk` (`npm install @onebudgetspec/sdk`, with
   `@onebudgetspec/cli` optional, `workspace:*` packed as the workspace version): `check`,
-  `validate`, `listBudgets`, `schema`, and `report`, which runs no binary. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
+  `validate`, `listBudgets`, `schema`, `compare`, `renderMarkdown`, and `report`, which runs no binary. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
   `@onebudgetspec/cli` launcher. Owes `sdks/typescript/tests/conformance.test.ts`,
-  `binary.test.ts`, `errors.test.ts`, `generator.test.ts`, `report.test.ts` and the
+  `binary.test.ts`, `errors.test.ts`, `generator.test.ts`, `report.test.ts`, `comparison.test.ts` and the
   `sdk_typescript.rs` journey.
 
 A new conformance case must use only flags both SDK runners parse; each fails on any other.
@@ -95,6 +96,7 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 - `crates/onebudgetspec-e2e/tests/journeys/budget_id.rs` — `ONEBUDGETSPEC_BUDGET_ID` reaches every budget's command and no condition's; one generic runner serves two budgets.
 - `crates/onebudgetspec-e2e/tests/journeys/command_environment.rs` — working directory, a relative program found from the file's directory, inherited environment, empty result file, no shell.
 - `crates/onebudgetspec-e2e/tests/journeys/command_stderr.rs` — a failed or unreadable measurement's `error` keeps its exit status and bounded stderr tail, in JSON and text; a failing condition's diagnostic line too; success unchanged.
+- `crates/onebudgetspec-e2e/tests/journeys/saved_report.rs` — saved comparisons reproduce offline with all catalog rows, ordinary exits and real external reporter diagnostics; standing history deduplicates and bounds reports.
 - `crates/onebudgetspec-e2e/tests/journeys/rust_report.rs` — a Rust measurement's `report` under a check gives `actual` and `detail`; outside one it writes nothing; a non-finite value or a failed write is an error.
 - `crates/onebudgetspec-e2e/tests/journeys/output_streams.rs` — command output on stderr only; an unwritable report exits 3.
 - `crates/onebudgetspec-e2e/tests/journeys/host.rs` — host values each platform supplies (load on Linux and macOS, available memory on Linux and Windows), `unknown` conditions, the file path and ordered times.

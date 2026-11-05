@@ -9,6 +9,7 @@
   "//": "The packaging journeys: every distribution built by scripts/build-dist.sh, installed with no registry, and driven. The most expensive suite, so it sits behind its own edge to the packages it installs. It has no coverage target: it builds release artifacts, which carry no instrumentation; the code it drives is measured by the other suites.",
   "implicitDependencies": [
     "onebudgetspec",
+    "onebudgetspec-core",
     "npm-cli",
     "npm-cli-linux-x64",
     "npm-cli-linux-arm64",

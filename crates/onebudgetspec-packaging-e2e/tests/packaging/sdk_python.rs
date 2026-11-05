@@ -9,8 +9,8 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::common::{
-    SDK_CASE, VERSION, artifact, assert_reports, assert_sdk_answers, conformance_case, exe,
-    node_dir, succeed, venv_bin, write_reporting_budgets,
+    SDK_CASE, VERSION, artifact, assert_reports, assert_sdk_answers, comparison_consumer,
+    conformance_case, exe, node_dir, saved_comparison, succeed, venv_bin, write_reporting_budgets,
 };
 
 /// Each call over the case named by argv[1], with the selection its case.json gives.
@@ -20,6 +20,33 @@ from pathlib import Path
 import onebudgetspec_sdk as sdk
 
 case = Path(sys.argv[1])
+input_path, reporter = Path(sys.argv[2]), sys.argv[3]
+history = sdk.RollingHistory.model_validate_json((input_path.parent / "history.json").read_text())
+assert sdk.RollingHistory.model_validate_json(history.model_dump_json()) == history
+saved = sdk.ComparisonInput.model_validate_json(input_path.read_text())
+saved.baseline = history.runs
+input_path.write_text(saved.model_dump_json())
+comparison = sdk.compare(input_path)
+assert "budget-99" in sdk.render_markdown(input_path)
+assert isinstance(comparison.current.results, sdk.CheckReport)
+assert isinstance(comparison.current.catalog[0], sdk.ListedBudget)
+assert len(comparison.rows) == 100
+assert all(row.baseline_n == 20 and row.flag and row.verdict == "over" for row in comparison.rows)
+import subprocess
+rust = json.loads(subprocess.check_output([reporter, str(input_path)]))
+assert comparison == sdk.ComparisonReport.model_validate(rust)
+for key in ("ok", "malformed", "exit"):
+    delivered = sdk.compare(input_path, reporter=reporter, destination=str(input_path.parent / "python-standing.md"), key=key)
+    assert len(delivered.rows) == 100
+    if key != "ok":
+        assert any("reporter" in d for d in delivered.diagnostics)
+for field in ("repository", "base_ref"):
+    broken = json.loads(input_path.read_text())
+    broken["baseline"][0][field] = "wrong"
+    input_path.write_text(json.dumps(broken))
+    assert sdk.compare(input_path).rows[0].baseline_n == 19
+    input_path.write_text(saved.model_dump_json())
+
 args = json.loads((case / "case.json").read_text())["args"]
 flags = {"--id": [], "--label": [], "--exclude-label": []}
 words = iter(args[1:])
@@ -136,8 +163,16 @@ fn the_installed_sdk_answers_a_conformance_case_through_the_wheel_s_binary() {
     };
     let path = std::env::join_paths([bin.clone(), node_dir()].iter().chain(&system))
         .expect("the directories join into a PATH");
+    let input = saved_comparison(dir.path());
+    let reporter = comparison_consumer();
     let output = Command::new(&python)
-        .args(["-c", DRIVE, case_dir.to_str().unwrap()])
+        .args([
+            "-c",
+            DRIVE,
+            case_dir.to_str().unwrap(),
+            input.to_str().unwrap(),
+            reporter.to_str().unwrap(),
+        ])
         .env_remove("ONEBUDGETSPEC_BIN")
         .env("PATH", path)
         .current_dir(dir.path())

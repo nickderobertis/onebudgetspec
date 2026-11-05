@@ -20,12 +20,19 @@ import { join, resolve } from "node:path";
 import { compile } from "json-schema-to-typescript";
 
 /** The bundle roots the SDK's calls return, and the module each is generated into. */
-type Root = "check-report" | "list-report";
-const ROOTS: Record<Root, string> = {
+const ROOTS = {
   "check-report": "check-report.ts",
   "list-report": "list-report.ts",
-};
-const ROOT_NAMES: readonly Root[] = ["check-report", "list-report"];
+  "budget-run": "budget-run.ts",
+  "comparison-input": "comparison-input.ts",
+  "comparison-report": "comparison-report.ts",
+  "rolling-history": "rolling-history.ts",
+  "publish-request": "publish-request.ts",
+  "delivery-result": "delivery-result.ts",
+  "report-history": "report-history.ts",
+} as const;
+type Root = keyof typeof ROOTS;
+const ROOT_NAMES = Object.keys(ROOTS) as Root[];
 const PACKAGE = resolve(import.meta.dir, "..");
 const WORKSPACE = resolve(PACKAGE, "../..");
 const GENERATED = join(PACKAGE, "src", "generated");
@@ -95,10 +102,9 @@ function parseBundle(text: string): SchemaBundle {
   const { roots } = document;
   return {
     version: document.version,
-    roots: {
-      "check-report": rootOf(roots, "check-report"),
-      "list-report": rootOf(roots, "list-report"),
-    },
+    roots: Object.fromEntries(
+      ROOT_NAMES.map((root) => [root, rootOf(roots, root)]),
+    ) as SchemaBundle["roots"],
     rootNames: Object.keys(roots),
   };
 }
