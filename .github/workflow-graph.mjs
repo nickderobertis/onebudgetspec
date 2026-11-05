@@ -1,6 +1,5 @@
 // Resolve this repository's scheduling graph with GitHub's published expression engine.
 
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve, sep } from "node:path";
@@ -254,14 +253,30 @@ export function workflowPath(workflow) {
   return relative(root, workflow.file).split(sep).join("/");
 }
 export function digest() {
-  const files = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
-    cwd: root,
-    encoding: "utf8",
-  })
-    .trim()
-    .split("\n")
-    .filter(Boolean)
-    .sort();
+  // Only the graph, classifier, workload fixtures and their runtime inputs produce
+  // telemetry. Build outputs elsewhere in the repository may change concurrently.
+  const files = [
+    ...readdirSync(resolve(root, ".github/workflows"))
+      .filter((file) => /\.ya?ml$/.test(file))
+      .map((file) => `.github/workflows/${file}`),
+    ...[
+      "workflow-graph.mjs",
+      "workflow-input.mjs",
+      "guard-outputs.mjs",
+      "macos-policy.mjs",
+      "version-format.mjs",
+      "semantic-version.py",
+      "version_contract.py",
+      "scenarios.mjs",
+      "tests/graph.test.mjs",
+      "tests/fixtures.mjs",
+      "package.json",
+    ].map((file) => `.github/${file}`),
+    "scripts/ci-guard.sh",
+    "tools/src/repo_checks/versions.py",
+    "package.json",
+    "bun.lock",
+  ].sort();
   const hash = createHash("sha256");
   for (const file of files) hash.update(file).update(readFileSync(resolve(root, file)));
   return hash.digest("hex");
