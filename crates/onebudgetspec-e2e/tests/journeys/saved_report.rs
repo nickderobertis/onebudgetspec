@@ -61,7 +61,7 @@ fn subprocess_delivery_preserves_real_failures_and_updates_one_standing_history(
     let input = saved();
     fixture.write("input.json", &serde_json::to_string(&input).unwrap());
     let reporter = env!("CARGO_BIN_EXE_onebudgetspec-e2e-publish");
-    for key in ["ok", "malformed", "exit", "denied"] {
+    for key in ["ok", "warning", "malformed", "exit", "denied"] {
         let run = run_in(
             fixture.path(),
             [
@@ -86,8 +86,16 @@ fn subprocess_delivery_preserves_real_failures_and_updates_one_standing_history(
                 d.as_str().unwrap().contains(match key {
                     "exit" => "exited",
                     "denied" => "credential",
+                    "warning" => "delivery accepted",
                     _ => "malformed",
                 })
+            }));
+        }
+        if key == "exit" {
+            assert!(report["diagnostics"].as_array().unwrap().iter().any(|d| {
+                d.as_str()
+                    .unwrap()
+                    .contains("posting server refused request")
             }));
         }
     }

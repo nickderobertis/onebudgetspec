@@ -32,6 +32,7 @@ test("saved rolling history roundtrips through comparison and Markdown rendering
   const saved: ComparisonInput = {
     schema_version: 1,
     current,
+    // This JSON is produced only from the typed local history above, with no external input.
     baseline: (JSON.parse(JSON.stringify(history)) as RollingHistory).runs,
   };
   const input = join(dir, "input.json");
@@ -54,8 +55,11 @@ test("saved rolling history roundtrips through comparison and Markdown rendering
 });
 
 test("saved input and reporter arguments reject non-string JavaScript values", async () => {
+  // JavaScript can omit the required input; bypass TypeScript to prove runtime rejection.
   await expect(compare({ input: undefined as never })).rejects.toThrow("input must be");
+  // JavaScript can supply a numeric path; bypass TypeScript to test that boundary.
   await expect(renderMarkdown({ input: 3 as never })).rejects.toThrow("input must be");
+  // JavaScript can supply a numeric executable; bypass TypeScript to test that boundary.
   await expect(compare({ input: "input.json", reporter: 3 as never })).rejects.toThrow(
     "reporter must be",
   );

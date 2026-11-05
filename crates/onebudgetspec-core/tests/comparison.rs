@@ -174,12 +174,15 @@ fn one_hundred_catalog_rows_and_twenty_commits_are_complete_and_failed_first() {
             .collect();
     }
     data.current.results.results[0].verdict = Verdict::Within;
+    data.current.results.results[0].actual = Some(10.0);
     data.current.results.results[99].verdict = Verdict::Error;
     data.current.results.results[99].actual = None;
     data.current.results.results[99].error = Some("cancelled".into());
     let report = compare(&data);
     assert_eq!(report.rows.len(), 100);
     assert_eq!(report.rows[0].id, "budget-99");
+    assert_eq!(report.rows[1].verdict, Some(Verdict::Over));
+    assert_eq!(report.rows.last().unwrap().verdict, Some(Verdict::Within));
     assert!(report.rows.iter().all(|r| r.baseline_n == 20));
     assert_eq!(report.current.results.exit_code(), 3);
     assert!(render_markdown(&report).contains("cancelled"));

@@ -11,7 +11,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     validate_request(&request)?;
     std::fs::write("publish-request.json", &bytes)?;
     match request.key.as_str() {
-        "exit" => std::process::exit(7),
+        "exit" => {
+            std::io::stderr().write_all(b"posting server refused request\n")?;
+            std::process::exit(7);
+        }
         "denied" => {
             std::io::stdout().write_all(
                 b"{\"delivered\":false,\"diagnostic\":\"reporter credential unavailable\"}\n",
@@ -30,7 +33,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let result = DeliveryResult {
         delivered: true,
         url: Some(request.destination),
-        diagnostic: None,
+        diagnostic: (request.key == "warning")
+            .then(|| "delivery accepted with a reporter warning".into()),
     };
     std::io::stdout().write_all(&serde_json::to_vec(&result)?)?;
     Ok(())
