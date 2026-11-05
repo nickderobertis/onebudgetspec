@@ -12,14 +12,9 @@
       "id": "latency",
       "file": "budgets.yaml",
       "description": null,
-      "labels": [
-        "report"
-      ],
+      "labels": ["report"],
       "measure": "reported",
-      "command": [
-        "node",
-        "measure.js"
-      ],
+      "command": ["node", "measure.js"],
       "unit": "ms",
       "direction": "max",
       "threshold": 12,
@@ -32,9 +27,7 @@
       {
         "id": "latency",
         "file": "budgets.yaml",
-        "labels": [
-          "report"
-        ],
+        "labels": ["report"],
         "unit": "ms",
         "direction": "max",
         "threshold": 12,
@@ -56,7 +49,5 @@
     ]
   },
   "unavailable": [],
-  "enforcement_exclude_labels": [
-    "report"
-  ]
+  "enforcement_exclude_labels": ["report"]
 }
