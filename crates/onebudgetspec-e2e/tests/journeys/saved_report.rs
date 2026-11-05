@@ -14,6 +14,9 @@ fn saved() -> ComparisonInput {
             let mut run = current.clone();
             run.head_sha = format!("base-{i}");
             run.results.results[0].actual = Some(10.0);
+            run.results.results[0].verdict = onebudgetspec_core::Verdict::Within;
+            run.results.results[0].headroom = Some(2.0);
+            run.results.results[0].headroom_percent = Some(2.0 / 12.0 * 100.0);
             run
         })
         .collect();
@@ -98,10 +101,13 @@ fn subprocess_delivery_preserves_real_failures_and_updates_one_standing_history(
     let mut improved = input;
     improved.current.attempt = 2;
     improved.current.results.results[0].actual = Some(1.0);
+    improved.current.results.results[0].verdict = onebudgetspec_core::Verdict::Within;
+    improved.current.results.results[0].headroom = Some(11.0);
+    improved.current.results.results[0].headroom_percent = Some(11.0 / 12.0 * 100.0);
     fixture.write("input.json", &serde_json::to_string(&improved).unwrap());
     fixture
         .run(["report", "--input", "input.json", "--reporter", reporter])
-        .expect_status(1);
+        .expect_status(0);
     let body = std::fs::read_to_string(fixture.path().join("standing.md")).unwrap();
     assert!(body.contains("current (attempt 2): 0 adverse flag(s)"));
     assert!(!body.contains("current (attempt 1)"));
@@ -151,6 +157,8 @@ fn saved_enforcement_and_malformed_baselines_preserve_offline_outcomes() {
     json["current"]["results"]["results"][0]["verdict"] = json!("error");
     json["current"]["results"]["results"][0]["actual"] = Value::Null;
     json["current"]["results"]["results"][0]["error"] = json!("cancelled");
+    json["current"]["results"]["results"][0]["headroom"] = Value::Null;
+    json["current"]["results"]["results"][0]["headroom_percent"] = Value::Null;
     fixture.write("input.json", &json.to_string());
     fixture
         .run([
@@ -204,4 +212,43 @@ fn standing_comments_bound_history_and_link_oversized_current_tables() {
     assert!(body.len() <= 4096);
     assert!(body.contains("Complete summary/artifact: https://example.test/run/current"));
     assert!(body.contains("may expire"));
+}
+
+#[test]
+fn markdown_is_refused_for_ordinary_verbs_and_bad_reporter_requests_exit_cleanly() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let fixture = Fixture::new();
+    for verb in ["check", "validate", "list", "schema"] {
+        let run = fixture.run([verb, "--output", "markdown"]);
+        assert!(
+            run.expect_status(2)
+                .stderr
+                .contains("supported only by report")
+        );
+    }
+    for input in [
+        "not JSON",
+        "{}",
+        r#"{"schema_version":2,"destination":"","key":"","head_sha":"head","run_id":"run","run_url":"url","attempt":1,"markdown":"body","flags":[]}"#,
+    ] {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_onebudgetspec-e2e-publish"))
+            .current_dir(fixture.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(!output.status.success());
+        let error = String::from_utf8(output.stderr).unwrap();
+        assert!(!error.contains("panicked"), "{error}");
+        assert!(!fixture.path().join("publish-request.json").exists());
+    }
 }

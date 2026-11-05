@@ -180,11 +180,11 @@ def _shared_models(root: str, text: str) -> str:
     removed: set[int] = set()
     imports = []
     for index, node in enumerate(nodes):
-        name = None
-        if isinstance(node, ast.ClassDef):
-            name = node.name
-        elif isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
-            name = node.targets[0].id
+        match node:
+            case ast.ClassDef(name=name) | ast.Assign(targets=[ast.Name(id=name), *_]):
+                pass
+            case _:
+                continue
         if name not in owners or owners[name] == root.replace("-", "_"):
             continue
         removed.update(range(node.lineno - 1, node.end_lineno or node.lineno))

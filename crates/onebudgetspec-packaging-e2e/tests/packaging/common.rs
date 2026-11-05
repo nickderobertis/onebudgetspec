@@ -489,6 +489,9 @@ pub fn saved_comparison(dir: &Path) -> PathBuf {
             run["head_sha"] = format!("base-{i}").into();
             for result in run["results"]["results"].as_array_mut().unwrap() {
                 result["actual"] = 10.into();
+                result["verdict"] = "within".into();
+                result["headroom"] = 2.into();
+                result["headroom_percent"] = serde_json::json!(2.0_f64 / 12.0 * 100.0);
             }
             run
         })

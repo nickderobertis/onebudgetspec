@@ -1,6 +1,6 @@
 //! Saved synthetic scalar observations exercise the public comparison interface.
 use onebudgetspec_core::comparison::{
-    BudgetRun, ComparisonInput, RollingHistory, compare, render_markdown, validate_history,
+    BudgetRun, ComparisonInput, RollingHistory, render_markdown, validate_history,
 };
 use onebudgetspec_core::{Direction, Verdict};
 
@@ -13,7 +13,15 @@ fn input(n: usize) -> ComparisonInput {
             run.head_sha = format!("base-{i:02}");
             run.run_id = format!("run-{i}");
             run.results.results[0].actual = Some(10.0 + f64::from(u32::try_from(i % 5).unwrap()));
-            run.results.results[0].verdict = Verdict::Within;
+            let result = &mut run.results.results[0];
+            let (verdict, headroom, percent) = onebudgetspec_core::judge(
+                result.direction,
+                result.threshold,
+                result.actual.unwrap(),
+            );
+            result.verdict = verdict;
+            result.headroom = Some(headroom);
+            result.headroom_percent = percent;
             run
         })
         .collect();
@@ -215,4 +223,24 @@ fn new_empty_fields_roundtrip_without_changing_old_report_keys() {
             .unwrap()
             .is_null()
     );
+}
+
+fn compare(input: &ComparisonInput) -> onebudgetspec_core::comparison::ComparisonReport {
+    let mut input = input.clone();
+    for run in std::iter::once(&mut input.current).chain(input.baseline.iter_mut()) {
+        for result in &mut run.results.results {
+            if let Some(actual) = result.actual {
+                let (verdict, headroom, percent) =
+                    onebudgetspec_core::judge(result.direction, result.threshold, actual);
+                result.verdict = verdict;
+                result.headroom = Some(headroom);
+                result.headroom_percent = percent;
+                result.error = None;
+            } else {
+                result.headroom = None;
+                result.headroom_percent = None;
+            }
+        }
+    }
+    onebudgetspec_core::compare(&input)
 }

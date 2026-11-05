@@ -81,7 +81,12 @@ import {
 } from "@onebudgetspec/sdk";
 
 const history: RollingHistory = { schema_version: 1, repository: "owner/repo", base_ref: "main", runs: [] };
-const saved: ComparisonInput = { schema_version: 1, current: history.runs[0]!, baseline: history.runs };
+function inputFromHistory(history: RollingHistory): ComparisonInput | undefined {
+  const current = history.runs[0];
+  if (current === undefined) return undefined;
+  return { schema_version: 1, current, baseline: history.runs };
+}
+const saved = inputFromHistory(history);
 const comparison: ComparisonReport = await compare({ input: "comparison.json" });
 console.log(saved, comparison.rows);
 const checked: CheckReport = await check({ ids: ["a"], labels: ["b"], excludeLabels: ["c"], recursive: true, cwd: "." });

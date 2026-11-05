@@ -2,6 +2,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+// llmlint: ignore-block[invalid_states_unrepresentable] These are the fixed serde wire structs shared with installed consumers; changing String, Option or bool fields to domain newtypes or outcome enums would change that agreed Rust API and schema. validate_run/compare_json and validate_history validate saved observations at entry; validate_request and validated_report_history guard delivery inputs. Arithmetic and rendering preserve the ordinary report rather than replacing its types.
 /// The saved `PublishRequest` wire contract.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -87,6 +88,8 @@ pub struct ReportHistory {
     pub omitted_heads: u32,
 }
 
+// llmlint: ignore-end[invalid_states_unrepresentable]
+
 /// A delivery adapter; delivery failures never change ordinary budget verdicts.
 pub trait Reporter {
     /// Publish one standing report request.
@@ -104,6 +107,7 @@ impl Reporter for ExternalReporter {
         let result = (|| -> Result<DeliveryResult, String> {
             use std::io::Write;
             use std::process::{Command, Stdio};
+            validate_request(request)?;
             let bytes = serde_json::to_vec(request).map_err(|e| e.to_string())?;
             let mut input =
                 tempfile::tempfile().map_err(|e| format!("cannot prepare reporter stdin: {e}"))?;
@@ -145,11 +149,15 @@ pub fn merge_standing_report(
     request: &PublishRequest,
     max_body_bytes: usize,
 ) -> String {
-    use std::fmt::Write;
+    if let Err(reason) = validate_request(request) {
+        let mut diagnostic = format!("Budget report delivery diagnostic: {reason}");
+        truncate_body(&mut diagnostic, max_body_bytes);
+        return diagnostic;
+    }
     let mut history = previous
         .and_then(|body| body.split_once(START)?.1.split_once(END))
         .and_then(|(json, _)| serde_json::from_str::<ReportHistory>(json).ok())
-        .filter(|h| h.schema_version == 1)
+        .filter(validated_report_history)
         .unwrap_or(ReportHistory {
             schema_version: 1,
             entries: Vec::new(),
@@ -176,47 +184,7 @@ pub fn merge_standing_report(
     }
     let mut current = request.markdown.clone();
     loop {
-        let mut body = format!("{current}\n\n### Per-head adverse flags\n");
-        for entry in &history.entries {
-            let _ = writeln!(
-                body,
-                "\n{} (attempt {}): {} adverse flag(s)",
-                safe_text(&entry.head_sha),
-                entry.attempt,
-                entry.flags.len()
-            );
-            for flag in &entry.flags {
-                let _ = writeln!(
-                    body,
-                    "- {}/{}: {}",
-                    safe_text(&flag.file),
-                    safe_text(&flag.id),
-                    if flag.constant_baseline_change {
-                        "constant-baseline-change".into()
-                    } else {
-                        flag.sigma_change.map_or_else(
-                            || "sigma unavailable".into(),
-                            |value| format!("{value:.2} SD"),
-                        )
-                    }
-                );
-            }
-        }
-        if history.omitted_heads > 0 {
-            let _ = write!(
-                body,
-                "\n{} oldest history head(s) omitted to fit host capacity.\n",
-                history.omitted_heads
-            );
-        }
-        body.push_str(START);
-        body.push_str(
-            &serde_json::to_string(&history)
-                .unwrap_or_default()
-                .replace('<', "\\u003c")
-                .replace('>', "\\u003e"),
-        );
-        body.push_str(END);
+        let mut body = history_body(&current, &history);
         if body.len() <= max_body_bytes {
             return body;
         }
@@ -239,11 +207,7 @@ pub fn merge_standing_report(
             continue;
         }
         // Tiny capacities cannot hold even the fallback; truncate at a UTF-8 boundary.
-        let mut end = max_body_bytes.min(body.len());
-        while !body.is_char_boundary(end) {
-            end -= 1;
-        }
-        body.truncate(end);
+        truncate_body(&mut body, max_body_bytes);
         return body;
     }
 }
@@ -262,4 +226,114 @@ fn history_entry(request: &PublishRequest) -> HistoryEntry {
         attempt: request.attempt,
         flags: request.flags.clone(),
     }
+}
+
+/// Validate a reporter request before invoking an external transport.
+///
+/// # Errors
+/// Returns a diagnostic for unsupported versions, incomplete provenance or invalid flags.
+pub fn validate_request(request: &PublishRequest) -> Result<(), String> {
+    if request.schema_version != 1
+        || !valid_provenance(
+            &request.head_sha,
+            &request.run_id,
+            &request.run_url,
+            request.attempt,
+        )
+    {
+        return Err("reporter request requires schema_version 1 and complete provenance with a positive attempt".into());
+    }
+    validate_flags(&request.flags)
+}
+
+fn valid_provenance(head: &str, run: &str, url: &str, attempt: u32) -> bool {
+    attempt > 0
+        && [head, run, url]
+            .iter()
+            .all(|value| !value.trim().is_empty())
+}
+
+fn validate_flags(flags: &[HistoricalFlag]) -> Result<(), String> {
+    let id_pattern = regex::Regex::new(crate::model::ID_PATTERN).map_err(|e| e.to_string())?;
+    let mut keys = std::collections::BTreeSet::new();
+    for flag in flags {
+        let valid_change = match (flag.constant_baseline_change, flag.sigma_change) {
+            (true, None) => true,
+            (false, Some(sigma)) => sigma.is_finite() && sigma.abs() >= 1.0,
+            _ => false,
+        };
+        if !crate::comparison::valid_relative_path(&flag.file)
+            || !id_pattern.is_match(&flag.id)
+            || !valid_change
+            || !keys.insert((&flag.file, &flag.id))
+        {
+            return Err("historical flags require unique file/id pairs and an adverse numeric or constant-baseline change".into());
+        }
+    }
+    Ok(())
+}
+
+fn validated_report_history(history: &ReportHistory) -> bool {
+    let mut heads = std::collections::BTreeSet::new();
+    history.schema_version == 1
+        && history.entries.iter().all(|entry| {
+            valid_provenance(
+                &entry.head_sha,
+                &entry.run_id,
+                &entry.run_url,
+                entry.attempt,
+            ) && heads.insert(&entry.head_sha)
+                && validate_flags(&entry.flags).is_ok()
+        })
+}
+
+fn truncate_body(body: &mut String, limit: usize) {
+    let mut end = limit.min(body.len());
+    while !body.is_char_boundary(end) {
+        end -= 1;
+    }
+    body.truncate(end);
+}
+
+fn history_body(current: &str, history: &ReportHistory) -> String {
+    use std::fmt::Write;
+    let mut body = format!("{current}\n\n### Per-head adverse flags\n");
+    for entry in &history.entries {
+        let _ = writeln!(
+            body,
+            "\n{} (attempt {}): {} adverse flag(s)",
+            safe_text(&entry.head_sha),
+            entry.attempt,
+            entry.flags.len()
+        );
+        for flag in &entry.flags {
+            let _ = writeln!(
+                body,
+                "- {}/{}: {}",
+                safe_text(&flag.file),
+                safe_text(&flag.id),
+                if flag.constant_baseline_change {
+                    "constant-baseline-change".into()
+                } else {
+                    format!("{:.2} SD", flag.sigma_change.unwrap_or_default())
+                }
+            );
+        }
+    }
+    if history.omitted_heads > 0 {
+        let _ = write!(
+            body,
+            "\n{} oldest history head(s) omitted to fit host capacity.\n",
+            history.omitted_heads
+        );
+    }
+    body.push_str(START);
+    body.push_str(
+        &serde_json::to_string(&history)
+            .unwrap_or_default()
+            .replace('<', "\\u003c")
+            .replace('>', "\\u003e"),
+    );
+    body.push_str(END);
+    body
 }

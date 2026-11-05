@@ -54,3 +54,100 @@ fn history_is_dropped_with_notice_and_oversized_current_links_the_complete_run()
     assert!(fallback.contains("may expire"));
     assert!(merge_standing_report(None, &huge, 7).len() <= 7);
 }
+
+#[test]
+fn malformed_unsupported_and_semantically_invalid_history_cannot_hide_current_flags() {
+    let request = request("current", 2);
+    let valid = merge_standing_report(None, &request, 65536);
+    let start = "<!-- onebudgetspec-history\n";
+    let json = valid
+        .split_once(start)
+        .unwrap()
+        .1
+        .split_once("\n-->")
+        .unwrap()
+        .0;
+    let history: serde_json::Value = serde_json::from_str(json).unwrap();
+    for change in [
+        "malformed",
+        "version",
+        "attempt",
+        "duplicate",
+        "flag",
+        "provenance",
+    ] {
+        let mut history = history.clone();
+        match change {
+            "version" => history["schema_version"] = 99.into(),
+            "attempt" => history["entries"][0]["attempt"] = 0.into(),
+            "duplicate" => {
+                let duplicate = history["entries"][0].clone();
+                history["entries"].as_array_mut().unwrap().push(duplicate);
+            }
+            "flag" => history["entries"][0]["flags"][0]["sigma_change"] = 0.5.into(),
+            "provenance" => history["entries"][0]["run_id"] = "".into(),
+            _ => {}
+        }
+        let previous = format!(
+            "old\n{start}{}\n-->",
+            if change == "malformed" {
+                "not JSON".into()
+            } else {
+                history.to_string()
+            }
+        );
+        assert_eq!(
+            merge_standing_report(Some(&previous), &request, 65536),
+            valid,
+            "{change}"
+        );
+    }
+}
+
+#[test]
+fn request_validation_and_embedded_history_escaping_preserve_the_protocol() {
+    use onebudgetspec_core::delivery::{ExternalReporter, Reporter, validate_request};
+    let mut request = request("head-->tail<&>", 1);
+    request.flags[0].file = "folder-->tail/budgets.yaml".into();
+    let body = merge_standing_report(None, &request, 65536);
+    assert!(body.contains("2.00 SD"));
+    let encoded = body
+        .split_once("<!-- onebudgetspec-history\n")
+        .unwrap()
+        .1
+        .split_once("\n-->")
+        .unwrap()
+        .0;
+    assert!(!encoded.contains("-->"));
+    let history: onebudgetspec_core::delivery::ReportHistory =
+        serde_json::from_str(encoded).unwrap();
+    assert_eq!(history.entries[0].head_sha, request.head_sha);
+    for invalid in [
+        "version",
+        "attempt",
+        "provenance",
+        "duplicate",
+        "both",
+        "neither",
+        "path",
+    ] {
+        let mut bad = request.clone();
+        match invalid {
+            "version" => bad.schema_version = 2,
+            "attempt" => bad.attempt = 0,
+            "provenance" => bad.run_url.clear(),
+            "duplicate" => bad.flags.push(bad.flags[0].clone()),
+            "both" => bad.flags[0].constant_baseline_change = true,
+            "neither" => bad.flags[0].sigma_change = None,
+            _ => bad.flags[0].file = "../bad".into(),
+        }
+        assert!(validate_request(&bad).is_err(), "{invalid}");
+        let delivery = ExternalReporter {
+            executable: "not-invoked".into(),
+        }
+        .publish(&bad);
+        assert!(!delivery.delivered);
+        assert!(!delivery.diagnostic.unwrap().contains("cannot start"));
+        assert!(merge_standing_report(Some(&body), &bad, 65536).contains("delivery diagnostic"));
+    }
+}

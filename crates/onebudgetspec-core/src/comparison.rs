@@ -3,6 +3,7 @@ use crate::{CheckReport, Direction, ListedBudget, Verdict};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+// llmlint: ignore-block[invalid_states_unrepresentable] These are the fixed serde wire structs shared with installed consumers; changing String, Option or bool fields to domain newtypes or outcome enums would change that agreed Rust API and schema. validate_run/compare_json and validate_history validate saved observations at entry; validate_request and validated_report_history guard delivery inputs. Arithmetic and rendering preserve the ordinary report rather than replacing its types.
 /// The saved `BudgetRun` wire contract.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -134,6 +135,8 @@ pub struct RollingHistory {
     pub runs: Vec<BudgetRun>,
 }
 
+// llmlint: ignore-end[invalid_states_unrepresentable]
+
 /// Compare saved observations without executing a measurement.
 #[must_use]
 pub fn compare(input: &ComparisonInput) -> ComparisonReport {
@@ -167,9 +170,15 @@ pub fn compare(input: &ComparisonInput) -> ComparisonReport {
             continue;
         }
         let previous = commits.entry(&run.head_sha).or_insert(run);
-        if (run.attempt, &run.completed_at, &run.run_id)
-            > (previous.attempt, &previous.completed_at, &previous.run_id)
-        {
+        if (
+            run.attempt,
+            chrono::DateTime::parse_from_rfc3339(&run.completed_at).ok(),
+            &run.run_id,
+        ) > (
+            previous.attempt,
+            chrono::DateTime::parse_from_rfc3339(&previous.completed_at).ok(),
+            &previous.run_id,
+        ) {
             *previous = run;
         }
     }
@@ -395,6 +404,7 @@ pub fn validate_run(run: &BudgetRun) -> Result<(), String> {
         || run.base_ref.trim().is_empty()
         || run.head_sha.trim().is_empty()
         || run.run_id.trim().is_empty()
+        || run.run_url.trim().is_empty()
         || run.attempt == 0
     {
         return Err("repository, base_ref, head_sha, run_id and positive attempt required".into());
@@ -412,14 +422,7 @@ pub fn validate_run(run: &BudgetRun) -> Result<(), String> {
     }
     let mut keys = std::collections::BTreeSet::new();
     for b in &run.catalog {
-        if b.file.is_empty()
-            || b.file.starts_with('/')
-            || b.file.contains('\\')
-            || b.file
-                .split('/')
-                .any(|p| p == "." || p == ".." || p.is_empty())
-            || b.file.contains(':')
-        {
+        if !valid_relative_path(&b.file) {
             return Err(format!(
                 "{}: path must be normalized repository-relative",
                 b.file
@@ -448,6 +451,7 @@ pub fn validate_run(run: &BudgetRun) -> Result<(), String> {
         else {
             return Err("result absent from catalog".into());
         };
+        validate_result(r)?;
         if !measured.insert((&r.file, &r.id))
             || r.labels != b.labels
             || r.ended_at < r.started_at
@@ -477,12 +481,55 @@ pub fn validate_run(run: &BudgetRun) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_result(result: &crate::CheckResult) -> Result<(), String> {
+    let valid = if let Some(actual) = result.actual {
+        let (verdict, headroom, percent) = crate::judge(result.direction, result.threshold, actual);
+        result.verdict == verdict
+            && result.error.is_none()
+            && same_number(result.headroom, Some(headroom))
+            && same_number(result.headroom_percent, percent)
+    } else {
+        result.verdict == Verdict::Error
+            && result.headroom.is_none()
+            && result.headroom_percent.is_none()
+            && result
+                .error
+                .as_ref()
+                .is_some_and(|error| !error.trim().is_empty())
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(format!(
+            "{}: ordinary verdict, headroom or error contradicts the saved measurement",
+            result.id
+        ))
+    }
+}
+
+fn same_number(left: Option<f64>, right: Option<f64>) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => {
+            // JSON decoders can round a final mantissa bit; verdict comparisons stay exact.
+            left.is_finite()
+                && right.is_finite()
+                && (left - right).abs() <= 8.0 * f64::EPSILON * left.abs().max(right.abs()).max(1.0)
+        }
+        (None, None) => true,
+        _ => false,
+    }
+}
+
 /// Validate the single saved rolling file, including its bounded unique provenance.
 ///
 /// # Errors
 /// Returns a diagnostic for malformed or mismatched saved history.
 pub fn validate_history(history: &RollingHistory) -> Result<(), String> {
-    if history.schema_version != 1 || history.runs.len() > 20 {
+    if history.schema_version != 1
+        || history.runs.len() > 20
+        || history.repository.trim().is_empty()
+        || history.base_ref.trim().is_empty()
+    {
         return Err("rolling history requires schema_version 1 and at most 20 runs".into());
     }
     let mut heads = std::collections::BTreeSet::new();
@@ -633,4 +680,14 @@ pub fn compare_json(bytes: &[u8]) -> Result<ComparisonReport, String> {
     });
     report.diagnostics.extend(diagnostics);
     Ok(report)
+}
+
+pub(crate) fn valid_relative_path(file: &str) -> bool {
+    !file.is_empty()
+        && !file.starts_with('/')
+        && !file.contains('\\')
+        && !file.contains(':')
+        && !file
+            .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
 }

@@ -32,6 +32,7 @@ const ROOTS = {
   "report-history": "report-history.ts",
 } as const;
 type Root = keyof typeof ROOTS;
+// ROOTS is a closed local literal; Object.keys loses only its known key union.
 const ROOT_NAMES = Object.keys(ROOTS) as Root[];
 const PACKAGE = resolve(import.meta.dir, "..");
 const WORKSPACE = resolve(PACKAGE, "../..");
@@ -102,6 +103,7 @@ function parseBundle(text: string): SchemaBundle {
   const { roots } = document;
   return {
     version: document.version,
+    // Every closed ROOT_NAMES key is inserted once after rootOf validates its value.
     roots: Object.fromEntries(
       ROOT_NAMES.map((root) => [root, rootOf(roots, root)]),
     ) as SchemaBundle["roots"],

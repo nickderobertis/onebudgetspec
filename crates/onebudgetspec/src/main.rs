@@ -36,6 +36,12 @@ fn main() -> ExitCode {
 }
 
 fn run(command: &Command, output: Output) -> Result<i32, Error> {
+    if output == Output::Markdown && !matches!(command, Command::Report(_)) {
+        return Err(Error::Invocation {
+            message: "--output markdown is supported only by report".into(),
+            next: "use --output text or --output json for this command".into(),
+        });
+    }
     let stdout = &mut std::io::stdout().lock();
     match command {
         Command::Check(args) => {
