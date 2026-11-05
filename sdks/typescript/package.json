@@ -1,6 +1,6 @@
 {
   "name": "@onebudgetspec/sdk",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "The onebudgetspec TypeScript SDK: check, validate and list budgets through the onebudgetspec binary, with report types generated from its schema.",
   "license": "MIT",
   "type": "module",

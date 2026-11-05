@@ -1,6 +1,6 @@
 {
   "name": "@onebudgetspec/cli-linux-x64",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "The onebudgetspec binary for linux-x64, installed by @onebudgetspec/cli.",
   "license": "MIT",
   "repository": {
