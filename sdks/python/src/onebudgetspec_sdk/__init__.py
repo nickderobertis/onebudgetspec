@@ -11,18 +11,38 @@ from ._client import (
     OnebudgetspecError,
     StrPath,
     check,
+    compare,
     list_budgets,
+    render_markdown,
     resolve_binary,
     schema,
     validate,
 )
 from ._generated import SCHEMA_BUNDLE_VERSION
+from ._generated.budget_run import BudgetRun, UnavailableBudget
 from ._generated.check_report import CheckReport, CheckResult, Direction, Host, Verdict
+from ._generated.comparison_input import ComparisonInput
+from ._generated.comparison_report import ComparisonReport, ComparisonRow
+from ._generated.delivery_result import DeliveryResult
 from ._generated.list_report import ListedBudget, ListReport, Measure
+from ._generated.publish_request import HistoricalFlag, PublishRequest
+from ._generated.report_history import HistoryEntry, ReportHistory
+from ._generated.rolling_history import RollingHistory
 from ._report import report
 
 __all__ = [
     "BINARY_ENV",
+    "BudgetRun",
+    "UnavailableBudget",
+    "ComparisonRow",
+    "HistoricalFlag",
+    "HistoryEntry",
+    "ComparisonInput",
+    "ComparisonReport",
+    "RollingHistory",
+    "PublishRequest",
+    "DeliveryResult",
+    "ReportHistory",
     "CLI_DISTRIBUTION",
     "SCHEMA_BUNDLE_VERSION",
     "CheckReport",
@@ -37,9 +57,11 @@ __all__ = [
     "Verdict",
     "__version__",
     "check",
+    "compare",
     "list_budgets",
     "report",
     "resolve_binary",
+    "render_markdown",
     "schema",
     "validate",
 ]

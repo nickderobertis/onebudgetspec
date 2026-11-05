@@ -172,7 +172,15 @@ test("a root the compiler cannot turn into types is refused, writing nothing", (
   const unresolvable = '{"$ref": "#/$defs/Missing"}';
   const refused = generate(
     copy,
-    fakeBinary(`{"version": 1, "roots": {"check-report": ${unresolvable}, "list-report": {}}}`),
+    fakeBinary(
+      JSON.stringify({
+        version: 2,
+        roots: {
+          ...JSON.parse(spawnSync(builtBinary(), ["schema"], { encoding: "utf8" }).stdout).roots,
+          "check-report": JSON.parse(unresolvable),
+        },
+      }),
+    ),
   );
   expect(refused.status).toBe(1);
   expect(refused.stderr).toContain('cannot compile the "check-report" root');

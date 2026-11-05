@@ -36,6 +36,12 @@ fn main() -> ExitCode {
 }
 
 fn run(command: &Command, output: Output) -> Result<i32, Error> {
+    if output == Output::Markdown && !matches!(command, Command::Report(_)) {
+        return Err(Error::Invocation {
+            message: "--output markdown is supported only by report".into(),
+            next: "use --output text or --output json for this command".into(),
+        });
+    }
     let stdout = &mut std::io::stdout().lock();
     match command {
         Command::Check(args) => {
@@ -44,7 +50,7 @@ fn run(command: &Command, output: Output) -> Result<i32, Error> {
             let report = selected.check();
             let written = match output {
                 Output::Json => render::json(stdout, &report),
-                Output::Text => render::check_text(stdout, &report),
+                Output::Text | Output::Markdown => render::check_text(stdout, &report),
             };
             Ok(delivered(written, report.exit_code()))
         }
@@ -52,7 +58,7 @@ fn run(command: &Command, output: Output) -> Result<i32, Error> {
             let budgets = load(&files.paths, files.recursive)?;
             let written = match output {
                 Output::Json => render::json(stdout, &budgets.all().list_report()),
-                Output::Text => writeln!(
+                Output::Text | Output::Markdown => writeln!(
                     stdout,
                     "valid: {} budget(s) in {} file(s)",
                     budgets.budget_count(),
@@ -66,10 +72,11 @@ fn run(command: &Command, output: Output) -> Result<i32, Error> {
             let report = budgets.select(&selection(&args.select))?.list_report();
             let written = match output {
                 Output::Json => render::json(stdout, &report),
-                Output::Text => render::list_text(stdout, &report),
+                Output::Text | Output::Markdown => render::list_text(stdout, &report),
             };
             Ok(delivered(written, exit::WITHIN))
         }
+        Command::Report(args) => run_report(stdout, args, output),
         Command::Schema => Ok(delivered(
             render::json(stdout, &schema_bundle()),
             exit::WITHIN,
@@ -98,4 +105,63 @@ fn selection(args: &cli::SelectArgs) -> Selection {
         labels: args.labels.clone(),
         exclude_labels: args.exclude_labels.clone(),
     }
+}
+
+fn run_report(
+    stdout: &mut impl Write,
+    args: &cli::ReportArgs,
+    output: Output,
+) -> Result<i32, Error> {
+    use onebudgetspec_core::delivery::{
+        ExternalReporter, HistoricalFlag, PublishRequest, Reporter,
+    };
+    let invalid = |message: String| Error::Invocation {
+        message,
+        next: "provide a valid saved ComparisonInput JSON file".into(),
+    };
+    let bytes = std::fs::read(&args.input)
+        .map_err(|e| invalid(format!("{}: {e}", args.input.display())))?;
+    let mut report = onebudgetspec_core::comparison::compare_json(&bytes).map_err(invalid)?;
+    let markdown = onebudgetspec_core::render_markdown(&report);
+    if let Some(executable) = &args.reporter {
+        let request = PublishRequest {
+            schema_version: 1,
+            destination: args.destination.clone(),
+            key: args.key.clone(),
+            head_sha: report.current.head_sha.clone(),
+            run_id: report.current.run_id.clone(),
+            run_url: report.current.run_url.clone(),
+            attempt: report.current.attempt,
+            markdown,
+            flags: report
+                .rows
+                .iter()
+                .filter(|r| r.flag)
+                .map(|r| HistoricalFlag {
+                    file: r.file.clone(),
+                    id: r.id.clone(),
+                    sigma_change: r.sigma_change,
+                    constant_baseline_change: r.sd == Some(0.0),
+                })
+                .collect(),
+        };
+        let delivery = ExternalReporter {
+            executable: executable.clone(),
+        }
+        .publish(&request);
+        if let Some(diagnostic) = delivery.diagnostic {
+            report.diagnostics.push(diagnostic);
+        }
+        if !delivery.delivered {
+            report
+                .diagnostics
+                .push("report not delivered; saved comparison remains available offline".into());
+        }
+    }
+    let written = if output == Output::Json {
+        render::json(stdout, &report)
+    } else {
+        write!(stdout, "{}", onebudgetspec_core::render_markdown(&report))
+    };
+    Ok(delivered(written, report.exit_code()))
 }

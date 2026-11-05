@@ -21,6 +21,7 @@ from pydantic import BaseModel, JsonValue, ValidationError
 
 from ._generated import BUNDLE_ROOTS
 from ._generated.check_report import CheckReport
+from ._generated.comparison_report import ComparisonReport
 from ._generated.list_report import ListReport
 from ._generated.schemas import REPORT_SCHEMAS
 
@@ -396,3 +397,35 @@ def schema(*, binary: StrPath | None = None) -> dict[str, JsonValue]:
             exit_code=None,
         )
     return bundle
+
+
+def compare(
+    input_path: StrPath,
+    *,
+    reporter: StrPath | None = None,
+    destination: str = "",
+    key: str = "",
+    binary: StrPath | None = None,
+    cwd: StrPath | None = None,
+) -> ComparisonReport:
+    """Reproduce saved observations through the binary, without measuring again.
+
+    An optional reporter executable receives the same PublishRequest as the CLI.
+    Delivery diagnostics remain in the returned report, independently of verdicts.
+    """
+    args = ["report", "--input", os.fspath(input_path), "--json"]
+    if reporter is not None:
+        args += ["--reporter", os.fspath(reporter), "--destination", destination, "--key", key]
+    return _report(ComparisonReport, "comparison-report", _run(binary, args, cwd))
+
+
+def render_markdown(
+    input_path: StrPath,
+    *,
+    binary: StrPath | None = None,
+    cwd: StrPath | None = None,
+) -> str:
+    """Render saved observations through the installed report command, without measuring."""
+    return _run(
+        binary, ["report", "--input", os.fspath(input_path), "--output", "markdown"], cwd
+    ).decode("utf-8")

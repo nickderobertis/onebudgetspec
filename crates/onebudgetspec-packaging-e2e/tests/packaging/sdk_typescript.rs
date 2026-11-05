@@ -11,17 +11,40 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::common::{
-    SDK_CASE, VERSION, artifact, assert_reports, assert_sdk_answers, conformance_case,
-    npm_project_with, root, succeed, write_reporting_budgets,
+    SDK_CASE, VERSION, artifact, assert_reports, assert_sdk_answers, comparison_consumer,
+    conformance_case, npm_project_with, root, saved_comparison, succeed, write_reporting_budgets,
 };
 
 /// Each call over the case named by argv[1], with the selection its case.json gives.
 const DRIVE: &str = r#"
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import * as sdk from "@onebudgetspec/sdk";
 
 const cwd = process.argv[1];
+const input = process.argv[2], reporter = process.argv[3];
+const saved = JSON.parse(readFileSync(input, "utf8"));
+const history = JSON.parse(readFileSync(join(input, "..", "history.json"), "utf8"));
+saved.baseline = JSON.parse(JSON.stringify(history)).runs;
+writeFileSync(input, JSON.stringify(saved));
+const comparison = await sdk.compare({input});
+if (!(await sdk.renderMarkdown({input})).includes("budget-99")) throw Error("incomplete Markdown");
+if (comparison.rows.length !== 100 || !comparison.rows.every(r => r.baseline_n === 20 && r.flag && r.verdict === "over")) throw Error("incomplete comparison");
+const rust = JSON.parse(execFileSync(reporter, [input], {encoding: "utf8"}));
+if (JSON.stringify(comparison) !== JSON.stringify(rust)) throw Error("Rust/TypeScript comparison drift");
+for (const key of ["ok", "malformed", "exit"]) {
+  const delivered = await sdk.compare({input, reporter, destination: join(input, "..", "typescript-standing.md"), key});
+  if (delivered.rows.length !== 100 || (key !== "ok" && !delivered.diagnostics.some(d => d.includes("reporter")))) throw Error("delivery masked budget failure");
+}
+for (const field of ["repository", "base_ref"]) {
+  const broken = JSON.parse(JSON.stringify(saved));
+  broken.baseline[0][field] = "wrong";
+  writeFileSync(input, JSON.stringify(broken));
+  if ((await sdk.compare({input})).rows[0].baseline_n !== 19) throw Error("invalid provenance accepted");
+}
+writeFileSync(input, JSON.stringify(saved));
+
 const [, ...args] = JSON.parse(readFileSync(join(cwd, "case.json"), "utf8")).args;
 const flags = { "--id": [], "--label": [], "--exclude-label": [] };
 for (let index = 0; index < args.length; index++) {
@@ -45,6 +68,10 @@ console.log(JSON.stringify({
 const CONSUMER: &str = r#"
 import {
   type CheckReport,
+  type RollingHistory,
+  type ComparisonInput,
+  type ComparisonReport,
+  compare,
   type ListReport,
   check,
   listBudgets,
@@ -53,6 +80,15 @@ import {
   validate,
 } from "@onebudgetspec/sdk";
 
+const history: RollingHistory = { schema_version: 1, repository: "owner/repo", base_ref: "main", runs: [] };
+function inputFromHistory(history: RollingHistory): ComparisonInput | undefined {
+  const current = history.runs[0];
+  if (current === undefined) return undefined;
+  return { schema_version: 1, current, baseline: history.runs };
+}
+const saved = inputFromHistory(history);
+const comparison: ComparisonReport = await compare({ input: "comparison.json" });
+console.log(saved, comparison.rows);
 const checked: CheckReport = await check({ ids: ["a"], labels: ["b"], excludeLabels: ["c"], recursive: true, cwd: "." });
 const conditions: string | undefined = checked.results[0]?.host.conditions["region"];
 const listed: ListReport = await listBudgets({ paths: ["budgets.yaml"] });
@@ -111,12 +147,16 @@ fn the_installed_sdk_answers_a_conformance_case_through_the_launcher() {
     assert_eq!(version.trim(), VERSION);
 
     let (case_dir, case) = conformance_case(dir.path(), SDK_CASE);
+    let input = saved_comparison(dir.path());
+    let reporter = comparison_consumer();
     let output = Command::new("node")
         .args([
             "--input-type=module",
             "-e",
             DRIVE,
             case_dir.to_str().unwrap(),
+            input.to_str().unwrap(),
+            reporter.to_str().unwrap(),
         ])
         .env_remove("ONEBUDGETSPEC_BIN")
         .current_dir(&project)

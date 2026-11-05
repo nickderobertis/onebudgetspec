@@ -9,6 +9,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { Ajv2020, type ValidateFunction } from "ajv/dist/2020.js";
 import type { CheckReport } from "./generated/check-report.ts";
+import type { ComparisonReport } from "./generated/comparison-report.ts";
 import type { ListReport } from "./generated/list-report.ts";
 import { BUNDLE_ROOTS, reportSchemas } from "./generated/schemas.ts";
 
@@ -336,4 +337,51 @@ export async function schema(options: SchemaOptions = {}): Promise<Record<string
     );
   }
   return bundle;
+}
+
+/** Saved-input reproduction; no measuring commands run. */
+export type CompareOptions = {
+  input: string;
+  binary?: string | undefined;
+  cwd?: string | undefined;
+  reporter?: string | undefined;
+  destination?: string | undefined;
+  key?: string | undefined;
+};
+
+/** Compare saved ordinary results; delivery errors remain report diagnostics. */
+export async function compare(options: CompareOptions): Promise<ComparisonReport> {
+  const args = ["report", "--input", requiredInput(options.input), "--json"];
+  if (options.reporter !== undefined) {
+    args.push(
+      "--reporter",
+      optionalString("reporter", options.reporter) ?? "",
+      "--destination",
+      optionalString("destination", options.destination) ?? "",
+      "--key",
+      optionalString("key", options.key) ?? "",
+    );
+  }
+  return report(
+    ajv.compile<ComparisonReport>(reportSchemas["comparison-report"]),
+    "comparison-report",
+    await run(options.binary, args, options.cwd),
+  );
+}
+
+/** Render saved observations through the installed report command, without measuring. */
+export async function renderMarkdown(
+  options: Pick<CompareOptions, "input" | "binary" | "cwd">,
+): Promise<string> {
+  return run(
+    options.binary,
+    ["report", "--input", requiredInput(options.input), "--output", "markdown"],
+    options.cwd,
+  );
+}
+
+function requiredInput(value: string): string {
+  const input = optionalString("input", value);
+  if (input === undefined) throw new TypeError("input must be a saved ComparisonInput path");
+  return input;
 }

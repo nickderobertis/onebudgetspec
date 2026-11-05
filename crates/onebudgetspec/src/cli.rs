@@ -37,6 +37,8 @@ pub enum Output {
     Text,
     /// One JSON document on stdout, for a program.
     Json,
+    /// Markdown comparison report.
+    Markdown,
 }
 
 #[derive(Debug, Subcommand)]
@@ -49,6 +51,8 @@ pub enum Command {
     List(SelectedFiles),
     /// Print the JSON Schema bundle: budgets-file, check-report and list-report.
     Schema,
+    /// Reproduce a comparison from saved observations.
+    Report(ReportArgs),
 }
 
 #[derive(Debug, Args)]
@@ -87,3 +91,20 @@ pub struct SelectArgs {
     pub exclude_labels: Vec<String>,
 }
 // llmlint: ignore-end[invalid_states_unrepresentable]
+
+/// Saved comparison and optional external delivery.
+#[derive(Debug, Args)]
+pub struct ReportArgs {
+    /// Saved `ComparisonInput` JSON.
+    #[arg(long)]
+    pub input: PathBuf,
+    /// External JSON reporter executable.
+    #[arg(long)]
+    pub reporter: Option<PathBuf>,
+    /// Reporter destination.
+    #[arg(long, default_value = "")]
+    pub destination: String,
+    /// Standing report key.
+    #[arg(long, default_value = "")]
+    pub key: String,
+}
