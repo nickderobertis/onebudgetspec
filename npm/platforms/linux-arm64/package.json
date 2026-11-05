@@ -1,6 +1,6 @@
 {
   "name": "@onebudgetspec/cli-linux-arm64",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "The onebudgetspec binary for linux-arm64, installed by @onebudgetspec/cli.",
   "license": "MIT",
   "repository": {

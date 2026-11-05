@@ -37,7 +37,7 @@ export type Direction = CheckResult["direction"];
 export type Measure = ListedBudget["measure"];
 
 /** The version of this package, which releases in lock step with the `onebudgetspec` binary. */
-export const VERSION = "0.1.5";
+export const VERSION = "0.1.6";
 
 export type { BudgetRun, UnavailableBudget } from "./generated/budget-run.ts";
 export type { ComparisonInput } from "./generated/comparison-input.ts";
