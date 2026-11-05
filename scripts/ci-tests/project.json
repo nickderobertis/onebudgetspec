@@ -42,6 +42,8 @@
         "default",
         "{workspaceRoot}/scripts/ci-base.sh",
         "{workspaceRoot}/scripts/build-dist.sh",
+        "{workspaceRoot}/scripts/native-build-lock.py",
+        "{workspaceRoot}/scripts/nx",
         "{workspaceRoot}/scripts/sync-release-pr.sh",
         "{workspaceRoot}/tools/src/repo_checks/versions.py",
         "{workspaceRoot}/justfile",

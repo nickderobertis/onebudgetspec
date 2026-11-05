@@ -28,6 +28,15 @@ if [ $# -lt 2 ] || [ $# -gt 3 ]; then
   usage "takes an artifact, an output directory and an optional Rust target"
 fi
 readonly ARTIFACT="$1"
+# Cargo's lock ends before maturin stages its binary. Hold one process lock through
+# staging and carrier copying, shared with the complete native-products build.
+case "$ARTIFACT" in
+  cli-wheel | npm-carrier)
+    if [ "${ONEBUDGETSPEC_NATIVE_BUILD_LOCK:-}" != 1 ]; then
+      exec uv run --frozen --no-sync python "$ROOT/scripts/native-build-lock.py" bash "$0" "$@"
+    fi
+    ;;
+esac
 TARGET="${3:-}"
 mkdir -p "$2"
 # The path printed must be one the caller can open: on Windows that is C:/..., which

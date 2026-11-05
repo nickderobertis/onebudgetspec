@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import time
+import zipfile
 from pathlib import Path
 
 from repo_checks.paths import ROOT
@@ -110,3 +111,35 @@ def test_a_missing_or_unrelated_precompiled_carrier_binary_is_refused(tmp_path: 
         assert "must match the compiled CLI" in refused.stderr
         assert "unset ONEBUDGETSPEC_BINARY" in refused.stderr
         assert list((tmp_path / "out").iterdir()) == []
+
+
+def test_concurrent_wheels_keep_their_payloads(tmp_path: Path) -> None:
+    """Independent release builders must not race maturin's shared staging directory."""
+    processes = [
+        subprocess.Popen(
+            [bash(), BUILD_DIST, "cli-wheel", str(tmp_path / str(index))],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for index in range(4)
+    ]
+    results = [(process, process.communicate(timeout=300)) for process in processes]
+    for process, (stdout, stderr) in results:
+        assert process.returncode == 0, stderr
+        wheel = Path(stdout.strip())
+        assert wheel.is_file()
+        # Read the actual wheel, including its compiled payload, rather than trusting
+        # the builder's exit status or an artifact name left by another process.
+        with zipfile.ZipFile(wheel) as archive:
+            assert archive.testzip() is None
+            payloads = [name for name in archive.namelist() if "/scripts/onebudgetspec" in name]
+            assert len(payloads) == 1
+            binary = wheel.parent / Path(payloads[0]).name
+            binary.write_bytes(archive.read(payloads[0]))
+        binary.chmod(0o755)
+        invoked = subprocess.run(
+            [str(binary), "--version"], capture_output=True, text=True, check=False
+        )
+        assert invoked.returncode == 0, invoked.stderr
+        assert invoked.stdout.strip() == f"onebudgetspec {workspace_version()}"

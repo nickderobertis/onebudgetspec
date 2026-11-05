@@ -4,6 +4,10 @@
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$root"
+# Keep wheel staging, carrier reuse and Cargo's freshness proof in one critical section.
+if [ "${ONEBUDGETSPEC_NATIVE_BUILD_LOCK:-}" != 1 ]; then
+  exec uv run --frozen --no-sync python "$root/scripts/native-build-lock.py" bash "$0" "$@"
+fi
 if [ $# -ne 3 ]; then
   echo 'native-products: usage: <Rust target> <output directory> <launcher tarball>' >&2
   exit 64
