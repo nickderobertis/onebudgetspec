@@ -10,6 +10,7 @@
       "{projectRoot}/project.json",
       "python",
       "{workspaceRoot}/scripts/build-dist.sh",
+      "{workspaceRoot}/scripts/native-build-lock.py",
       "{workspaceRoot}/rust-toolchain.toml"
     ]
   },

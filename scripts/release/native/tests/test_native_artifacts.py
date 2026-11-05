@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tarfile
+import time
 import tomllib
 import zipfile
 from pathlib import Path
@@ -491,3 +492,77 @@ def test_report_validation_refuses_malformed_cli_data(tmp_path: Path, shape: obj
     assert refused.returncode == 1
     assert "invalid staged report" in refused.stderr and "rebuild" in refused.stderr
     assert "TypeError" not in refused.stderr
+
+
+def test_native_products_contend_with_independent_wheel_and_carrier_builders(
+    products: NativeProducts, tmp_path: Path
+) -> None:
+    """Separate builders preserve all payloads and the native install's freshness proof."""
+    launcher = next((products.directory / "launcher").glob("*.tgz"))
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            str(ROOT / "scripts/native-build-lock.py"),
+            sys.executable,
+            "-c",
+            "print('locked', flush=True); input()",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert holder.stdout is not None
+    assert holder.stdout.readline().strip() == "locked"
+    native = subprocess.Popen(
+        [
+            bash(),
+            str(ROOT / "scripts/release/native/native-products.sh"),
+            products.target,
+            str(tmp_path / "native"),
+            str(launcher),
+        ],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    competitors = [
+        subprocess.Popen(
+            [
+                bash(),
+                str(ROOT / "scripts/build-dist.sh"),
+                artifact,
+                str(tmp_path / artifact),
+                products.target,
+            ],
+            cwd=ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        for artifact in ("cli-wheel", "npm-carrier")
+    ]
+    try:
+        # All builders have been dispatched, but none may create its output directory
+        # while another process owns the native-build critical section.
+        time.sleep(2)
+        blocked = not any(
+            (tmp_path / name).exists() for name in ("native", "cli-wheel", "npm-carrier")
+        )
+    finally:
+        holder.communicate("\n")
+    results = [(process, process.communicate()) for process in [native, *competitors]]
+    assert blocked, "a native builder entered the critical section while another process held it"
+    for process, (_, stderr) in results:
+        assert process.returncode == 0, stderr
+    # native-products has installed and driven all three products and verified Cargo
+    # freshness. Independently built distributions must carry exactly those same bytes.
+    payload = (tmp_path / "native/staged/onebudgetspec").read_bytes()
+    with zipfile.ZipFile(results[1][1][0].strip()) as wheel:
+        [script] = [name for name in wheel.namelist() if name.endswith("/scripts/onebudgetspec")]
+        assert wheel.read(script) == payload
+    with tarfile.open(results[2][1][0].strip()) as carrier:
+        binary = carrier.extractfile("package/bin/onebudgetspec")
+        assert binary is not None
+        assert binary.read() == payload
