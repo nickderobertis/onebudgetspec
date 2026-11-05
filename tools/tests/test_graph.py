@@ -131,10 +131,11 @@ def test_an_sdk_may_depend_on_the_binary_and_the_contract_and_nothing_further(
     "changed",
     ["crates/onebudgetspec-core/src/report.rs", "conformance/cases/selection/case.json"],
 )
-def test_a_contract_or_case_change_selects_both_sdks(changed: str) -> None:
+def test_a_contract_or_case_change_selects_both_sdks(changed: str, tmp_path: Path) -> None:
     affected = subprocess.run(
         [
-            str(ROOT / "node_modules/.bin/nx"),
+            "node",
+            str(ROOT / "node_modules/nx/dist/bin/nx.js"),
             "show",
             "projects",
             "--affected",
@@ -142,9 +143,16 @@ def test_a_contract_or_case_change_selects_both_sdks(changed: str) -> None:
             "--json",
         ],
         cwd=ROOT,
-        env={**os.environ, "NX_DAEMON": "false"},
+        # This query runs inside Nx's test target; keep its graph database separate
+        # from the parent runner's, including on Windows where open files lock.
+        env={
+            **os.environ,
+            "NX_DAEMON": "false",
+            "NX_WORKSPACE_DATA_DIRECTORY": str(tmp_path / "workspace-data"),
+        },
         capture_output=True,
         text=True,
-        check=True,
+        check=False,
     )
+    assert affected.returncode == 0, (affected.stdout, affected.stderr)
     assert {"sdk-python", "sdk-typescript"} <= set(json.loads(affected.stdout)), affected.stdout
