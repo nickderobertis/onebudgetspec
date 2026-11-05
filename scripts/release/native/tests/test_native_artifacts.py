@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import tarfile
+import time
 import tomllib
 import zipfile
 from pathlib import Path
@@ -498,6 +499,21 @@ def test_native_products_contend_with_independent_wheel_and_carrier_builders(
 ) -> None:
     """Separate builders preserve all payloads and the native install's freshness proof."""
     launcher = next((products.directory / "launcher").glob("*.tgz"))
+    holder = subprocess.Popen(
+        [
+            sys.executable,
+            str(ROOT / "scripts/native-build-lock.py"),
+            sys.executable,
+            "-c",
+            "print('locked', flush=True); input()",
+        ],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert holder.stdout is not None
+    assert holder.stdout.readline().strip() == "locked"
     native = subprocess.Popen(
         [
             bash(),
@@ -527,7 +543,17 @@ def test_native_products_contend_with_independent_wheel_and_carrier_builders(
         )
         for artifact in ("cli-wheel", "npm-carrier")
     ]
+    try:
+        # All builders have been dispatched, but none may create its output directory
+        # while another process owns the native-build critical section.
+        time.sleep(2)
+        blocked = not any(
+            (tmp_path / name).exists() for name in ("native", "cli-wheel", "npm-carrier")
+        )
+    finally:
+        holder.communicate("\n")
     results = [(process, process.communicate()) for process in [native, *competitors]]
+    assert blocked, "a native builder entered the critical section while another process held it"
     for process, (_, stderr) in results:
         assert process.returncode == 0, stderr
     # native-products has installed and driven all three products and verified Cargo
