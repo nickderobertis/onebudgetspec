@@ -4,7 +4,13 @@
 # superseded builds, as the pruner itself reports it.
 #
 #   1. The ordinary build, then one declared pass, untimed, which clears any backlog,
-#      including whatever that build superseded; its seconds go in the detail only.
+#      including whatever that build superseded; its seconds go in the detail only. A build
+#      older than the window survives a pass only as its unit name's newest, so a backlog can
+#      cost the ordinary build a dependency: a lint build of `clap` newer than the test build
+#      of `clap` removes the test build. The ordinary build and an untimed pass therefore
+#      repeat until a pass removes nothing. Each rebuilt entry is inside the window, so only
+#      the shrinking older set can go, and the repeat ends with the ordinary build whole and
+#      nothing superseded left for the timed pass.
 #   2. The workspace's test targets, built as the gate's uninstrumented lane builds them
 #      (`cargo test --no-run`, the build `cargo nextest run` makes) but with every workspace
 #      crate's overflow checks off, which gives this repository's own crates (and nothing
@@ -47,13 +53,19 @@ build_tests() {
 build_tests
 ONEBUDGETSPEC_RESULT="$scratch/backlog.json" just pool-maintenance >&2 \
   || fail "the untimed backlog pass failed (above); run 'just bootstrap' if the pruner is missing."
+while :; do
+  build_tests
+  entries >"$scratch/before"
+  ONEBUDGETSPEC_RESULT="$scratch/settling.json" just pool-maintenance >&2 \
+    || fail "an untimed pass after the backlog pass failed (above)."
+  [ "$(entries)" != "$(cat "$scratch/before")" ] || break
+done
 
 alternative=()
 for crate in $(cargo metadata --no-deps --locked --format-version 1 \
   | node -e 'for (const p of JSON.parse(require("fs").readFileSync(0, "utf8")).packages) console.log(p.name)'); do
   alternative+=(--config "profile.dev.package.$crate.overflow-checks=false")
 done
-entries >"$scratch/before"
 build_tests "${alternative[@]}"
 entries | LC_ALL=C comm -13 "$scratch/before" - >"$scratch/alternative"
 [ -s "$scratch/alternative" ] || fail "the alternative build created no entries in $PROFILE."
