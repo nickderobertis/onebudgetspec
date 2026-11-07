@@ -173,6 +173,7 @@ def _shared_models(root: str, text: str) -> str:
         "Measure": "list_report",
         "BudgetRun": "budget_run",
         "UnavailableBudget": "budget_run",
+        "ResultNote": "budget_run",
         "HistoricalFlag": "publish_request",
     }
     lines = text.splitlines(keepends=True)

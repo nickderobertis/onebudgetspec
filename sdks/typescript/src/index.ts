@@ -39,7 +39,7 @@ export type Measure = ListedBudget["measure"];
 /** The version of this package, which releases in lock step with the `onebudgetspec` binary. */
 export const VERSION = "0.1.6";
 
-export type { BudgetRun, UnavailableBudget } from "./generated/budget-run.ts";
+export type { BudgetRun, ResultNote, UnavailableBudget } from "./generated/budget-run.ts";
 export type { ComparisonInput } from "./generated/comparison-input.ts";
 export type { ComparisonReport, ComparisonRow } from "./generated/comparison-report.ts";
 export type { DeliveryResult } from "./generated/delivery-result.ts";

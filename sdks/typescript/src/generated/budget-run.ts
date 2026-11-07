@@ -33,6 +33,10 @@ export interface BudgetRun {
    * Repository identity recorded by the producer.
    */
   repository: string;
+  /**
+   * One short note per catalog row, shown at the end of that row's report status.
+   */
+  result_notes?: ResultNote[];
   results: CheckReport;
   /**
    * Host workflow run identity.
@@ -95,6 +99,23 @@ export interface ListedBudget {
    * The budget's unit.
    */
   unit: string;
+}
+/**
+ * The saved `ResultNote` wire contract.
+ */
+export interface ResultNote {
+  /**
+   * Normalized repository-relative budgets file path.
+   */
+  file: string;
+  /**
+   * Budget id within its file.
+   */
+  id: string;
+  /**
+   * The text the report appends to this row's status.
+   */
+  note: string;
 }
 /**
  * Unmodified ordinary check results from completed measurements.

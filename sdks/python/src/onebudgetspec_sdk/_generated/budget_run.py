@@ -12,6 +12,28 @@ from .check_report import CheckReport
 from .list_report import ListedBudget
 
 
+class ResultNote(BaseModel):
+    """
+    The saved `ResultNote` wire contract.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    file: str
+    """
+    Normalized repository-relative budgets file path.
+    """
+    id: str
+    """
+    Budget id within its file.
+    """
+    note: str
+    """
+    The text the report appends to this row's status.
+    """
+
+
 class UnavailableBudget(BaseModel):
     """
     The saved `UnavailableBudget` wire contract.
@@ -69,6 +91,10 @@ class BudgetRun(BaseModel):
     repository: str
     """
     Repository identity recorded by the producer.
+    """
+    result_notes: list[ResultNote] | None = None
+    """
+    One short note per catalog row, shown at the end of that row's report status.
     """
     results: CheckReport
     """

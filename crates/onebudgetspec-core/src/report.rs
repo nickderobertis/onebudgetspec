@@ -5,6 +5,9 @@
 //! to tell an absent key from a null one.
 
 use std::collections::BTreeMap;
+use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
 
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
@@ -185,5 +188,31 @@ impl CheckReport {
         } else {
             exit::WITHIN
         }
+    }
+
+    /// Write this report to `path` as the JSON document `check --output json` prints,
+    /// creating missing parent directories. The write is atomic: a temporary file beside
+    /// `path` is renamed over it, so a reader sees the previous file or the whole report.
+    ///
+    /// # Errors
+    /// Returns why a directory or the file could not be written; `path` is then unchanged.
+    pub fn save(&self, path: &Path) -> io::Result<()> {
+        let mut document = serde_json::to_string_pretty(self).map_err(io::Error::other)?;
+        document.push('\n');
+        let directory = match path.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent,
+            _ => Path::new("."),
+        };
+        fs::create_dir_all(directory)?;
+        let mut builder = tempfile::Builder::new();
+        builder.prefix(".onebudgetspec-results-");
+        // A temporary file defaults to owner-only; the saved file is an ordinary one that
+        // the umask decides. Windows has no such mode to set.
+        #[cfg(unix)]
+        builder.permissions(std::os::unix::fs::PermissionsExt::from_mode(0o666));
+        let mut file = builder.tempfile_in(directory)?;
+        file.write_all(document.as_bytes())?;
+        file.persist(path).map_err(|error| error.error)?;
+        Ok(())
     }
 }

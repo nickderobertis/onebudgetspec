@@ -19,7 +19,7 @@ from ._client import (
     validate,
 )
 from ._generated import SCHEMA_BUNDLE_VERSION
-from ._generated.budget_run import BudgetRun, UnavailableBudget
+from ._generated.budget_run import BudgetRun, ResultNote, UnavailableBudget
 from ._generated.check_report import CheckReport, CheckResult, Direction, Host, Verdict
 from ._generated.comparison_input import ComparisonInput
 from ._generated.comparison_report import ComparisonReport, ComparisonRow
@@ -34,6 +34,7 @@ __all__ = [
     "BINARY_ENV",
     "BudgetRun",
     "UnavailableBudget",
+    "ResultNote",
     "ComparisonRow",
     "HistoricalFlag",
     "HistoryEntry",

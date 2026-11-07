@@ -2,7 +2,7 @@
 // Do not edit: re-run the generator. The client validates every report against these.
 
 /** The version of the schema bundle these types were generated from. */
-export const SCHEMA_BUNDLE_VERSION = 2;
+export const SCHEMA_BUNDLE_VERSION = 3;
 
 /** Every root the schema bundle carries, which the client requires of one. */
 export const BUNDLE_ROOTS: readonly string[] = [
@@ -441,6 +441,23 @@ export const reportSchemas = {
           },
         ],
       },
+      ResultNote: {
+        additionalProperties: false,
+        description: "The saved `ResultNote` wire contract.",
+        properties: {
+          file: {
+            description: "Normalized repository-relative budgets file path.",
+            type: "string",
+          },
+          id: { description: "Budget id within its file.", type: "string" },
+          note: {
+            description: "The text the report appends to this row's status.",
+            type: "string",
+          },
+        },
+        required: ["file", "id", "note"],
+        type: "object",
+      },
       UnavailableBudget: {
         additionalProperties: false,
         description: "The saved `UnavailableBudget` wire contract.",
@@ -509,6 +526,12 @@ export const reportSchemas = {
         type: "string",
       },
       repository: { description: "Repository identity recorded by the producer.", type: "string" },
+      result_notes: {
+        description:
+          "One short note per catalog row, shown at the end of that row's report status.",
+        items: { $ref: "#/$defs/ResultNote" },
+        type: "array",
+      },
       results: {
         $ref: "#/$defs/CheckReport",
         description: "Unmodified ordinary check results from completed measurements.",
@@ -579,6 +602,12 @@ export const reportSchemas = {
           repository: {
             description: "Repository identity recorded by the producer.",
             type: "string",
+          },
+          result_notes: {
+            description:
+              "One short note per catalog row, shown at the end of that row's report status.",
+            items: { $ref: "#/$defs/ResultNote" },
+            type: "array",
           },
           results: {
             $ref: "#/$defs/CheckReport",
@@ -799,6 +828,23 @@ export const reportSchemas = {
           },
         ],
       },
+      ResultNote: {
+        additionalProperties: false,
+        description: "The saved `ResultNote` wire contract.",
+        properties: {
+          file: {
+            description: "Normalized repository-relative budgets file path.",
+            type: "string",
+          },
+          id: { description: "Budget id within its file.", type: "string" },
+          note: {
+            description: "The text the report appends to this row's status.",
+            type: "string",
+          },
+        },
+        required: ["file", "id", "note"],
+        type: "object",
+      },
       UnavailableBudget: {
         additionalProperties: false,
         description: "The saved `UnavailableBudget` wire contract.",
@@ -890,6 +936,12 @@ export const reportSchemas = {
           repository: {
             description: "Repository identity recorded by the producer.",
             type: "string",
+          },
+          result_notes: {
+            description:
+              "One short note per catalog row, shown at the end of that row's report status.",
+            items: { $ref: "#/$defs/ResultNote" },
+            type: "array",
           },
           results: {
             $ref: "#/$defs/CheckReport",
@@ -1178,6 +1230,23 @@ export const reportSchemas = {
           },
         ],
       },
+      ResultNote: {
+        additionalProperties: false,
+        description: "The saved `ResultNote` wire contract.",
+        properties: {
+          file: {
+            description: "Normalized repository-relative budgets file path.",
+            type: "string",
+          },
+          id: { description: "Budget id within its file.", type: "string" },
+          note: {
+            description: "The text the report appends to this row's status.",
+            type: "string",
+          },
+        },
+        required: ["file", "id", "note"],
+        type: "object",
+      },
       UnavailableBudget: {
         additionalProperties: false,
         description: "The saved `UnavailableBudget` wire contract.",
@@ -1274,6 +1343,12 @@ export const reportSchemas = {
           repository: {
             description: "Repository identity recorded by the producer.",
             type: "string",
+          },
+          result_notes: {
+            description:
+              "One short note per catalog row, shown at the end of that row's report status.",
+            items: { $ref: "#/$defs/ResultNote" },
+            type: "array",
           },
           results: {
             $ref: "#/$defs/CheckReport",
@@ -1493,6 +1568,23 @@ export const reportSchemas = {
             type: "string",
           },
         ],
+      },
+      ResultNote: {
+        additionalProperties: false,
+        description: "The saved `ResultNote` wire contract.",
+        properties: {
+          file: {
+            description: "Normalized repository-relative budgets file path.",
+            type: "string",
+          },
+          id: { description: "Budget id within its file.", type: "string" },
+          note: {
+            description: "The text the report appends to this row's status.",
+            type: "string",
+          },
+        },
+        required: ["file", "id", "note"],
+        type: "object",
       },
       UnavailableBudget: {
         additionalProperties: false,
