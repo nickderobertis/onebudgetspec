@@ -500,6 +500,23 @@ REPORT_SCHEMAS: dict[str, dict[str, object]] = {
                     },
                 ],
             },
+            "ResultNote": {
+                "additionalProperties": False,
+                "description": "The saved `ResultNote` wire contract.",
+                "properties": {
+                    "file": {
+                        "description": "Normalized repository-relative budgets file path.",
+                        "type": "string",
+                    },
+                    "id": {"description": "Budget id within its file.", "type": "string"},
+                    "note": {
+                        "description": "The text the report appends to this row's status.",
+                        "type": "string",
+                    },
+                },
+                "required": ["file", "id", "note"],
+                "type": "object",
+            },
             "UnavailableBudget": {
                 "additionalProperties": False,
                 "description": "The saved `UnavailableBudget` wire contract.",
@@ -575,6 +592,11 @@ REPORT_SCHEMAS: dict[str, dict[str, object]] = {
                 "description": "Repository identity recorded by the producer.",
                 "type": "string",
             },
+            "result_notes": {
+                "description": "One short note per catalog row, shown at the end of that row's report status.",
+                "items": {"$ref": "#/$defs/ResultNote"},
+                "type": "array",
+            },
             "results": {
                 "$ref": "#/$defs/CheckReport",
                 "description": "Unmodified ordinary check results from completed measurements.",
@@ -645,6 +667,11 @@ REPORT_SCHEMAS: dict[str, dict[str, object]] = {
                     "repository": {
                         "description": "Repository identity recorded by the producer.",
                         "type": "string",
+                    },
+                    "result_notes": {
+                        "description": "One short note per catalog row, shown at the end of that row's report status.",
+                        "items": {"$ref": "#/$defs/ResultNote"},
+                        "type": "array",
                     },
                     "results": {
                         "$ref": "#/$defs/CheckReport",
@@ -895,6 +922,23 @@ REPORT_SCHEMAS: dict[str, dict[str, object]] = {
                     },
                 ],
             },
+            "ResultNote": {
+                "additionalProperties": False,
+                "description": "The saved `ResultNote` wire contract.",
+                "properties": {
+                    "file": {
+                        "description": "Normalized repository-relative budgets file path.",
+                        "type": "string",
+                    },
+                    "id": {"description": "Budget id within its file.", "type": "string"},
+                    "note": {
+                        "description": "The text the report appends to this row's status.",
+                        "type": "string",
+                    },
+                },
+                "required": ["file", "id", "note"],
+                "type": "object",
+            },
             "UnavailableBudget": {
                 "additionalProperties": False,
                 "description": "The saved `UnavailableBudget` wire contract.",
@@ -990,6 +1034,11 @@ REPORT_SCHEMAS: dict[str, dict[str, object]] = {
                     "repository": {
                         "description": "Repository identity recorded by the producer.",
                         "type": "string",
+                    },
+                    "result_notes": {
+                        "description": "One short note per catalog row, shown at the end of that row's report status.",
+                        "items": {"$ref": "#/$defs/ResultNote"},
+                        "type": "array",
                     },
                     "results": {
                         "$ref": "#/$defs/CheckReport",
@@ -1306,6 +1355,23 @@ REPORT_SCHEMAS: dict[str, dict[str, object]] = {
                     },
                 ],
             },
+            "ResultNote": {
+                "additionalProperties": False,
+                "description": "The saved `ResultNote` wire contract.",
+                "properties": {
+                    "file": {
+                        "description": "Normalized repository-relative budgets file path.",
+                        "type": "string",
+                    },
+                    "id": {"description": "Budget id within its file.", "type": "string"},
+                    "note": {
+                        "description": "The text the report appends to this row's status.",
+                        "type": "string",
+                    },
+                },
+                "required": ["file", "id", "note"],
+                "type": "object",
+            },
             "UnavailableBudget": {
                 "additionalProperties": False,
                 "description": "The saved `UnavailableBudget` wire contract.",
@@ -1406,6 +1472,11 @@ REPORT_SCHEMAS: dict[str, dict[str, object]] = {
                     "repository": {
                         "description": "Repository identity recorded by the producer.",
                         "type": "string",
+                    },
+                    "result_notes": {
+                        "description": "One short note per catalog row, shown at the end of that row's report status.",
+                        "items": {"$ref": "#/$defs/ResultNote"},
+                        "type": "array",
                     },
                     "results": {
                         "$ref": "#/$defs/CheckReport",
@@ -1655,6 +1726,23 @@ REPORT_SCHEMAS: dict[str, dict[str, object]] = {
                         "type": "string",
                     },
                 ],
+            },
+            "ResultNote": {
+                "additionalProperties": False,
+                "description": "The saved `ResultNote` wire contract.",
+                "properties": {
+                    "file": {
+                        "description": "Normalized repository-relative budgets file path.",
+                        "type": "string",
+                    },
+                    "id": {"description": "Budget id within its file.", "type": "string"},
+                    "note": {
+                        "description": "The text the report appends to this row's status.",
+                        "type": "string",
+                    },
+                },
+                "required": ["file", "id", "note"],
+                "type": "object",
             },
             "UnavailableBudget": {
                 "additionalProperties": False,

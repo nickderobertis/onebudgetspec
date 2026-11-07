@@ -44,7 +44,7 @@ pub enum Output {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Measure every selected budget once and report actual, budget and headroom.
-    Check(SelectedFiles),
+    Check(CheckArgs),
     /// Check the files' shape and id uniqueness; runs no command.
     Validate(Files),
     /// Report the selected budgets; runs no command.
@@ -73,6 +73,17 @@ pub struct SelectedFiles {
 
     #[command(flatten)]
     pub select: SelectArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct CheckArgs {
+    #[command(flatten)]
+    pub selected: SelectedFiles,
+
+    /// Also write the JSON report `--output json` prints to this file, whatever the verdict.
+    /// Missing parent directories are created.
+    #[arg(long, value_name = "FILE")]
+    pub save_results: Option<PathBuf>,
 }
 
 // llmlint: ignore-block[invalid_states_unrepresentable] the contract gives these their meaning at selection, not parsing: an id matching no budget is refused by Budgets::select with status 2, and a label matching none leaves an empty selection that exits 0, which a validating type here would turn into a refusal.

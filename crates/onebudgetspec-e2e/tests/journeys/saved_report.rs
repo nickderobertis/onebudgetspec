@@ -298,3 +298,104 @@ fn markdown_is_refused_for_ordinary_verbs_and_bad_reporter_requests_exit_cleanly
         assert!(!fixture.path().join("publish-request.json").exists());
     }
 }
+
+/// The bytes of a document the current release saved, with no `result_notes` field, and an
+/// empty baseline, so its one row carries report-only and unavailable text.
+fn released_document() -> String {
+    let run = include_str!("../../../onebudgetspec-core/tests/fixtures/budget-run.json");
+    assert!(!run.contains("result_notes"));
+    format!(r#"{{"schema_version": 1, "current": {run}, "baseline": []}}"#)
+}
+
+/// What `report --output markdown` printed for [`released_document`] before notes existed.
+const RELEASED_MARKDOWN: &str = "## Budget report
+
+Repository: owner/repo · head: current · run: run-current · attempt: 1
+
+| Budget | Verdict | Current | Mean | SD | Change % | Sigma | Samples | Status |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| budgets.yaml / latency (ms) | over | 15.000 | unavailable | unavailable | unavailable | unavailable | 0 | report-only; baseline unavailable: 0 eligible samples; minimum 5; additional usable baseline observations were not supplied |
+
+Baseline provenance (saved observations; artifact links may expire):
+";
+
+#[test]
+fn a_document_saved_without_notes_renders_as_before_and_stays_without_them() {
+    let fixture = Fixture::new();
+    fixture.write("input.json", &released_document());
+    let run = fixture.run(["report", "--input", "input.json", "--output", "markdown"]);
+    assert_eq!(run.expect_status(0).stdout, RELEASED_MARKDOWN);
+    let json = fixture.run(["report", "--input", "input.json", "--json"]);
+    let report = json.expect_status(0).json();
+    crate::common::validate("comparison-report", &report);
+    assert!(report["current"].get("result_notes").is_none());
+}
+
+#[test]
+fn null_notes_read_as_no_notes() {
+    let fixture = Fixture::new();
+    let mut value: Value = serde_json::from_str(&released_document()).unwrap();
+    value["current"]["result_notes"] = Value::Null;
+    fixture.write("input.json", &value.to_string());
+    let run = fixture.run(["report", "--input", "input.json", "--output", "markdown"]);
+    assert_eq!(run.expect_status(0).stdout, RELEASED_MARKDOWN);
+}
+
+#[test]
+fn a_rows_note_ends_its_status_after_every_other_text() {
+    let fixture = Fixture::new();
+    let mut input = saved();
+    input.current.enforcement_exclude_labels = vec!["report".into()];
+    let mut other = input.current.catalog[0].clone();
+    other.id = "unnoted".into();
+    input.current.catalog.push(other);
+    let mut value = serde_json::to_value(&input).unwrap();
+    value["current"]["result_notes"] = json!([{
+        "file": "budgets.yaml",
+        "id": "latency",
+        "note": "measured at abc123 | <cached>",
+    }]);
+    // Fewer than 20 samples, so the row is provisional as well as report-only and flagged.
+    value["baseline"].as_array_mut().unwrap().truncate(6);
+    fixture.write("input.json", &value.to_string());
+    let run = fixture.run(["report", "--input", "input.json", "--output", "markdown"]);
+    let markdown = &run.expect_status(0).stdout;
+    let row = |id: &str| {
+        markdown
+            .lines()
+            .find(|line| line.starts_with(&format!("| budgets.yaml / {id} ")))
+            .unwrap_or_else(|| panic!("no row for {id} in {markdown}"))
+    };
+    assert!(
+        row("latency").ends_with(
+            "| report-only; constant-baseline-change; provisional; sigma change unavailable: constant baseline changed; measured at abc123 &#124; &lt;cached&gt; |"
+        ),
+        "{markdown}"
+    );
+    assert!(!row("unnoted").contains("abc123"), "{markdown}");
+
+    let json = fixture.run(["report", "--input", "input.json", "--json"]);
+    let report = json.expect_status(0).json();
+    crate::common::validate("comparison-report", &report);
+    assert_eq!(
+        report["current"]["result_notes"],
+        value["current"]["result_notes"]
+    );
+}
+
+#[test]
+fn a_note_without_a_row_a_second_note_or_a_blank_note_is_refused() {
+    let fixture = Fixture::new();
+    let note = |id: &str, note: &str| json!({"file": "budgets.yaml", "id": id, "note": note});
+    for notes in [
+        json!([note("unregistered", "text")]),
+        json!([note("latency", "one"), note("latency", "two")]),
+        json!([note("latency", "  ")]),
+    ] {
+        let mut value = serde_json::to_value(saved()).unwrap();
+        value["current"]["result_notes"] = notes;
+        fixture.write("input.json", &value.to_string());
+        let run = fixture.run(["report", "--input", "input.json"]);
+        assert!(run.expect_status(2).stderr.contains("invalid result note"));
+    }
+}

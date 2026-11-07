@@ -126,7 +126,7 @@ report(len(recorded_requests), detail="one sync of the recorded fixture")
 ## The command line
 
 ```sh
-onebudgetspec check [PATH]... [--id ID]... [--label LABEL]... [--exclude-label LABEL]... [--recursive]
+onebudgetspec check [PATH]... [--id ID]... [--label LABEL]... [--exclude-label LABEL]... [--recursive] [--save-results FILE]
 onebudgetspec validate [PATH]... [--recursive]
 onebudgetspec list [PATH]... [--id ID]... [--label LABEL]... [--exclude-label LABEL]... [--recursive]
 onebudgetspec schema
@@ -149,12 +149,23 @@ budget bundle-size: actual 900 kilobytes, budget 800 kilobytes, headroom -100 ki
 A failed measurement's line is `budget <id>: error — <reason>; host: ...`. A result with no
 detail, or an empty one, is its line alone.
 
+`check --save-results FILE` also writes the JSON document `--output json` prints to `FILE`,
+whichever output format is chosen and whatever the verdict, measurement errors included;
+what `check` prints and its exit status stay the same. Missing parent directories are
+created and the write is atomic (a temporary file beside `FILE`, then a rename). An invalid
+invocation or budgets file writes nothing.
+
+A saved `BudgetRun` may carry `result_notes`, a list of `{file, id, note}` with at most one
+note per catalog budget. `onebudgetspec report` appends a row's note to its Status column,
+after any report-only, flag, provisional or unavailable text. A note naming no catalog budget
+or holding only whitespace makes the run invalid.
+
 | Exit | Meaning |
 | ---- | ------- |
 | 0 | every selected budget is within |
 | 1 | at least one is over, and none errored |
 | 2 | the invocation or a file is invalid; nothing was run (the reason is on stderr) |
-| 3 | at least one measurement errored (its reason is that result's `error`, in the report), or the report could not be written (that reason is on stderr) |
+| 3 | at least one measurement errored (its reason is that result's `error`, in the report), or the report could not be written or the `--save-results` file could not be saved (that reason is on stderr) |
 
 The npm launcher adds three of its own, each with the reason on stderr: `64` on a platform
 no carrier is published for (Intel macOS among them, said so by name), `69` when the carrier package is missing or its binary

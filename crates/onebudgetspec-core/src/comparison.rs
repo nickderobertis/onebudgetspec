@@ -36,6 +36,21 @@ pub struct BudgetRun {
     /// Saved generic selection: matching catalog labels render as report-only.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub enforcement_exclude_labels: Vec<String>,
+    /// One short note per catalog row, shown at the end of that row's report status.
+    #[serde(
+        default,
+        deserialize_with = "null_is_empty",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub result_notes: Vec<ResultNote>,
+}
+
+/// The generated Python model dumps an absent optional list as `null`, so a run that SDK
+/// loaded and saved again reads as one with no notes rather than as a refused document.
+fn null_is_empty<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<ResultNote>, D::Error> {
+    Ok(Option::<Vec<ResultNote>>::deserialize(deserializer)?.unwrap_or_default())
 }
 
 /// The saved `UnavailableBudget` wire contract.
@@ -48,6 +63,18 @@ pub struct UnavailableBudget {
     pub id: String,
     /// Why the command could not supply an ordinary result.
     pub reason: String,
+}
+
+/// The saved `ResultNote` wire contract.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ResultNote {
+    /// Normalized repository-relative budgets file path.
+    pub file: String,
+    /// Budget id within its file.
+    pub id: String,
+    /// The text the report appends to this row's status.
+    pub note: String,
 }
 
 /// The saved `ComparisonInput` wire contract.
@@ -478,6 +505,15 @@ pub fn validate_run(run: &BudgetRun) -> Result<(), String> {
             return Err("invalid unavailable entry".into());
         }
     }
+    let mut noted = std::collections::BTreeSet::new();
+    for item in &run.result_notes {
+        if !keys.contains(&(&item.file, &item.id))
+            || !noted.insert((&item.file, &item.id))
+            || item.note.trim().is_empty()
+        {
+            return Err("invalid result note".into());
+        }
+    }
     Ok(())
 }
 
@@ -598,6 +634,14 @@ pub fn render_markdown(report: &ComparisonReport) -> String {
         }
         if let Some(reason) = &row.unavailable {
             status.push(cell(reason));
+        }
+        if let Some(item) = report
+            .current
+            .result_notes
+            .iter()
+            .find(|n| n.file == row.file && n.id == row.id)
+        {
+            status.push(cell(&item.note));
         }
         let _ = writeln!(
             out,

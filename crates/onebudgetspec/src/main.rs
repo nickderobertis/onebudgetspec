@@ -8,12 +8,13 @@ mod cli;
 mod render;
 
 use std::io::Write;
+use std::path::Path;
 use std::process::ExitCode;
 
 use clap::Parser;
-use onebudgetspec_core::{Error, Selection, exit, load, schema_bundle};
+use onebudgetspec_core::{CheckReport, Error, Selection, exit, load, schema_bundle};
 
-use crate::cli::{Cli, Command, Output};
+use crate::cli::{Cli, Command, Output, SelectedFiles};
 
 fn main() -> ExitCode {
     let cli = match Cli::try_parse() {
@@ -45,14 +46,23 @@ fn run(command: &Command, output: Output) -> Result<i32, Error> {
     let stdout = &mut std::io::stdout().lock();
     match command {
         Command::Check(args) => {
-            let budgets = load(&args.files.paths, args.files.recursive)?;
-            let selected = budgets.select(&selection(&args.select))?;
+            if let Some(path) = &args.save_results {
+                refuse_unusable_results_file(path)?;
+            }
+            let SelectedFiles { files, select } = &args.selected;
+            let budgets = load(&files.paths, files.recursive)?;
+            let selected = budgets.select(&selection(select))?;
             let report = selected.check();
+            let saved = args
+                .save_results
+                .as_deref()
+                .is_none_or(|path| saved(&report, path));
             let written = match output {
                 Output::Json => render::json(stdout, &report),
                 Output::Text | Output::Markdown => render::check_text(stdout, &report),
             };
-            Ok(delivered(written, report.exit_code()))
+            let code = delivered(written, report.exit_code());
+            Ok(if saved { code } else { exit::ERROR })
         }
         Command::Validate(files) => {
             let budgets = load(&files.paths, files.recursive)?;
@@ -82,6 +92,32 @@ fn run(command: &Command, output: Output) -> Result<i32, Error> {
             exit::WITHIN,
         )),
     }
+}
+
+/// Save the report to `path`, or name the reason on stderr and answer false.
+fn saved(report: &CheckReport, path: &Path) -> bool {
+    let outcome = report.save(path);
+    if let Err(error) = &outcome {
+        eprintln!(
+            "onebudgetspec: cannot save the results to {}: {error}; re-run with a writable --save-results path",
+            path.display()
+        );
+    }
+    outcome.is_ok()
+}
+
+/// Refuse a `--save-results` path that could never name a file, before anything is measured.
+fn refuse_unusable_results_file(path: &Path) -> Result<(), Error> {
+    if path.file_name().is_some() && !path.is_dir() {
+        return Ok(());
+    }
+    Err(Error::Invocation {
+        message: format!(
+            "--save-results {:?} does not name a file",
+            path.display().to_string()
+        ),
+        next: "pass a file path, for example --save-results results/check.json".into(),
+    })
 }
 
 /// The exit status once the report is written: `outcome` when it was, and `3` (an error)
