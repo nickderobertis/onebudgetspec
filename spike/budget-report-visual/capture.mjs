@@ -23,9 +23,8 @@ try {
 		const comment = page.locator(`[id="${id}"]`).first();
 		await comment.waitFor({ timeout: 60_000 });
 		if (shot.expand) {
-			for (const summary of await comment.locator("details:not([open]) > summary").all()) {
-				await summary.click();
-			}
+			const closed = comment.locator(".comment-body details:not([open]) > summary");
+			while ((await closed.count()) > 0) await closed.first().click();
 		}
 		await page.waitForTimeout(500);
 		await comment.screenshot({ path: join(outDir, shot.name) });

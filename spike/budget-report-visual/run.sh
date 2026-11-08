@@ -12,7 +12,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 out="${1:?usage: run.sh OUT_DIR}"
 mkdir -p "$out"
-cols="${COLUMNS_SET:-5}"
+cols="${COLUMNS_SET:-3}" # chosen for phone width; trials 4 and 5 overflow or wrap at 390 px
 ui=nickderobertis/onepipeline-ui
 declare -A run=([noflag]=42384341444 [flagged]=42421538096)
 declare -A live=([noflag]=6707640908 [flagged]=6714331765)
@@ -34,17 +34,21 @@ for case in noflag flagged; do
 done
 
 if [ -n "${POST_PR:-}" ]; then
-	post() { gh api "repos/nickderobertis/onebudgetspec/issues/$POST_PR/comments" -F "body=@$1" -q .html_url; }
-	python3 -I - "$here/comments.json" \
-		"$(post "$out/trial-flagged-5.md")" "$(post "$out/trial-flagged-4.md")" "$(post "$out/trial-flagged-3.md")" \
-		"$(post "$out/after-noflag.md")" "$(post "$out/after-flagged.md")" <<'EOF'
-import json, sys
-p, t5, t4, t3, an, af = sys.argv[1:]
+	python3 -I - "$here/comments.json" "$POST_PR" "$out" <<'PY'
+import json, subprocess, sys
+p, pr, out = sys.argv[1:]
 c = json.load(open(p))
-c.update(trial_flagged_5=t5, trial_flagged_4=t4, trial_flagged_3=t3, after_noflag=an, after_flagged=af)
+def post(path):
+    return subprocess.run(["gh", "api", f"repos/nickderobertis/onebudgetspec/issues/{pr}/comments",
+        "-F", f"body=@{path}", "-q", ".html_url"], check=True, capture_output=True, text=True).stdout.strip()
+for n in (5, 4, 3):  # trials are posted once, on the first run against a PR
+    if f"trial_flagged_{n}" not in c:
+        c[f"trial_flagged_{n}"] = post(f"{out}/trial-flagged-{n}.md")
+c["after_noflag"] = post(f"{out}/after-noflag.md")
+c["after_flagged"] = post(f"{out}/after-flagged.md")
 json.dump(c, open(p, "w"), indent=2)
 open(p, "a").write("\n")
-EOF
+PY
 fi
 
 python3 -I - "$here/comments.json" "$out/shots.json" <<'EOF'
@@ -52,7 +56,7 @@ import json, sys
 c = json.load(open(sys.argv[1]))
 shots = []
 for key, url in c.items():
-    if not url:
+    if not url or key.startswith("superseded"):
         continue
     for w, tag in ((390, "phone"), (1280, "desktop")):
         if key.startswith("trial_") and w == 1280:
