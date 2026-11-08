@@ -76,7 +76,7 @@ regenerates them, and each generator's `--check` runs under its project's `lint`
   `@onebudgetspec/cli` optional, `workspace:*` packed as the workspace version): `check`,
   `validate`, `listBudgets`, `schema`, `compare`, `renderMarkdown`, and `report`, which runs no binary. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
   `@onebudgetspec/cli` launcher. Owes `sdks/typescript/tests/conformance.test.ts`,
-  `binary.test.ts`, `errors.test.ts`, `generator.test.ts`, `report.test.ts`, `comparison.test.ts` and the
+  `binary.test.ts`, `errors.test.ts`, `generator.test.ts`, `report.test.ts`, `comparison.test.ts`, `build.test.ts` (a rebuild never empties `dist`) and the
   `sdk_typescript.rs` journey.
 
 A new conformance case must use only flags both SDK runners parse; each fails on any other.
