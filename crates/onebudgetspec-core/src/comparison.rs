@@ -3,6 +3,9 @@ use crate::{CheckReport, Direction, ListedBudget, Verdict};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+mod markdown;
+pub use markdown::render_markdown;
+
 // llmlint: ignore-block[invalid_states_unrepresentable] These are the fixed serde wire structs shared with installed consumers; changing String, Option or bool fields to domain newtypes or outcome enums would change that agreed Rust API and schema. validate_run/compare_json and validate_history validate saved observations at entry; validate_request and validated_report_history guard delivery inputs. Arithmetic and rendering preserve the ordinary report rather than replacing its types.
 /// The saved `BudgetRun` wire contract.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -217,8 +220,15 @@ pub fn compare(input: &ComparisonInput) -> ComparisonReport {
         ))
     });
     runs.truncate(20);
-    for run in &runs {
-        report.diagnostics.push(format!("baseline provenance: head {} run {} attempt {} completed {} URL {} (artifact links may expire)", run.head_sha, run.run_id, run.attempt, run.completed_at, run.run_url));
+    // Newest first, so the range reads oldest to newest; each run's head, run and URL stay
+    // in the saved input.
+    if let (Some(newest), Some(oldest)) = (runs.first(), runs.last()) {
+        report.diagnostics.push(format!(
+            "baseline: {} base commits, {} … {}",
+            runs.len(),
+            short_sha(&oldest.head_sha),
+            short_sha(&newest.head_sha)
+        ));
     }
     let current_error = if input.schema_version == 1 {
         validate_run(&input.current).err()
@@ -283,34 +293,40 @@ fn comparison_row(
                 .unwrap_or_else(|| "current measurement unavailable or incomplete".into()),
         );
     }
-    let mut missing = Vec::new();
+    // Identical reasons are grouped in first-seen order, each counted against every sample.
+    let mut missing: Vec<(String, usize)> = Vec::new();
     let samples: Vec<f64> = runs
         .iter()
         .filter_map(|run| match sample(run, budget) {
             Ok(value) => Some(value),
             Err(reason) => {
-                missing.push(format!("{}: {reason}", run.head_sha));
+                match missing.iter_mut().find(|(seen, _)| *seen == reason) {
+                    Some((_, count)) => *count += 1,
+                    None => missing.push((reason, 1)),
+                }
                 None
             }
         })
         .collect();
     if !missing.is_empty() {
-        append_reason(&mut row, &missing.join("; "));
+        let grouped: Vec<String> = missing
+            .iter()
+            .map(|(reason, count)| format!("{reason} ({count} of {} baseline samples)", runs.len()))
+            .collect();
+        append_reason(&mut row, &grouped.join("; "));
     }
     row.baseline_n = u32::try_from(samples.len()).unwrap_or(20);
-    if samples.len() < 5 {
-        let reason = format!(
-            "baseline unavailable: {} eligible samples; minimum 5; additional usable baseline observations were not supplied",
-            samples.len()
-        );
-        row.unavailable = Some(
-            row.unavailable
-                .map_or_else(|| reason.clone(), |old| format!("{old}; {reason}")),
-        );
-    } else if current_error.is_none() {
+    if samples.len() >= 5 && current_error.is_none() {
         statistics(&mut row, &samples);
     }
     row
+}
+
+/// The first seven characters of a commit hash, the way a host abbreviates it.
+fn short_sha(sha: &str) -> &str {
+    sha.char_indices()
+        .nth(7)
+        .map_or(sha, |(end, _)| &sha[..end])
 }
 
 fn append_reason(row: &mut ComparisonRow, reason: &str) {
@@ -579,91 +595,6 @@ pub fn validate_history(history: &RollingHistory) -> Result<(), String> {
         }
     }
     Ok(())
-}
-
-fn cell(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('|', "&#124;")
-        .replace(['\r', '\n'], " ")
-}
-fn number(value: Option<f64>) -> String {
-    value.map_or_else(|| "unavailable".into(), |v| format!("{v:.3}"))
-}
-
-/// Render every catalog row, with ordinary failures first and saved enforcement labels.
-#[must_use]
-pub fn render_markdown(report: &ComparisonReport) -> String {
-    use std::fmt::Write;
-    let mut out = format!(
-        "## Budget report\n\nRepository: {} · head: {} · run: {} · attempt: {}\n\n| Budget | Verdict | Current | Mean | SD | Change % | Sigma | Samples | Status |\n| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |\n",
-        cell(&report.current.repository),
-        cell(&report.current.head_sha),
-        cell(&report.current.run_id),
-        report.current.attempt
-    );
-    for row in &report.rows {
-        let only = report
-            .current
-            .catalog
-            .iter()
-            .find(|b| b.file == row.file && b.id == row.id)
-            .is_some_and(|b| {
-                b.labels
-                    .iter()
-                    .any(|l| report.current.enforcement_exclude_labels.contains(l))
-            });
-        let mut status = Vec::new();
-        if only {
-            status.push("report-only".to_string());
-        }
-        if row.flag {
-            status.push(
-                if row.sd == Some(0.0) {
-                    "constant-baseline-change"
-                } else {
-                    "adverse change ≥1 SD"
-                }
-                .into(),
-            );
-        }
-        if (5..20).contains(&row.baseline_n) {
-            status.push("provisional".into());
-        }
-        if let Some(reason) = &row.unavailable {
-            status.push(cell(reason));
-        }
-        if let Some(item) = report
-            .current
-            .result_notes
-            .iter()
-            .find(|n| n.file == row.file && n.id == row.id)
-        {
-            status.push(cell(&item.note));
-        }
-        let _ = writeln!(
-            out,
-            "| {} / {} ({}) | {} | {} | {} | {} | {} | {} | {} | {} |",
-            cell(&row.file),
-            cell(&row.id),
-            cell(&row.unit),
-            row.verdict.map_or("unavailable", Verdict::as_str),
-            number(row.current),
-            number(row.mean),
-            number(row.sd),
-            number(row.percent_change),
-            number(row.sigma_change),
-            row.baseline_n,
-            status.join("; ")
-        );
-    }
-    out.push_str("\nBaseline provenance (saved observations; artifact links may expire):\n");
-    for diagnostic in &report.diagnostics {
-        let _ = writeln!(out, "\nDiagnostic: {}", cell(diagnostic));
-    }
-    out
 }
 
 impl ComparisonReport {

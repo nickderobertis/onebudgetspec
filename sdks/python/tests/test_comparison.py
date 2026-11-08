@@ -44,7 +44,7 @@ def test_saved_history_roundtrips_and_renders_through_the_binary(
             built_binary, ["report", "--input", str(path), "--output", "markdown"], tmp_path
         ).stdout
     )
-    assert "report-only" in markdown and "provisional" in markdown
+    assert "| **latency** | 15.0 ms<br>+0.0% (+0.0 SD) | Over limit (report-only) |" in markdown
     failed = compare(path, binary=built_binary, reporter=tmp_path / "missing")
     assert failed.rows == report.rows
     assert any("cannot start reporter" in diagnostic for diagnostic in failed.diagnostics)

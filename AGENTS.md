@@ -76,7 +76,7 @@ regenerates them, and each generator's `--check` runs under its project's `lint`
   `@onebudgetspec/cli` optional, `workspace:*` packed as the workspace version): `check`,
   `validate`, `listBudgets`, `schema`, `compare`, `renderMarkdown`, and `report`, which runs no binary. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
   `@onebudgetspec/cli` launcher. Owes `sdks/typescript/tests/conformance.test.ts`,
-  `binary.test.ts`, `errors.test.ts`, `generator.test.ts`, `report.test.ts`, `comparison.test.ts` and the
+  `binary.test.ts`, `errors.test.ts`, `generator.test.ts`, `report.test.ts`, `comparison.test.ts`, `build.test.ts` (a rebuild never empties `dist`) and the
   `sdk_typescript.rs` journey.
 
 A new conformance case must use only flags both SDK runners parse; each fails on any other.
@@ -96,7 +96,9 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 - `crates/onebudgetspec-e2e/tests/journeys/budget_id.rs` — `ONEBUDGETSPEC_BUDGET_ID` reaches every budget's command and no condition's; one generic runner serves two budgets.
 - `crates/onebudgetspec-e2e/tests/journeys/command_environment.rs` — working directory, a relative program found from the file's directory, inherited environment, empty result file, no shell.
 - `crates/onebudgetspec-e2e/tests/journeys/command_stderr.rs` — a failed or unreadable measurement's `error` keeps its exit status and bounded stderr tail, in JSON and text; a failing condition's diagnostic line too; success unchanged.
-- `crates/onebudgetspec-e2e/tests/journeys/saved_report.rs` — saved comparisons reproduce offline with all catalog rows, ordinary exits and real external reporter diagnostics; a row's result note ends its Status, and a document without notes renders as before; standing history deduplicates and bounds reports.
+- `crates/onebudgetspec-e2e/tests/journeys/saved_report.rs` — saved comparisons reproduce offline with all catalog rows, ordinary exits and real external reporter diagnostics; a row's result note is a Details bullet, never in a table, and a document without notes renders with no Notes block; standing history deduplicates and bounds reports.
+- `crates/onebudgetspec-e2e/tests/journeys/report_layout.rs` — over real saved inputs (onepipeline-ui #676, #686, and #686 with a flagged and an enforced `error` row), every row in exactly one of Needs attention (open), Within budget and Not measured (collapsed), each reason and diagnostic once inside Details, no row marked, and v0.2.0's verdicts, flags, statistics and exits.
+- `crates/onebudgetspec-e2e/tests/journeys/standing_report.rs` — across successive heads, earlier heads' flags sit in one collapsed section after Details, never the current head's; the section is absent with no earlier flag and no omission, holds only the capacity line when heads were left out; a v0.2.0 body is read and its hidden block round-trips byte-for-byte.
 - `crates/onebudgetspec-e2e/tests/journeys/save_results.rs` — `check --save-results` leaves the JSON document under every verdict with stdout and status unchanged, creates parents, replaces atomically, writes nothing on a refusal, and exits 3 when it cannot write.
 - `crates/onebudgetspec-e2e/tests/journeys/rust_report.rs` — a Rust measurement's `report` under a check gives `actual` and `detail`; outside one it writes nothing; a non-finite value or a failed write is an error.
 - `crates/onebudgetspec-e2e/tests/journeys/output_streams.rs` — command output on stderr only; an unwritable report exits 3.

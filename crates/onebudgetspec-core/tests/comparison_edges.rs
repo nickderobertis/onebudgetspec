@@ -69,17 +69,10 @@ fn newest_twenty_heads_and_equal_attempt_ties_are_deterministic() {
     let report = compare_json(&encode(&input)).unwrap();
     assert_eq!(report.rows[0].baseline_n, 20);
     assert!((report.rows[0].mean.unwrap() - 23.3).abs() < 1e-10);
-    assert!(
-        report
-            .diagnostics
-            .iter()
-            .any(|d| d.contains("run b attempt 2"))
-    );
-    assert!(
-        !report
-            .diagnostics
-            .iter()
-            .any(|d| d.contains("head base-00 run"))
+    // One line names the selected range; the runs themselves stay in the saved input.
+    assert_eq!(
+        report.diagnostics,
+        ["baseline: 20 base commits, base-05 … base-24"]
     );
 }
 
@@ -340,8 +333,13 @@ fn markdown_escapes_saved_paths_error_reasons_and_provenance() {
     errored(&mut input.current);
     input.current.results.results[0].error = Some("line1\n<script>|x".into());
     input.current.head_sha = "head<>&".into();
+    // The same id in a second file, so each row names its file.
+    let mut twin = input.current.catalog[0].clone();
+    twin.file = "budgets.yaml".into();
+    input.current.catalog.push(twin);
     let markdown = render_markdown(&compare_json(&encode(&input)).unwrap());
-    assert!(markdown.contains("a&lt;&gt;&amp;&#124;/budgets.yaml"));
+    assert!(markdown.contains("latency (a&lt;&gt;&amp;&#124;/budgets.yaml)"));
+    assert!(markdown.contains("latency (budgets.yaml)"));
     assert!(markdown.contains("line1 &lt;script&gt;&#124;x"));
     assert!(!markdown.contains("<script>"));
     assert!(markdown.contains("head&lt;&gt;&amp;"));
