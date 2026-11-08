@@ -1,0 +1,48 @@
+## Budget report
+
+**⚠️ 4 need attention** · 4 within budget · 3 not measured · head f130282 · [run 42421538096](https://github.com/nickderobertis/onepipeline-ui/actions/runs/42421538096)
+
+<details open><summary><b>Needs attention (4)</b></summary>
+
+| Budget | Now · vs base | Reason |
+| --- | --- | --- |
+| **docs-build-seconds** | —<br>baseline 0/5 | Error |
+| **ci-check-time** | 1,943 seconds<br>+19.2% (+0.6 SD) | Over limit (report-only) |
+| **cache-headroom** | 1.07 gigabytes<br>baseline 1/5 | Over limit (report-only) |
+| **budget-render-seconds** | 11.5 seconds<br>+70.7% (+2.5 SD) | Flagged +2.5 SD |
+
+</details>
+
+<details><summary><b>Within budget (4)</b></summary>
+
+| Budget | Now · vs base |
+| --- | --- |
+| **budget-report-command-seconds** | 7.45 seconds<br>+10.6% (+0.4 SD) |
+| **dag-ui-human-items-requests-per-minute** | 0.00 requests/min<br>baseline 3/5 |
+| **dag-ui-human-items-update-lag-seconds** | 0.48 seconds<br>baseline 3/5 |
+| **ci-job-count** | 5.00 jobs<br>+0.0% (+0.0 SD) |
+
+</details>
+
+<details><summary>Details</summary>
+
+Repository: nickderobertis/onepipeline-ui · head: f130282008a0e9071b57f4ec3e0c16d143f03fd4 · run: 42421538096 · attempt: 2
+
+**Not measured on this run (3)**
+
+- macos-jobs-per-run: no result this run · baseline 5/5
+- macos-runs-per-change: no result this run · baseline 5/5
+- pool-maintenance-seconds: no result this run · baseline 2/5
+
+**Why some figures are missing**
+
+- docs-build-seconds: node exited with status 1; its stderr: docs build: page /guides/budgets failed to render; catalog entry absent (10 of 10 baseline samples)
+- ci-check-time, ci-job-count: report-only measurement failed: bash exited with status 1; its stderr: actions-budget-figures: onevcs is not on PATH (install a release carrying `onevcs host`, or name the binary in ONEVCS) (5 of 10 baseline samples)
+- cache-headroom: report-only measurement failed: bash exited with status 1; its stderr: GET actions/cache/storage-limit answered HTTP 403 (7 of 10 baseline samples); catalog entry absent (2 of 10 baseline samples)
+- macos-jobs-per-run, macos-runs-per-change: no saved result was found on this run; its command reads .github/.telemetry/macos-policy.json, which is not available in this job (5 of 10 baseline samples)
+- dag-ui-human-items-requests-per-minute, dag-ui-human-items-update-lag-seconds: catalog entry absent (7 of 10 baseline samples)
+- pool-maintenance-seconds: no saved result was found on this run; its command reads ../apps/dag-ui/dist/index.html, which is not available in this job (8 of 10 baseline samples)
+
+- baseline: 10 base commits, 7d264e1 … cfa2b55
+
+</details>
