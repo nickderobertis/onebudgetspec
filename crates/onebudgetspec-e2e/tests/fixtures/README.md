@@ -15,6 +15,8 @@ Each was downloaded with `gh run download <run> -R nickderobertis/onepipeline-ui
 budget-results`. One change was made to the downloaded files: a result `detail` longer than
 4096 bytes is replaced by `null`. The two affected results are the macOS budgets in #676, at
 about 172 KB each. A comparison never reads `detail`.
+Every file here is laid out by the repository's formatter (`just format`), which changes
+whitespace only, never the parsed value.
 
 `v0.2.0-outcomes.json` holds what the v0.2.0 `onebudgetspec report --json` gave for each
 fixture: its exit code and, per row, `verdict`, `flag`, `baseline_n`, `mean`, `sd`,
