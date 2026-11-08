@@ -156,9 +156,18 @@ created and the write is atomic (a temporary file beside `FILE`, then a rename).
 invocation or budgets file writes nothing.
 
 A saved `BudgetRun` may carry `result_notes`, a list of `{file, id, note}` with at most one
-note per catalog budget. `onebudgetspec report` appends a row's note to its Status column,
-after any report-only, flag, provisional or unavailable text. A note naming no catalog budget
-or holding only whitespace makes the run invalid.
+note per catalog budget. A note naming no catalog budget or holding only whitespace makes
+the run invalid.
+
+`onebudgetspec report --input FILE --output markdown` renders a saved comparison for a
+narrow screen. A summary line comes first: how many rows need attention, how many are
+within budget and how many were not measured, then the head and the run. Below it are
+three sections. *Needs attention* is open and holds every `over` row, every `error` on an
+enforced budget and every flagged row, with a Reason such as `Over limit`, `Error` or
+`Flagged +2.5 SD`. *Within budget* is collapsed. *Details* is collapsed too, and holds the
+rows that were not measured, why figures are missing, each row's note and every
+diagnostic. No row carries a pass or fail mark; the section it sits in says which. A
+standing comment adds a collapsed *Flags on earlier heads* section after Details.
 
 | Exit | Meaning |
 | ---- | ------- |

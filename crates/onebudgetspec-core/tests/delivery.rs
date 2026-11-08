@@ -1,5 +1,19 @@
 //! Standing reports retain compact per-head adverse flags within the host's limit.
-use onebudgetspec_core::delivery::{HistoricalFlag, PublishRequest, merge_standing_report};
+use onebudgetspec_core::delivery::{
+    HistoricalFlag, PublishRequest, ReportHistory, merge_standing_report,
+};
+
+/// The history the body carries in its hidden block.
+fn hidden(body: &str) -> ReportHistory {
+    let json = body
+        .split_once("<!-- onebudgetspec-history\n")
+        .unwrap()
+        .1
+        .split_once("\n-->")
+        .unwrap()
+        .0;
+    serde_json::from_str(json).unwrap()
+}
 
 fn request(head: &str, attempt: u32) -> PublishRequest {
     PublishRequest {
@@ -30,11 +44,23 @@ fn latest_attempt_per_head_replaces_flags_and_old_attempts_do_not_regress_histor
     let mut improved = request("abc", 3);
     improved.flags.clear();
     let updated = merge_standing_report(Some(&first), &improved, 65536);
-    assert!(updated.contains("abc (attempt 3): 0 adverse flag(s)"));
+    let entries = hidden(&updated).entries;
+    assert_eq!((entries.len(), entries[0].attempt), (1, 3));
+    assert!(entries[0].flags.is_empty());
     assert!(!updated.contains("attempt 2"));
-    let another = merge_standing_report(Some(&updated), &request("def", 1), 65536);
-    assert!(another.contains("abc (attempt 3)"));
-    assert!(another.contains("def (attempt 1)"));
+    // A later head lists the earlier head's flags only while that head carries some.
+    let another = merge_standing_report(Some(&first), &request("def", 1), 65536);
+    assert!(another.contains("<summary>Flags on earlier heads (1)</summary>"));
+    assert!(another.contains("abc (attempt 2): 1 adverse flag(s)"));
+    assert!(!another.contains("def (attempt 1)"));
+    let cleared = merge_standing_report(Some(&updated), &request("def", 1), 65536);
+    assert!(!cleared.contains("Flags on earlier heads"));
+    let heads: Vec<_> = hidden(&cleared)
+        .entries
+        .into_iter()
+        .map(|entry| (entry.head_sha, entry.attempt))
+        .collect();
+    assert_eq!(heads, [("abc".into(), 3), ("def".into(), 1)]);
 }
 
 #[test]
@@ -109,8 +135,11 @@ fn request_validation_and_embedded_history_escaping_preserve_the_protocol() {
     use onebudgetspec_core::delivery::{ExternalReporter, Reporter, validate_request};
     let mut request = request("head-->tail<&>", 1);
     request.flags[0].file = "folder-->tail/budgets.yaml".into();
-    let body = merge_standing_report(None, &request, 65536);
-    assert!(body.contains("2.00 SD"));
+    let earlier = merge_standing_report(None, &request, 65536);
+    let body = merge_standing_report(Some(&earlier), &self::request("next", 1), 65536);
+    assert!(body.contains("head--&gt;tail&lt;&amp;&gt; (attempt 1): 1 adverse flag(s)"));
+    assert!(body.contains("- folder--&gt;tail/budgets.yaml/latency: 2.00 SD"));
+    let body = earlier;
     let encoded = body
         .split_once("<!-- onebudgetspec-history\n")
         .unwrap()

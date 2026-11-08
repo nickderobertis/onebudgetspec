@@ -44,8 +44,9 @@ test("saved rolling history roundtrips through comparison and Markdown rendering
   expect(report.rows[0]?.sigma_change).toBe(0);
   expect(report.rows[0]?.flag).toBe(false);
   const markdown = await renderMarkdown(options);
-  expect(markdown).toContain("report-only");
-  expect(markdown).toContain("provisional");
+  expect(markdown).toContain(
+    "| **latency** | 15.0 ms<br>+0.0% (+0.0 SD) | Over limit (report-only) |",
+  );
   const failed = await compare({ ...options, reporter: join(dir, "missing") });
   expect(failed.rows).toEqual(report.rows);
   expect(failed.diagnostics.some((d) => d.includes("cannot start reporter"))).toBe(true);

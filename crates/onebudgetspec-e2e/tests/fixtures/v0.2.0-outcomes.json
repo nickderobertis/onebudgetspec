@@ -1,0 +1,314 @@
+{
+ "onepipeline-ui-676.json": {
+  "exit_code": 0,
+  "rows": [
+   {
+    "file": ".github/budgets.yaml",
+    "id": "onepipeline-ui-macos-jobs-per-run",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 0,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": ".github/budgets.yaml",
+    "id": "onepipeline-ui-macos-runs-per-change",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 0,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": ".github/reporting/budgets.yaml",
+    "id": "onepipeline-ui-budget-report-command-seconds",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 5,
+    "mean": 6.450424337387085,
+    "sd": 1.3335341305324313,
+    "percent_change": 16.572872561130062,
+    "sigma_change": 0.801644727803449
+   },
+   {
+    "file": "budgets.yaml",
+    "id": "onepipeline-ui-ci-check-time",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 0,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": "budgets.yaml",
+    "id": "onepipeline-ui-ci-job-count",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 0,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": "budgets.yaml",
+    "id": "onepipeline-ui-cache-headroom",
+    "verdict": null,
+    "flag": false,
+    "baseline_n": 0,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": "pool-maintenance/budgets.yaml",
+    "id": "onepipeline-ui-pool-maintenance-seconds",
+    "verdict": null,
+    "flag": false,
+    "baseline_n": 0,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   }
+  ]
+ },
+ "onepipeline-ui-686.json": {
+  "exit_code": 0,
+  "rows": [
+   {
+    "file": "budgets.yaml",
+    "id": "onepipeline-ui-ci-check-time",
+    "verdict": "over",
+    "flag": false,
+    "baseline_n": 5,
+    "mean": 1630.4,
+    "sd": 481.61997466882536,
+    "percent_change": 19.17320902845927,
+    "sigma_change": 0.6490594585802882
+   },
+   {
+    "file": "budgets.yaml",
+    "id": "onepipeline-ui-cache-headroom",
+    "verdict": "over",
+    "flag": false,
+    "baseline_n": 1,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": ".github/budgets.yaml",
+    "id": "onepipeline-ui-macos-jobs-per-run",
+    "verdict": null,
+    "flag": false,
+    "baseline_n": 5,
+    "mean": 1.0,
+    "sd": 0.0,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": ".github/budgets.yaml",
+    "id": "onepipeline-ui-macos-runs-per-change",
+    "verdict": null,
+    "flag": false,
+    "baseline_n": 5,
+    "mean": 4.0,
+    "sd": 0.0,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": ".github/reporting/budgets.yaml",
+    "id": "onepipeline-ui-budget-report-command-seconds",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 10,
+    "mean": 6.736263632774353,
+    "sd": 1.9057702731266424,
+    "percent_change": 10.551345277096335,
+    "sigma_change": 0.3729549383218146
+   },
+   {
+    "file": "apps/dag-ui-e2e/read-latency/budgets.yaml",
+    "id": "dag-ui-human-items-requests-per-minute",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 3,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": "apps/dag-ui-e2e/read-latency/budgets.yaml",
+    "id": "dag-ui-human-items-update-lag-seconds",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 3,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": "budgets.yaml",
+    "id": "onepipeline-ui-ci-job-count",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 5,
+    "mean": 5.0,
+    "sd": 0.0,
+    "percent_change": 0.0,
+    "sigma_change": 0.0
+   },
+   {
+    "file": "pool-maintenance/budgets.yaml",
+    "id": "onepipeline-ui-pool-maintenance-seconds",
+    "verdict": null,
+    "flag": false,
+    "baseline_n": 2,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   }
+  ]
+ },
+ "onepipeline-ui-686-flagged-error.json": {
+  "exit_code": 3,
+  "rows": [
+   {
+    "file": "apps/docs/budgets.yaml",
+    "id": "onepipeline-ui-docs-build-seconds",
+    "verdict": "error",
+    "flag": false,
+    "baseline_n": 0,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": "budgets.yaml",
+    "id": "onepipeline-ui-ci-check-time",
+    "verdict": "over",
+    "flag": false,
+    "baseline_n": 5,
+    "mean": 1630.4,
+    "sd": 481.61997466882536,
+    "percent_change": 19.17320902845927,
+    "sigma_change": 0.6490594585802882
+   },
+   {
+    "file": "budgets.yaml",
+    "id": "onepipeline-ui-cache-headroom",
+    "verdict": "over",
+    "flag": false,
+    "baseline_n": 1,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": ".github/budgets.yaml",
+    "id": "onepipeline-ui-macos-jobs-per-run",
+    "verdict": null,
+    "flag": false,
+    "baseline_n": 5,
+    "mean": 1.0,
+    "sd": 0.0,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": ".github/budgets.yaml",
+    "id": "onepipeline-ui-macos-runs-per-change",
+    "verdict": null,
+    "flag": false,
+    "baseline_n": 5,
+    "mean": 4.0,
+    "sd": 0.0,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": ".github/reporting/budgets.yaml",
+    "id": "onepipeline-ui-budget-report-command-seconds",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 10,
+    "mean": 6.736263632774353,
+    "sd": 1.9057702731266424,
+    "percent_change": 10.551345277096335,
+    "sigma_change": 0.3729549383218146
+   },
+   {
+    "file": "apps/dag-ui-e2e/read-latency/budgets.yaml",
+    "id": "dag-ui-human-items-requests-per-minute",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 3,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": "apps/dag-ui-e2e/read-latency/budgets.yaml",
+    "id": "dag-ui-human-items-update-lag-seconds",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 3,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": "budgets.yaml",
+    "id": "onepipeline-ui-ci-job-count",
+    "verdict": "within",
+    "flag": false,
+    "baseline_n": 5,
+    "mean": 5.0,
+    "sd": 0.0,
+    "percent_change": 0.0,
+    "sigma_change": 0.0
+   },
+   {
+    "file": "pool-maintenance/budgets.yaml",
+    "id": "onepipeline-ui-pool-maintenance-seconds",
+    "verdict": null,
+    "flag": false,
+    "baseline_n": 2,
+    "mean": null,
+    "sd": null,
+    "percent_change": null,
+    "sigma_change": null
+   },
+   {
+    "file": ".github/reporting/budgets.yaml",
+    "id": "onepipeline-ui-budget-render-seconds",
+    "verdict": "within",
+    "flag": true,
+    "baseline_n": 10,
+    "mean": 6.736263632774353,
+    "sd": 1.9057702731266424,
+    "percent_change": 70.73262905037572,
+    "sigma_change": 2.5001630230114413
+   }
+  ]
+ }
+}

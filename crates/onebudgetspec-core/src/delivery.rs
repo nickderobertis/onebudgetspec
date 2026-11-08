@@ -184,7 +184,7 @@ pub fn merge_standing_report(
     }
     let mut current = request.markdown.clone();
     loop {
-        let mut body = history_body(&current, &history);
+        let mut body = history_body(&current, &history, &request.head_sha);
         if body.len() <= max_body_bytes {
             return body;
         }
@@ -295,38 +295,56 @@ fn truncate_body(body: &mut String, limit: usize) {
     body.truncate(end);
 }
 
-fn history_body(current: &str, history: &ReportHistory) -> String {
+/// The current report, then the earlier heads' flags collapsed, then the hidden history.
+///
+/// Only heads other than `head` that carry a flag are listed; the section is absent when
+/// none does and no head was omitted for capacity.
+fn history_body(current: &str, history: &ReportHistory, head: &str) -> String {
     use std::fmt::Write;
-    let mut body = format!("{current}\n\n### Per-head adverse flags\n");
-    for entry in &history.entries {
+    let earlier: Vec<_> = history
+        .entries
+        .iter()
+        .filter(|entry| entry.head_sha != head && !entry.flags.is_empty())
+        .collect();
+    let mut body = current.to_string();
+    if !earlier.is_empty() || history.omitted_heads > 0 {
         let _ = writeln!(
             body,
-            "\n{} (attempt {}): {} adverse flag(s)",
-            safe_text(&entry.head_sha),
-            entry.attempt,
-            entry.flags.len()
+            "\n\n<details><summary>Flags on earlier heads ({})</summary>",
+            earlier.len()
         );
-        for flag in &entry.flags {
+        for entry in earlier {
             let _ = writeln!(
                 body,
-                "- {}/{}: {}",
-                safe_text(&flag.file),
-                safe_text(&flag.id),
-                if flag.constant_baseline_change {
-                    "constant-baseline-change".into()
-                } else {
-                    format!("{:.2} SD", flag.sigma_change.unwrap_or_default())
-                }
+                "\n{} (attempt {}): {} adverse flag(s)",
+                safe_text(&entry.head_sha),
+                entry.attempt,
+                entry.flags.len()
+            );
+            for flag in &entry.flags {
+                let _ = writeln!(
+                    body,
+                    "- {}/{}: {}",
+                    safe_text(&flag.file),
+                    safe_text(&flag.id),
+                    if flag.constant_baseline_change {
+                        "constant-baseline-change".into()
+                    } else {
+                        format!("{:.2} SD", flag.sigma_change.unwrap_or_default())
+                    }
+                );
+            }
+        }
+        if history.omitted_heads > 0 {
+            let _ = writeln!(
+                body,
+                "\n{} oldest history head(s) omitted to fit host capacity.",
+                history.omitted_heads
             );
         }
+        body.push_str("\n</details>");
     }
-    if history.omitted_heads > 0 {
-        let _ = write!(
-            body,
-            "\n{} oldest history head(s) omitted to fit host capacity.\n",
-            history.omitted_heads
-        );
-    }
+    body.push_str("\n\n");
     body.push_str(START);
     body.push_str(
         &serde_json::to_string(&history)

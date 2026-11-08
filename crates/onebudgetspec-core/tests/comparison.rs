@@ -84,9 +84,16 @@ fn missing_expired_and_incomplete_data_are_never_zero_samples() {
         let report = compare(&input(n));
         assert_eq!(report.rows[0].baseline_n, u32::try_from(n).unwrap());
         assert_eq!(report.rows[0].mean.is_none(), n < 5);
+        // A baseline still filling says how far it has got, and no reason invents a minimum.
         assert_eq!(
-            render_markdown(&report).contains("provisional"),
-            (5..20).contains(&n)
+            render_markdown(&report).contains(&format!("baseline {n}/5")),
+            n < 5
+        );
+        assert!(
+            report.rows[0]
+                .unavailable
+                .as_deref()
+                .is_none_or(|reason| !reason.contains("eligible samples"))
         );
     }
     let mut data = input(5);
@@ -136,7 +143,23 @@ fn provenance_unique_commits_latest_attempt_and_scope_are_validated() {
         }
         let report = compare(&broken);
         assert_eq!(report.rows[0].baseline_n, 4, "{field}");
-        assert!(report.rows[0].unavailable.is_some());
+        assert_eq!(report.rows[0].mean, None, "{field}");
+        // A rejected run is a diagnostic; a run whose scope differs is a reason in the row.
+        if field == "scope" {
+            assert_eq!(
+                report.rows[0].unavailable.as_deref(),
+                Some("measurement/command scope mismatch (1 of 5 baseline samples)")
+            );
+        } else {
+            assert!(
+                report
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.starts_with(&format!("baseline {}: ", broken.baseline[0].head_sha))),
+                "{field}: {:?}",
+                report.diagnostics
+            );
+        }
     }
     let history = RollingHistory {
         schema_version: 1,

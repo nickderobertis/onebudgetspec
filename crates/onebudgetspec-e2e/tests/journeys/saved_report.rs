@@ -40,11 +40,12 @@ fn offline_json_equals_the_sdk_and_does_not_execute_commands() {
     assert_eq!(report["rows"][0]["baseline_n"], 20);
     assert_eq!(report["rows"][0]["flag"], true);
     let markdown = fixture.run(["report", "--input", "input.json", "--output", "markdown"]);
+    // A changed constant baseline has no SD change, so the row reads against its base.
     assert!(
         markdown
             .expect_status(1)
             .stdout
-            .contains("constant-baseline-change")
+            .contains("| **latency** | 15.0 ms<br>base 10.0 ms | Over limit · flagged |")
     );
     assert!(!fixture.path().join("measure.js").exists());
     let mut invalid = serde_json::to_value(input).unwrap();
@@ -118,8 +119,12 @@ fn subprocess_delivery_preserves_real_failures_and_updates_one_standing_history(
         .run(["report", "--input", "input.json", "--reporter", reporter])
         .expect_status(0);
     let body = std::fs::read_to_string(fixture.path().join("standing.md")).unwrap();
-    assert!(body.contains("current (attempt 2): 0 adverse flag(s)"));
-    assert!(!body.contains("current (attempt 1)"));
+    // The later attempt replaced the head's entry, and its own head is never listed.
+    let history = crate::standing_report::hidden_history(&body);
+    assert_eq!(history.entries.len(), 1);
+    assert_eq!(history.entries[0].attempt, 2);
+    assert!(history.entries[0].flags.is_empty());
+    assert!(!body.contains("Flags on earlier heads"));
 }
 
 fn assert_numeric_delivery(fixture: &Fixture, mut input: ComparisonInput, reporter: &str) {
@@ -307,23 +312,43 @@ fn released_document() -> String {
     format!(r#"{{"schema_version": 1, "current": {run}, "baseline": []}}"#)
 }
 
-/// What `report --output markdown` printed for [`released_document`] before notes existed.
+/// What `report --output markdown` prints for [`released_document`]: no Notes block, and
+/// no reason for a baseline that is still filling.
 const RELEASED_MARKDOWN: &str = "## Budget report
+
+**⚠️ 1 need attention** · 0 within budget · head current · [run run-current](https://example.test/run/current)
+
+<details open><summary><b>Needs attention (1)</b></summary>
+
+| Budget | Now · vs base | Reason |
+| --- | --- | --- |
+| **latency** | 15.0 ms<br>baseline 0/5 | Over limit (report-only) |
+
+</details>
+
+<details><summary><b>Within budget (0)</b></summary>
+
+No budget is within its limit.
+
+</details>
+
+<details><summary>Details</summary>
 
 Repository: owner/repo · head: current · run: run-current · attempt: 1
 
-| Budget | Verdict | Current | Mean | SD | Change % | Sigma | Samples | Status |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| budgets.yaml / latency (ms) | over | 15.000 | unavailable | unavailable | unavailable | unavailable | 0 | report-only; baseline unavailable: 0 eligible samples; minimum 5; additional usable baseline observations were not supplied |
-
-Baseline provenance (saved observations; artifact links may expire):
+</details>
 ";
 
 #[test]
-fn a_document_saved_without_notes_renders_as_before_and_stays_without_them() {
+fn a_document_saved_without_notes_renders_without_them_and_stays_without_them() {
     let fixture = Fixture::new();
     fixture.write("input.json", &released_document());
     let run = fixture.run(["report", "--input", "input.json", "--output", "markdown"]);
+    assert_eq!(run.expect_status(0).stdout, RELEASED_MARKDOWN);
+    let mut empty: Value = serde_json::from_str(&released_document()).unwrap();
+    empty["current"]["result_notes"] = json!([]);
+    fixture.write("empty.json", &empty.to_string());
+    let run = fixture.run(["report", "--input", "empty.json", "--output", "markdown"]);
     assert_eq!(run.expect_status(0).stdout, RELEASED_MARKDOWN);
     let json = fixture.run(["report", "--input", "input.json", "--json"]);
     let report = json.expect_status(0).json();
@@ -342,7 +367,7 @@ fn null_notes_read_as_no_notes() {
 }
 
 #[test]
-fn a_rows_note_ends_its_status_after_every_other_text() {
+fn a_rows_note_is_listed_in_details_after_the_reasons_and_never_in_a_table() {
     let fixture = Fixture::new();
     let mut input = saved();
     input.current.enforcement_exclude_labels = vec!["report".into()];
@@ -355,24 +380,32 @@ fn a_rows_note_ends_its_status_after_every_other_text() {
         "id": "latency",
         "note": "measured at abc123 | <cached>",
     }]);
-    // Fewer than 20 samples, so the row is provisional as well as report-only and flagged.
     value["baseline"].as_array_mut().unwrap().truncate(6);
     fixture.write("input.json", &value.to_string());
     let run = fixture.run(["report", "--input", "input.json", "--output", "markdown"]);
     let markdown = &run.expect_status(0).stdout;
-    let row = |id: &str| {
-        markdown
-            .lines()
-            .find(|line| line.starts_with(&format!("| budgets.yaml / {id} ")))
-            .unwrap_or_else(|| panic!("no row for {id} in {markdown}"))
-    };
+    let details = markdown
+        .split_once("<details><summary>Details</summary>")
+        .unwrap()
+        .1;
+    let (reasons, notes) = details.split_once("**Notes on this run**").unwrap();
     assert!(
-        row("latency").ends_with(
-            "| report-only; constant-baseline-change; provisional; sigma change unavailable: constant baseline changed; measured at abc123 &#124; &lt;cached&gt; |"
-        ),
+        reasons.contains("**Why some figures are missing**"),
         "{markdown}"
     );
-    assert!(!row("unnoted").contains("abc123"), "{markdown}");
+    assert!(
+        notes.starts_with("\n\n- latency: measured at abc123 &#124; &lt;cached&gt;\n"),
+        "{markdown}"
+    );
+    assert_eq!(markdown.matches("abc123").count(), 1, "{markdown}");
+    assert!(
+        markdown
+            .lines()
+            .filter(|line| line.starts_with('|'))
+            .all(|line| !line.contains("abc123")),
+        "{markdown}"
+    );
+    assert!(!notes.contains("unnoted"), "{markdown}");
 
     let json = fixture.run(["report", "--input", "input.json", "--json"]);
     let report = json.expect_status(0).json();
