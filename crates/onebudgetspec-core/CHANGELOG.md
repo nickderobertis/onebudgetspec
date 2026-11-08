@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1](https://github.com/nickderobertis/onebudgetspec/compare/v0.2.0...v0.2.1) - 2026-11-08
+
+### Added
+
+- *(report)* lead the budget report with what needs attention ([#62](https://github.com/nickderobertis/onebudgetspec/pull/62))
+
 ## [0.2.0](https://github.com/nickderobertis/onebudgetspec/compare/v0.1.6...v0.2.0) - 2026-11-07
 
 ### Added
