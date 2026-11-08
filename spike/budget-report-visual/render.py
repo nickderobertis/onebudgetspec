@@ -51,12 +51,12 @@ def status(report: dict, row: dict) -> tuple[bool, str]:
         return True, f"❌ Over limit{ro}"
     if v == "error":
         return True, f"❌ Error{ro}"
-    if v is None:
-        return True, f"⚠️ No result{ro}"
     if row.get("flag"):
         if row.get("sd") == 0:
             return True, "⚠️ Flagged: changed from constant"
         return True, f"⚠️ Flagged: +{row['sigma_change']:.1f} SD"
+    if v is None:  # unmeasured: listed in Details, never a warning on its own
+        return False, f"No result this run{ro}"
     if row.get("baseline_n", 0) < MIN_SAMPLES:
         return False, "✅ Within · baseline filling"
     return False, "✅ Within"
@@ -127,7 +127,7 @@ def grouped_reasons(rows: list[dict], prefix: str) -> list[str]:
     return out
 
 
-def details(report: dict, prefix: str, standing: str | None) -> str:
+def details(report: dict, prefix: str, standing: str | None, unmeasured: list[dict]) -> str:
     diags = report["diagnostics"]
     prov = [d for d in diags if d.startswith("baseline provenance: ")]
     lost = [d for d in diags if d.startswith("history entry lost: ")]
@@ -135,6 +135,10 @@ def details(report: dict, prefix: str, standing: str | None) -> str:
     artifact = [d for d in diags if d.startswith("complete results are in artifact")]
     other = [d for d in diags if d not in prov + lost + left + artifact]
     lines = ["<details><summary>Details</summary>", ""]
+    if unmeasured:
+        lines += [f"**Not measured on this run ({len(unmeasured)})**", ""]
+        lines += [f"- `{short_id(r['id'], prefix)}`: {status(report, r)[1]}, baseline {base(r)}" for r in unmeasured]
+        lines.append("")
     reasons = grouped_reasons(report["rows"], prefix)
     if reasons:
         lines += ["**Why some figures are missing**", "", *reasons, ""]
@@ -168,13 +172,18 @@ def details(report: dict, prefix: str, standing: str | None) -> str:
 def render(report: dict, cols: int, standing: str | None) -> str:
     cur = report["current"]
     prefix = cur["repository"].split("/")[-1] + "-"
-    attn, ok = [], []
+    attn, ok, unmeasured = [], [], []
     for r in report["rows"]:
-        (attn if status(report, r)[0] else ok).append(r)
+        if status(report, r)[0]:
+            attn.append(r)
+        elif r.get("verdict") is None:
+            unmeasured.append(r)
+        else:
+            ok.append(r)
     head = cur["head_sha"][:7]
     summary = (
         f"**{'⚠️ ' + str(len(attn)) + ' need attention' if attn else '✅ Nothing needs attention'}** · "
-        f"{len(ok)} within budget · head `{head}` · [run {cur['run_id']}]({cur['run_url']})"
+        f"{len(ok)} within budget" + (f" · {len(unmeasured)} not measured" if unmeasured else "") + f" · head `{head}` · [run {cur['run_id']}]({cur['run_url']})"
     )
     out = [
         "## Budget report",
@@ -191,7 +200,7 @@ def render(report: dict, cols: int, standing: str | None) -> str:
         table(report, ok, cols, prefix) if ok else "No budget is within its limit.\n",
         "</details>",
         "",
-        details(report, prefix, standing),
+        details(report, prefix, standing, unmeasured),
     ]
     if standing is not None:
         m = re.search(r"<!-- onebudgetspec-history\n.*?\n-->", standing, re.S)

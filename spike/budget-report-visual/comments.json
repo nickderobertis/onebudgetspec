@@ -6,6 +6,8 @@
   "trial_flagged_3": "https://github.com/nickderobertis/onebudgetspec/pull/61#issuecomment-6715079214",
   "superseded_after_noflag_5col": "https://github.com/nickderobertis/onebudgetspec/pull/61#issuecomment-6715079357",
   "superseded_after_flagged_5col": "https://github.com/nickderobertis/onebudgetspec/pull/61#issuecomment-6715079506",
-  "after_noflag": "https://github.com/nickderobertis/onebudgetspec/pull/61#issuecomment-6715133319",
-  "after_flagged": "https://github.com/nickderobertis/onebudgetspec/pull/61#issuecomment-6715133483"
+  "superseded_after_noflag_3col_unmeasured_warned": "https://github.com/nickderobertis/onebudgetspec/pull/61#issuecomment-6715133319",
+  "superseded_after_flagged_3col_unmeasured_warned": "https://github.com/nickderobertis/onebudgetspec/pull/61#issuecomment-6715133483",
+  "after_noflag": "https://github.com/nickderobertis/onebudgetspec/pull/61#issuecomment-6715175309",
+  "after_flagged": "https://github.com/nickderobertis/onebudgetspec/pull/61#issuecomment-6715175485"
 }

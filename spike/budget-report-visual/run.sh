@@ -3,6 +3,7 @@
 # image from github.com.
 #
 #   spike/budget-report-visual/run.sh OUT_DIR            # render + re-capture comments.json's URLs
+#   CAPTURE_ONLY=after_ ...                            # re-capture only keys with that prefix
 #   POST_PR=<n> spike/budget-report-visual/run.sh OUT_DIR  # also post the after comments on demo PR n
 #                                                        # (onebudgetspec) and rewrite comments.json
 #
@@ -51,9 +52,10 @@ open(p, "a").write("\n")
 PY
 fi
 
-python3 -I - "$here/comments.json" "$out/shots.json" <<'EOF'
+python3 -I - "$here/comments.json" "$out/shots.json" "${CAPTURE_ONLY:-}" <<'EOF'
 import json, sys
 c = json.load(open(sys.argv[1]))
+only = sys.argv[3]  # CAPTURE_ONLY=<prefix> re-captures just the matching keys, e.g. after_
 shots = []
 for key, url in c.items():
     if not url or key.startswith("superseded"):
@@ -64,6 +66,7 @@ for key, url in c.items():
         shots.append({"name": f"{key}-{tag}.png", "url": url, "width": w, "expand": False})
 if c.get("after_noflag"):
     shots.append({"name": "after_noflag-phone-expanded.png", "url": c["after_noflag"], "width": 390, "expand": True})
+shots = [x for x in shots if x["name"].startswith(only)]
 json.dump(shots, open(sys.argv[2], "w"), indent=2)
 EOF
 PLAYWRIGHT_MODULE="${PLAYWRIGHT_MODULE:-/home/whoop/ai-orchestrator/node_modules/playwright}" \
