@@ -464,3 +464,76 @@ fn the_library_answers_as_the_binary_does() {
     assert_eq!(ids(&library, "subjects"), ids(&binary, "subjects"));
     assert_eq!(library["unanswered"], binary["unanswered"]);
 }
+
+#[test]
+fn a_document_with_trailing_text_is_refused_with_2_running_nothing() {
+    let fixture = Fixture::new();
+    subjects(&fixture);
+    let document = r#"{"schema_version": 1, "subjects": [{"id": "a", "directory": "change-a", "env": {"SUBJECT_MINUTES": "1"}}]} trailing"#;
+    for args in [
+        &["check", "--subjects", "subjects.json", "--json"][..],
+        &["check", "--subjects", "-", "--json"][..],
+    ] {
+        fixture.write("subjects.json", document);
+        let mut child = crate::common::spawn(
+            Command::new(crate::common::binary())
+                .args(args)
+                .current_dir(fixture.path())
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped()),
+        );
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(document.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{args:?}: {stderr}");
+        assert!(output.stdout.is_empty(), "{args:?}");
+        assert!(stderr.contains("trailing"), "{args:?}: {stderr}");
+        assert!(
+            !fixture.path().join("change-a/gate-runs.ran").exists(),
+            "{args:?}: a command ran before the refusal"
+        );
+    }
+}
+
+#[test]
+fn a_nested_budgets_files_commands_run_from_the_subjects_directory() {
+    let fixture = Fixture::new();
+    fixture.budgets("checkout/nested/budgets.yaml", &file(&[gate_runs()]));
+    fixture.write("checkout/measure.txt", "3");
+    fixture.write("checkout/nested/measure.txt", "9");
+    let document = json!({ "schema_version": 1, "subjects": [{
+        "id": "checkout",
+        "directory": "checkout",
+        "files": ["nested/budgets.yaml"],
+    }] });
+
+    let run = run_with_stdin(
+        fixture.path(),
+        &["check", "--subjects", "-", "--json"],
+        &document,
+    );
+    let answer = run.expect_status(0).subjects_report();
+    let checkout = subject(&answer, "subjects", "checkout");
+    assert_eq!(
+        verdicts(checkout),
+        [("gate-runs".into(), "within".into(), 3.0)],
+        "the command read nested/measure.txt rather than the subject's own"
+    );
+    assert_eq!(
+        checkout["report"]["results"][0]["file"],
+        "nested/budgets.yaml"
+    );
+    assert!(fixture.path().join("checkout/gate-runs.ran").exists());
+    assert!(
+        !fixture
+            .path()
+            .join("checkout/nested/gate-runs.ran")
+            .exists()
+    );
+}

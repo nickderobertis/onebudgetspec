@@ -66,6 +66,9 @@ fn a_document_is_held_to_its_rules_naming_every_problem() {
         shape[0].starts_with("subjects: subjects[0].id: "),
         "{shape:?}"
     );
+    let trailing = problems(r#"{"schema_version": 1, "subjects": []} trailing"#);
+    assert_eq!(trailing.len(), 1);
+    assert!(trailing[0].contains("trailing characters"), "{trailing:?}");
     let missing = problems(r#"{"schema_version": 1}"#);
     assert!(missing[0].contains("subjects"), "{missing:?}");
 }

@@ -195,3 +195,26 @@ test("arguments of the wrong type are refused before anything runs", async () =>
     ).rejects.toThrow(TypeError);
   }
 });
+
+test("a nested budgets file's commands run from the subject's directory", async () => {
+  const dir = scratch();
+  mkdirSync(join(dir, "checkout", "nested"), { recursive: true });
+  writeFileSync(
+    join(dir, "checkout", "nested", "budgets.yaml"),
+    `schema_version: 1\nbudgets:\n${GATE_RUNS_BUDGET}`,
+  );
+  writeFileSync(join(dir, "checkout", "measure.txt"), "3");
+  writeFileSync(join(dir, "checkout", "nested", "measure.txt"), "9");
+  const answer = await checkSubjects({
+    subjects: {
+      schema_version: 1,
+      subjects: [{ id: "checkout", directory: "checkout", files: ["nested/budgets.yaml"] }],
+    },
+    cwd: dir,
+    binary: builtBinary(),
+  });
+  expect(verdicts(answer)).toEqual({ checkout: [["gate-runs", "within", 3]] });
+  expect(answer.subjects[0]?.report.results[0]?.file).toBe("nested/budgets.yaml");
+  expect(existsSync(join(dir, "checkout", "gate-runs.ran"))).toBe(true);
+  expect(existsSync(join(dir, "checkout", "nested", "gate-runs.ran"))).toBe(false);
+});

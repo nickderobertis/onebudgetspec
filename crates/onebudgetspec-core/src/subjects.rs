@@ -123,6 +123,10 @@ impl Subjects {
                     problems: vec![format!("subjects: {at}{}", error.inner())],
                 }
             })?;
+        // Text after the document is no part of it: refuse it rather than ignore it.
+        deserializer.end().map_err(|error| Error::Invalid {
+            problems: vec![format!("subjects: {error}")],
+        })?;
         let problems = subjects.problems();
         if problems.is_empty() {
             Ok(subjects)
@@ -177,8 +181,10 @@ impl Subjects {
 
 /// Check `selection` once per subject, in document order: read each subject's budgets
 /// files from its directory, apply the selection, and measure what it keeps exactly as
-/// [`crate::SelectedBudgets::check`] does, every command run with the subject's `env`
-/// added to the inherited environment.
+/// [`crate::SelectedBudgets::check`] does, except that every command, conditions included,
+/// runs from the subject's directory — whichever file, however nested, names it — with the
+/// subject's `env` added to the inherited environment. A program named by a relative path
+/// is found from that directory too.
 ///
 /// A subject whose directory or a budgets file cannot be read or is invalid, or whose
 /// selection keeps nothing (an id it does not register included), is not checked: it is
@@ -242,7 +248,11 @@ fn check_subject(
             subject.files.join(", ")
         ));
     }
-    Ok(selected.check_with_env(&subject.env))
+    // Every command runs from the subject's directory, whichever file names it; absolute,
+    // as a budgets file's own directory is, so a command's program and working directory
+    // resolve alike on every platform.
+    let working = std::path::absolute(directory).unwrap_or_else(|_| directory.to_path_buf());
+    Ok(selected.check_in(Some(&working), &subject.env))
 }
 
 /// A refusal as an unanswered subject's reason: its message, without the next step a

@@ -182,9 +182,10 @@ subjects document (the `subjects` root of `onebudgetspec schema`, `schema_versio
 For each subject, in order, the budgets files `files` names (`["budgets.yaml"]` when
 omitted; with `--recursive`, a directory is searched) are read relative to its
 `directory` (itself relative to the working directory), the selection is applied, and
-each selected budget is measured exactly as `check` measures one, from the directory
-holding its file, with the subject's `env` added to the inherited environment of every
-command, conditions included. `id` is the caller's key, non-empty and unique in the
+each selected budget is measured exactly as `check` measures one, except that every
+command, conditions included, runs from the subject's `directory` (a nested
+`files: ["nested/budgets.yaml"]` still runs from the subject's directory, and a relative
+program is found from it), with the subject's `env` added to the inherited environment. `id` is the caller's key, non-empty and unique in the
 document; `context` is any JSON, echoed back (null when omitted). Each subject names its
 own files, so no PATH is given beside `--subjects`, and `--save-results` is refused with it.
 

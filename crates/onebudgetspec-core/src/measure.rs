@@ -42,12 +42,17 @@ impl SelectedBudgets<'_> {
     /// hand a child its streams, explicitly.
     #[must_use]
     pub fn check(&self) -> CheckReport {
-        self.check_with_env(&BTreeMap::new())
+        self.check_in(None, &BTreeMap::new())
     }
 
-    /// [`Self::check`], with `env` added to the inherited environment of every command it
-    /// runs, conditions included.
-    pub(crate) fn check_with_env(&self, env: &BTreeMap<String, String>) -> CheckReport {
+    /// [`Self::check`], with every command it runs, conditions included, run from `dir`
+    /// when given instead of the directory holding its budgets file, and with `env` added
+    /// to its inherited environment.
+    pub(crate) fn check_in(
+        &self,
+        dir: Option<&Path>,
+        env: &BTreeMap<String, String>,
+    ) -> CheckReport {
         #[cfg(windows)]
         keep_standard_handles();
         let mut declared: Vec<(&Path, BTreeMap<String, String>)> = Vec::new();
@@ -57,10 +62,10 @@ impl SelectedBudgets<'_> {
                 .iter()
                 .position(|(path, _)| *path == selected.file.path.as_path());
             let index = known.unwrap_or_else(|| {
-                declared.push((&selected.file.path, run_conditions(selected.file, env)));
+                declared.push((&selected.file.path, run_conditions(selected.file, dir, env)));
                 declared.len() - 1
             });
-            results.push(measure(*selected, &declared[index].1, env));
+            results.push(measure(*selected, &declared[index].1, dir, env));
         }
         CheckReport {
             schema_version: SCHEMA_VERSION,
@@ -93,12 +98,17 @@ fn keep_standard_handles() {
 }
 
 /// Run every condition a file declares, once each, in declaration order.
-fn run_conditions(file: &LoadedFile, env: &BTreeMap<String, String>) -> BTreeMap<String, String> {
+fn run_conditions(
+    file: &LoadedFile,
+    dir: Option<&Path>,
+    env: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let dir = dir.unwrap_or(&file.dir);
     file.contents
         .conditions
         .iter()
         .map(|condition| {
-            let value = match run_condition(&file.dir, &condition.command, env) {
+            let value = match run_condition(dir, &condition.command, env) {
                 Ok(value) => value,
                 Err(reason) => {
                     eprintln!(
@@ -158,22 +168,19 @@ struct Measured {
 fn measure(
     selected: Selected<'_>,
     declared: &BTreeMap<String, String>,
+    dir: Option<&Path>,
     env: &BTreeMap<String, String>,
 ) -> CheckResult {
     let Selected { file, budget } = selected;
+    let dir = dir.unwrap_or(&file.dir);
     let started_at = Utc::now();
     let sample = host::sample();
     let timeout = budget.timeout_seconds.map(Duration::from_secs);
     let outcome = match budget.measure {
-        Measure::Elapsed => measure_elapsed(&file.dir, &budget.id, &budget.command, timeout, env),
-        Measure::Reported => measure_reported(
-            &file.dir,
-            &budget.id,
-            &budget.command,
-            timeout,
-            declared,
-            env,
-        ),
+        Measure::Elapsed => measure_elapsed(dir, &budget.id, &budget.command, timeout, env),
+        Measure::Reported => {
+            measure_reported(dir, &budget.id, &budget.command, timeout, declared, env)
+        }
     };
     let ended_at = Utc::now().max(started_at);
 

@@ -202,3 +202,24 @@ def test_arguments_of_the_wrong_type_are_refused(arguments: dict) -> None:
     """A path in place of the document, or a flag that is not a bool, is refused unrun."""
     with pytest.raises(TypeError):
         check_subjects(binary="never-run", **arguments)
+
+
+def test_a_nested_budgets_files_commands_run_from_the_subjects_directory(
+    built_binary: Path, tmp_path: Path
+) -> None:
+    """``files`` naming a nested budgets file still runs its commands from ``directory``."""
+    (tmp_path / "checkout" / "nested").mkdir(parents=True)
+    (tmp_path / "checkout" / "nested" / "budgets.yaml").write_text(
+        f"schema_version: 1\nbudgets:\n{GATE_RUNS_BUDGET}"
+    )
+    (tmp_path / "checkout" / "measure.txt").write_text("3")
+    (tmp_path / "checkout" / "nested" / "measure.txt").write_text("9")
+    nested = {
+        "schema_version": 1,
+        "subjects": [{"id": "checkout", "directory": "checkout", "files": ["nested/budgets.yaml"]}],
+    }
+    answer = check_subjects(nested, cwd=tmp_path, binary=built_binary)
+    assert verdicts(answer) == {"checkout": [("gate-runs", "within", 3.0)]}
+    assert answer.subjects[0].report.results[0].file == "nested/budgets.yaml"
+    assert (tmp_path / "checkout" / "gate-runs.ran").exists()
+    assert not (tmp_path / "checkout" / "nested" / "gate-runs.ran").exists()
