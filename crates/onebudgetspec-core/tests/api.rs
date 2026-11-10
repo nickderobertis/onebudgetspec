@@ -337,7 +337,7 @@ fn a_refusal_reads_as_its_problems_and_a_next_step() {
 }
 
 #[test]
-fn the_schema_bundle_preserves_old_roots_and_adds_saved_report_roots() {
+fn the_schema_bundle_preserves_old_roots_and_adds_saved_report_and_subjects_roots() {
     let bundle = schema_bundle();
     let roots = bundle["roots"].as_object().unwrap();
     let names: Vec<_> = roots.keys().map(String::as_str).collect();
@@ -353,7 +353,9 @@ fn the_schema_bundle_preserves_old_roots_and_adds_saved_report_roots() {
             "list-report",
             "publish-request",
             "report-history",
-            "rolling-history"
+            "rolling-history",
+            "subjects",
+            "subjects-report"
         ]
     );
 }

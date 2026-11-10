@@ -12,9 +12,9 @@ import os
 import re
 import shutil
 import subprocess
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import BaseModel, JsonValue, ValidationError
@@ -24,6 +24,8 @@ from ._generated.check_report import CheckReport
 from ._generated.comparison_report import ComparisonReport
 from ._generated.list_report import ListReport
 from ._generated.schemas import REPORT_SCHEMAS
+from ._generated.subjects import Subjects
+from ._generated.subjects_report import SubjectsReport
 
 #: The environment variable naming the binary when no explicit one is passed.
 BINARY_ENV = "ONEBUDGETSPEC_BIN"
@@ -138,14 +140,20 @@ def _selection(
     ]
 
 
-def _run(binary: StrPath | None, args: list[str], cwd: StrPath | None) -> bytes:
-    """Run the binary with ``args`` and return its stdout, or raise with its message."""
+def _run(
+    binary: StrPath | None, args: list[str], cwd: StrPath | None, stdin: bytes | None = None
+) -> bytes:
+    """Run the binary with ``args`` and return its stdout, or raise with its message.
+
+    ``stdin`` is written to the binary's standard input; without it, the binary reads none.
+    """
     program = resolve_binary(binary)
     try:
         completed = subprocess.run(
             [os.fspath(program), *args],
             cwd=cwd,
-            stdin=subprocess.DEVNULL,
+            input=stdin,
+            stdin=subprocess.DEVNULL if stdin is None else None,
             capture_output=True,
             check=False,
         )
@@ -320,6 +328,63 @@ def check(
     """
     args = ["check", "--json", *_selection(ids, labels, exclude_labels), *_files(paths, recursive)]
     return _report(CheckReport, "check-report", _run(binary, args, cwd))
+
+
+def check_subjects(
+    subjects: Subjects | Mapping[str, Any],
+    ids: Sequence[str] | None = None,
+    labels: Sequence[str] | None = None,
+    exclude_labels: Sequence[str] | None = None,
+    recursive: bool = False,
+    over_only: bool = False,
+    cwd: StrPath | None = None,
+    *,
+    binary: StrPath | None = None,
+) -> SubjectsReport:
+    """Check the selection once per subject: ``onebudgetspec check --subjects -``.
+
+    Each subject's budgets files are read from its ``directory`` and its commands run there,
+    with its ``env`` added to the inherited environment.
+
+    Args:
+        subjects: the subjects document, as the generated model or as plain JSON data,
+            which the binary validates.
+        ids: as for :func:`check`, applied to every subject.
+        labels: as for :func:`check`, applied to every subject.
+        exclude_labels: as for :func:`check`, applied to every subject.
+        recursive: let a subject's ``files`` name directories to search.
+        over_only: keep only the results whose verdict is ``over``.
+        cwd: the directory a relative subject ``directory`` is read from.
+        binary: as for :func:`check`.
+
+    Returns:
+        Each checked subject's report, with its ``id`` and ``context``, and every subject
+        that could not be checked under ``unanswered``, with its reason.
+
+    Raises:
+        OnebudgetspecError: the document or the invocation is invalid (exit status 2), with
+            the binary's message, or the binary could not run.
+    """
+    if not isinstance(recursive, bool) or not isinstance(over_only, bool):
+        raise TypeError(
+            f"recursive and over_only must be True or False, not {recursive!r}, {over_only!r}"
+        )
+    if isinstance(subjects, Subjects):
+        document = subjects.model_dump_json(exclude_none=True).encode()
+    elif isinstance(subjects, Mapping):
+        document = json.dumps(subjects).encode()
+    else:
+        raise TypeError(f"subjects must be a Subjects or a mapping, not {subjects!r}")
+    args = [
+        "check",
+        "--json",
+        "--subjects",
+        "-",
+        *(["--over-only"] if over_only else []),
+        *(["--recursive"] if recursive else []),
+        *_selection(ids, labels, exclude_labels),
+    ]
+    return _report(SubjectsReport, "subjects-report", _run(binary, args, cwd, document))
 
 
 def validate(

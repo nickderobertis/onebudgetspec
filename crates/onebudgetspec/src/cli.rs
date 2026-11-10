@@ -37,7 +37,7 @@ pub enum Output {
     Text,
     /// One JSON document on stdout, for a program.
     Json,
-    /// Markdown comparison report.
+    /// Markdown: a saved comparison's report, or `check --subjects`'s one section per subject.
     Markdown,
 }
 
@@ -82,8 +82,18 @@ pub struct CheckArgs {
 
     /// Also write the JSON report `--output json` prints to this file, whatever the verdict.
     /// Missing parent directories are created.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, value_name = "FILE", conflicts_with = "subjects")]
     pub save_results: Option<PathBuf>,
+
+    /// Check the selection once per subject this JSON document names (`-` reads it from
+    /// stdin), each in its own directory and environment, and report each apart. Each
+    /// subject names its own budgets files, so no PATH is given.
+    #[arg(long, value_name = "FILE|-", conflicts_with = "paths")]
+    pub subjects: Option<PathBuf>,
+
+    /// With --subjects, keep only the results whose verdict is `over`.
+    #[arg(long)]
+    pub over_only: bool,
 }
 
 // llmlint: ignore-block[invalid_states_unrepresentable] the contract gives these their meaning at selection, not parsing: an id matching no budget is refused by Budgets::select with status 2, and a label matching none leaves an empty selection that exits 0, which a validating type here would turn into a refusal.

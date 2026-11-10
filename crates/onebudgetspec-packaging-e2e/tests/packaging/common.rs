@@ -369,8 +369,8 @@ fn numbers_as_floats(value: Value) -> Value {
 }
 
 /// Assert an SDK's answers over [`SDK_CASE`], printed as one JSON document with `check`,
-/// `list`, `validate`, `schema` and `binary`, are what the case and the binary answer,
-/// number for number.
+/// `subjects` (the case's directory as the one subject `case`), `list`, `validate`, `schema`
+/// and `binary`, are what the case and the binary answer, number for number.
 pub fn assert_sdk_answers(answers: &Value, case_dir: &Path, case: &Value, binary: &Path) {
     let expected: Value =
         serde_json::from_str(&fs::read_to_string(case_dir.join("expected.json")).unwrap()).unwrap();
@@ -378,6 +378,21 @@ pub fn assert_sdk_answers(answers: &Value, case_dir: &Path, case: &Value, binary
         numbers_as_floats(normalized(answers["check"].clone())),
         numbers_as_floats(expected),
         "the SDK's check differs from the case's expected report"
+    );
+    let subjects = &answers["subjects"];
+    assert_eq!(subjects["unanswered"], serde_json::json!([]), "{subjects}");
+    assert_eq!(subjects["subjects"][0]["id"], "case", "{subjects}");
+    assert_eq!(
+        subjects["subjects"][0]["context"],
+        serde_json::json!({ "case": "selection" })
+    );
+    assert_eq!(
+        numbers_as_floats(normalized(subjects["subjects"][0]["report"].clone())),
+        numbers_as_floats(
+            serde_json::from_str(&fs::read_to_string(case_dir.join("expected.json")).unwrap())
+                .unwrap()
+        ),
+        "the SDK's check_subjects differs from the case's expected report"
     );
     let selection = case_selection(case);
     let mut list_args = vec!["list", "--json"];

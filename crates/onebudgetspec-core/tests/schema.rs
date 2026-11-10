@@ -87,3 +87,35 @@ fn the_reserved_condition_names_are_the_sampled_host_values() {
     reserved.sort();
     assert_eq!(sampled, reserved);
 }
+
+/// A subject's `report` is the check report `check` prints, not a second form of it: the
+/// subjects report's definitions of it, its results and their host are the check-report
+/// root's own.
+#[test]
+fn a_subjects_report_holds_the_check_report_unchanged() {
+    let bundle = schema_bundle();
+    let check = &bundle["roots"]["check-report"];
+    let subjects = &bundle["roots"]["subjects-report"];
+    assert_eq!(
+        subjects["$defs"]["SubjectReport"]["properties"]["report"]["$ref"],
+        "#/$defs/CheckReport"
+    );
+    let embedded = &subjects["$defs"]["CheckReport"];
+    for key in ["properties", "required", "type", "additionalProperties"] {
+        assert_eq!(embedded[key], check[key], "CheckReport's {key} differs");
+    }
+    assert!(
+        embedded["properties"].is_object(),
+        "subjects-report defines no CheckReport"
+    );
+    for definition in ["CheckResult", "Host", "Verdict", "Direction"] {
+        assert!(
+            check["$defs"][definition].is_object(),
+            "check-report defines no {definition}"
+        );
+        assert_eq!(
+            subjects["$defs"][definition], check["$defs"][definition],
+            "{definition} differs between check-report and subjects-report"
+        );
+    }
+}

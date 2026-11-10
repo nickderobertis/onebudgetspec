@@ -12,7 +12,9 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use clap::Parser;
-use onebudgetspec_core::{CheckReport, Error, Selection, exit, load, schema_bundle};
+use onebudgetspec_core::{
+    CheckReport, Error, Selection, Subjects, check_subjects, exit, load, schema_bundle,
+};
 
 use crate::cli::{Cli, Command, Output, SelectedFiles};
 
@@ -37,14 +39,24 @@ fn main() -> ExitCode {
 }
 
 fn run(command: &Command, output: Output) -> Result<i32, Error> {
-    if output == Output::Markdown && !matches!(command, Command::Report(_)) {
+    let markdown_allowed = match command {
+        Command::Report(_) => true,
+        Command::Check(args) => args.subjects.is_some(),
+        _ => false,
+    };
+    if output == Output::Markdown && !markdown_allowed {
         return Err(Error::Invocation {
-            message: "--output markdown is supported only by report".into(),
+            message: "--output markdown is supported only by report and check --subjects".into(),
             next: "use --output text or --output json for this command".into(),
         });
     }
     let stdout = &mut std::io::stdout().lock();
     match command {
+        Command::Check(args) if args.subjects.is_some() => run_subjects(stdout, args, output),
+        Command::Check(args) if args.over_only => Err(Error::Invocation {
+            message: "--over-only filters a --subjects answer, and no --subjects was given".into(),
+            next: "pass --subjects FILE, or drop --over-only".into(),
+        }),
         Command::Check(args) => {
             if let Some(path) = &args.save_results {
                 refuse_unusable_results_file(path)?;
@@ -92,6 +104,40 @@ fn run(command: &Command, output: Output) -> Result<i32, Error> {
             exit::WITHIN,
         )),
     }
+}
+
+/// `check --subjects`: read the document, check each subject, and render the answer.
+fn run_subjects(
+    stdout: &mut impl Write,
+    args: &cli::CheckArgs,
+    output: Output,
+) -> Result<i32, Error> {
+    let source = args.subjects.as_deref().unwrap_or(Path::new("-"));
+    let text = if source == Path::new("-") {
+        let mut text = Vec::new();
+        std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut text)
+            .map(|_| text)
+            .map_err(|error| format!("stdin: {error}"))
+    } else {
+        std::fs::read(source).map_err(|error| format!("{}: {error}", source.display()))
+    }
+    .map_err(|message| Error::Invocation {
+        message: format!("cannot read the subjects document: {message}"),
+        next: "pass --subjects a readable JSON file, or - with the document on stdin".into(),
+    })?;
+    let subjects = Subjects::from_json(&text)?;
+    let SelectedFiles { files, select } = &args.selected;
+    let mut answer = check_subjects(&subjects, &selection(select), files.recursive);
+    let code = answer.exit_code();
+    if args.over_only {
+        answer.retain_over();
+    }
+    let written = match output {
+        Output::Json => render::json(stdout, &answer),
+        Output::Text => render::subjects_text(stdout, &answer),
+        Output::Markdown => render::subjects_markdown(stdout, &answer),
+    };
+    Ok(delivered(written, code))
 }
 
 /// Save the report to `path`, or name the reason on stderr and answer false.

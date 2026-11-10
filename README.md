@@ -127,6 +127,7 @@ report(len(recorded_requests), detail="one sync of the recorded fixture")
 
 ```sh
 onebudgetspec check [PATH]... [--id ID]... [--label LABEL]... [--exclude-label LABEL]... [--recursive] [--save-results FILE]
+onebudgetspec check --subjects FILE|- [--id ID]... [--label LABEL]... [--exclude-label LABEL]... [--recursive] [--over-only]
 onebudgetspec validate [PATH]... [--recursive]
 onebudgetspec list [PATH]... [--id ID]... [--label LABEL]... [--exclude-label LABEL]... [--recursive]
 onebudgetspec schema
@@ -134,7 +135,8 @@ onebudgetspec schema
 
 With no PATH, `./budgets.yaml` is read. `--recursive` searches a directory for files named
 `budgets.yaml`, honouring `.gitignore`. Every verb takes `--output text|json` (`--json` for
-short). `schema` prints the JSON Schema bundle for the budgets file and both reports.
+short). `schema` prints the JSON Schema bundle for the budgets file, the reports, the
+subjects document and its answer.
 
 A text result reads as one line, followed, when the result has a non-empty `detail`, by
 each line of that detail indented by two spaces, whatever the verdict:
@@ -154,6 +156,61 @@ whichever output format is chosen and whatever the verdict, measurement errors i
 what `check` prints and its exit status stay the same. Missing parent directories are
 created and the write is atomic (a temporary file beside `FILE`, then a rename). An invalid
 invocation or budgets file writes nothing.
+
+### Checking each subject apart
+
+`check --subjects FILE` checks one selection once per **subject** — a change, a commit, a
+deployment, anything measured separately — each in its own directory and environment, and
+answers per subject in one document. `--subjects -` reads the document from stdin. The
+subjects document (the `subjects` root of `onebudgetspec schema`, `schema_version` `1`):
+
+```json
+{
+  "schema_version": 1,
+  "subjects": [
+    {
+      "id": "change-1842",
+      "directory": "checkouts/change-1842",
+      "env": { "DELIVERY_RUN": "run-7" },
+      "files": ["budgets.yaml"],
+      "context": { "title": "anything, echoed back" }
+    }
+  ]
+}
+```
+
+For each subject, in order, the budgets files `files` names (`["budgets.yaml"]` when
+omitted; with `--recursive`, a directory is searched) are read relative to its
+`directory` (itself relative to the working directory), the selection is applied, and
+each selected budget is measured exactly as `check` measures one, except that every
+command, conditions included, runs from the subject's `directory` (a nested
+`files: ["nested/budgets.yaml"]` still runs from the subject's directory, and a relative
+program is found from it), with the subject's `env` added to the inherited environment. `id` is the caller's key, non-empty and unique in the
+document; `context` is any JSON, echoed back (null when omitted). Each subject names its
+own files, so no PATH is given beside `--subjects`, and `--save-results` is refused with it.
+
+The answer (`--json`; the `subjects-report` root, `schema_version` `1`):
+
+```json
+{
+  "schema_version": 1,
+  "subjects": [{ "id": "change-1842", "context": { "title": "anything, echoed back" }, "report": { "schema_version": 1, "results": [] } }],
+  "unanswered": [{ "id": "change-1850", "context": null, "reason": "checkouts/change-1850/budgets.yaml: no such file or directory" }]
+}
+```
+
+Each `report` is the check report `check --json` prints, unchanged. A subject whose
+directory or a budgets file cannot be read or is invalid, or whose selection keeps none of
+its budgets (an `--id` it does not register included), is not checked: it goes under
+`unanswered` with its `reason`, and every other subject is still checked. `--over-only`
+keeps only the results whose verdict is `over`. `--output markdown` renders one section per
+subject, each a table of its results, then one listing the unanswered subjects; the text
+output prints `subject <id>:` and that subject's result lines, indented by two spaces.
+
+The exit status is the table's below over every subject's results, taken before
+`--over-only` filters them: `0` when every result is within, `1` when any is over and none
+errored, `3` when any errored, and `2`, with nothing run, for an invalid or unreadable
+document. An unanswered subject holds no result, so it changes none of them.
 
 A saved `BudgetRun` may carry `result_notes`, a list of `{file, id, note}` with at most one
 note per catalog budget. A note naming no catalog budget or holding only whitespace makes
@@ -191,9 +248,9 @@ from it.
 | --- | --- | --- | --- |
 | Package | `onebudgetspec-core` (crates.io) | `onebudgetspec-sdk` (PyPI), imported as `onebudgetspec_sdk` | `@onebudgetspec/sdk` (npm) |
 | Install | `cargo add onebudgetspec-core` | `pip install onebudgetspec-sdk`, which installs `onebudgetspec-cli` at the same version | `npm install @onebudgetspec/sdk`, which installs its optional dependency `@onebudgetspec/cli` at the same version |
-| Calls | `load(paths, recursive)`, then `.select(&Selection)` and `.check()` or `.list_report()`, or `.all().list_report()` to validate; `schema_bundle()`; `report(value, detail)` | `check(paths=None, ids=None, labels=None, exclude_labels=None, recursive=False, cwd=None) -> CheckReport`, `validate(paths=None, recursive=False, cwd=None) -> ListReport`, `list_budgets(...)` with `check`'s arguments `-> ListReport`, `schema() -> dict`; `report(value, detail=None) -> bool`, which runs no binary | `check({paths, ids, labels, excludeLabels, recursive, cwd})`, `validate({paths, recursive, cwd})`, `listBudgets({paths, ids, labels, excludeLabels, recursive, cwd})`, `schema()`, each a promise of the generated type; `report(value, detail)`, synchronous, which runs no binary |
+| Calls | `load(paths, recursive)`, then `.select(&Selection)` and `.check()` or `.list_report()`, or `.all().list_report()` to validate; `Subjects::from_json(bytes)`, then `check_subjects(&subjects, &Selection, recursive) -> SubjectsReport`; `schema_bundle()`; `report(value, detail)` | `check(paths=None, ids=None, labels=None, exclude_labels=None, recursive=False, cwd=None) -> CheckReport`, `check_subjects(subjects, ids=None, labels=None, exclude_labels=None, recursive=False, over_only=False, cwd=None) -> SubjectsReport`, `validate(paths=None, recursive=False, cwd=None) -> ListReport`, `list_budgets(...)` with `check`'s arguments `-> ListReport`, `schema() -> dict`; `report(value, detail=None) -> bool`, which runs no binary | `check({paths, ids, labels, excludeLabels, recursive, cwd})`, `checkSubjects({subjects, ids, labels, excludeLabels, recursive, overOnly, cwd})`, `validate({paths, recursive, cwd})`, `listBudgets({paths, ids, labels, excludeLabels, recursive, cwd})`, `schema()`, each a promise of the generated type; `report(value, detail)`, synchronous, which runs no binary |
 | Binary | none: it measures in process | the `binary=` argument, then `ONEBUDGETSPEC_BIN`, then the `onebudgetspec` the `onebudgetspec-cli` wheel installed (`Scripts\onebudgetspec.exe` on Windows), then `onebudgetspec` on `PATH` (`onebudgetspec.exe` on Windows) | the `binary` option, then `ONEBUDGETSPEC_BIN`, then the launcher of the resolved `@onebudgetspec/cli` package |
-| Tests and journeys it owes | `crates/onebudgetspec-core/tests/api.rs`, `crates/onebudgetspec-core/tests/schema.rs`, and every CLI journey and conformance case, which drive it through the binary; `crates/onebudgetspec-e2e/tests/journeys/rust_report.rs` (`report`) | `sdks/python/tests/test_conformance.py` (every conformance case through `check`, `list_budgets` and `validate`), `sdks/python/tests/test_binary.py` (resolution order and refusals), `sdks/python/tests/test_generate.py` (the model generator), `sdks/python/tests/test_report.py` (`report`), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` | `sdks/typescript/tests/conformance.test.ts`, `sdks/typescript/tests/binary.test.ts`, `sdks/typescript/tests/errors.test.ts`, `sdks/typescript/tests/generator.test.ts` and `sdks/typescript/tests/report.test.ts` (the same concerns), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` |
+| Tests and journeys it owes | `crates/onebudgetspec-core/tests/api.rs`, `crates/onebudgetspec-core/tests/schema.rs`, `crates/onebudgetspec-core/tests/subjects.rs` (`check_subjects`), and every CLI journey and conformance case, which drive it through the binary; `crates/onebudgetspec-e2e/tests/journeys/rust_report.rs` (`report`) | `sdks/python/tests/test_conformance.py` (every conformance case through `check`, `list_budgets` and `validate`), `sdks/python/tests/test_binary.py` (resolution order and refusals), `sdks/python/tests/test_generate.py` (the model generator), `sdks/python/tests/test_report.py` (`report`), `sdks/python/tests/test_subjects.py` (`check_subjects`), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` | `sdks/typescript/tests/conformance.test.ts`, `sdks/typescript/tests/binary.test.ts`, `sdks/typescript/tests/errors.test.ts`, `sdks/typescript/tests/generator.test.ts`, `sdks/typescript/tests/report.test.ts` and `sdks/typescript/tests/subjects.test.ts` (the same concerns), and the packaging journey `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` |
 
 In Python and TypeScript, exit statuses `0`, `1` and `3` return the report, since the
 verdicts are in it; status `2` (an invalid invocation or budgets file) raises

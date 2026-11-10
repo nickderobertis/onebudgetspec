@@ -42,6 +42,17 @@ impl SelectedBudgets<'_> {
     /// hand a child its streams, explicitly.
     #[must_use]
     pub fn check(&self) -> CheckReport {
+        self.check_in(None, &BTreeMap::new())
+    }
+
+    /// [`Self::check`], with every command it runs, conditions included, run from `dir`
+    /// when given instead of the directory holding its budgets file, and with `env` added
+    /// to its inherited environment.
+    pub(crate) fn check_in(
+        &self,
+        dir: Option<&Path>,
+        env: &BTreeMap<String, String>,
+    ) -> CheckReport {
         #[cfg(windows)]
         keep_standard_handles();
         let mut declared: Vec<(&Path, BTreeMap<String, String>)> = Vec::new();
@@ -51,10 +62,10 @@ impl SelectedBudgets<'_> {
                 .iter()
                 .position(|(path, _)| *path == selected.file.path.as_path());
             let index = known.unwrap_or_else(|| {
-                declared.push((&selected.file.path, run_conditions(selected.file)));
+                declared.push((&selected.file.path, run_conditions(selected.file, dir, env)));
                 declared.len() - 1
             });
-            results.push(measure(*selected, &declared[index].1));
+            results.push(measure(*selected, &declared[index].1, dir, env));
         }
         CheckReport {
             schema_version: SCHEMA_VERSION,
@@ -87,12 +98,17 @@ fn keep_standard_handles() {
 }
 
 /// Run every condition a file declares, once each, in declaration order.
-fn run_conditions(file: &LoadedFile) -> BTreeMap<String, String> {
+fn run_conditions(
+    file: &LoadedFile,
+    dir: Option<&Path>,
+    env: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let dir = dir.unwrap_or(&file.dir);
     file.contents
         .conditions
         .iter()
         .map(|condition| {
-            let value = match run_condition(&file.dir, &condition.command) {
+            let value = match run_condition(dir, &condition.command, env) {
                 Ok(value) => value,
                 Err(reason) => {
                     eprintln!(
@@ -107,10 +123,14 @@ fn run_conditions(file: &LoadedFile) -> BTreeMap<String, String> {
         .collect()
 }
 
-fn run_condition(dir: &Path, argv: &[String]) -> Result<String, String> {
+fn run_condition(
+    dir: &Path,
+    argv: &[String],
+    env: &BTreeMap<String, String>,
+) -> Result<String, String> {
     // A condition belongs to no budget, so it never sees an id, even one this process
     // inherited from a check it is itself measured by.
-    let mut child = command(dir, argv)
+    let mut child = command(dir, argv, env)
         .env_remove(BUDGET_ID_ENV)
         .spawn()
         .map_err(|error| format!("cannot run {}: {error}", argv[0]))?;
@@ -145,15 +165,21 @@ struct Measured {
     returned: BTreeMap<String, String>,
 }
 
-fn measure(selected: Selected<'_>, declared: &BTreeMap<String, String>) -> CheckResult {
+fn measure(
+    selected: Selected<'_>,
+    declared: &BTreeMap<String, String>,
+    dir: Option<&Path>,
+    env: &BTreeMap<String, String>,
+) -> CheckResult {
     let Selected { file, budget } = selected;
+    let dir = dir.unwrap_or(&file.dir);
     let started_at = Utc::now();
     let sample = host::sample();
     let timeout = budget.timeout_seconds.map(Duration::from_secs);
     let outcome = match budget.measure {
-        Measure::Elapsed => measure_elapsed(&file.dir, &budget.id, &budget.command, timeout),
+        Measure::Elapsed => measure_elapsed(dir, &budget.id, &budget.command, timeout, env),
         Measure::Reported => {
-            measure_reported(&file.dir, &budget.id, &budget.command, timeout, declared)
+            measure_reported(dir, &budget.id, &budget.command, timeout, declared, env)
         }
     };
     let ended_at = Utc::now().max(started_at);
@@ -228,8 +254,9 @@ fn measure_elapsed(
     id: &str,
     argv: &[String],
     timeout: Option<Duration>,
+    env: &BTreeMap<String, String>,
 ) -> Result<Measured, String> {
-    let mut command = command(dir, argv);
+    let mut command = command(dir, argv, env);
     command.env(BUDGET_ID_ENV, id);
     let finished = run(&mut command, &argv[0], timeout)?;
     if !finished.status.success() {
@@ -248,13 +275,14 @@ fn measure_reported(
     argv: &[String],
     timeout: Option<Duration>,
     declared: &BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
 ) -> Result<Measured, String> {
     let result_file = tempfile::Builder::new()
         .prefix("onebudgetspec-result-")
         .suffix(".json")
         .tempfile()
         .map_err(|error| format!("cannot create the result file: {error}"))?;
-    let mut command = command(dir, argv);
+    let mut command = command(dir, argv, env);
     command
         .env(BUDGET_ID_ENV, id)
         .env(RESULT_ENV, result_file.path());
@@ -395,7 +423,10 @@ fn kind(value: &Value) -> &'static str {
 /// a process the command leaves running then holds only those pipes, which are not waited
 /// for past [`STDERR_DRAIN`], rather than holding this process's output open after it
 /// exits for whoever reads it to its end.
-fn command(dir: &Path, argv: &[String]) -> Command {
+///
+/// `env` is added to the inherited environment; the variables this library sets for a
+/// command itself are set after it, so they win.
+fn command(dir: &Path, argv: &[String], env: &BTreeMap<String, String>) -> Command {
     let program = Path::new(&argv[0]);
     let program = if program.is_relative() && program.components().count() > 1 {
         dir.join(program)
@@ -405,6 +436,7 @@ fn command(dir: &Path, argv: &[String]) -> Command {
     let mut command = Command::new(program);
     command
         .args(&argv[1..])
+        .envs(env)
         .current_dir(dir)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
