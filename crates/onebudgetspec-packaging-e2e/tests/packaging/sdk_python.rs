@@ -60,6 +60,12 @@ selection = {
 }
 print(json.dumps({
     "check": sdk.check(cwd=case, **selection).model_dump(mode="json"),
+    "subjects": sdk.check_subjects(
+        {"schema_version": 1, "subjects": [
+            {"id": "case", "directory": str(case), "context": {"case": "selection"}},
+        ]},
+        **selection,
+    ).model_dump(mode="json"),
     "list": sdk.list_budgets(cwd=case, **selection).model_dump(mode="json"),
     "validate": sdk.validate(cwd=case).model_dump(mode="json"),
     "schema": sdk.schema(),

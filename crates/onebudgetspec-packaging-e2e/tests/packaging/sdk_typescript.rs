@@ -57,6 +57,10 @@ const selection = {
 };
 console.log(JSON.stringify({
   check: await sdk.check({ cwd, ...selection }),
+  subjects: await sdk.checkSubjects({
+    subjects: { schema_version: 1, subjects: [{ id: "case", directory: cwd, context: { case: "selection" } }] },
+    ...selection,
+  }),
   list: await sdk.listBudgets({ cwd, ...selection }),
   validate: await sdk.validate({ cwd }),
   schema: await sdk.schema(),
@@ -74,6 +78,8 @@ import {
   compare,
   type ListReport,
   check,
+  checkSubjects,
+  type SubjectsReport,
   listBudgets,
   report,
   schema,
@@ -92,6 +98,13 @@ console.log(saved, comparison.rows);
 const checked: CheckReport = await check({ ids: ["a"], labels: ["b"], excludeLabels: ["c"], recursive: true, cwd: "." });
 const conditions: string | undefined = checked.results[0]?.host.conditions["region"];
 const listed: ListReport = await listBudgets({ paths: ["budgets.yaml"] });
+const bySubject: SubjectsReport = await checkSubjects({
+  subjects: { schema_version: 1, subjects: [{ id: "a", directory: ".", env: { A: "1" }, files: ["budgets.yaml"], context: [1] }] },
+  labels: ["b"],
+  overOnly: true,
+});
+const subjectReport: CheckReport | undefined = bySubject.subjects[0]?.report;
+console.log(subjectReport, bySubject.unanswered[0]?.reason);
 const validated: ListReport = await validate({ paths: ["budgets.yaml"], recursive: false });
 const bundle: Record<string, unknown> = await schema();
 const reported: boolean = report(1.5, "detail") && report(2);
