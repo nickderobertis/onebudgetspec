@@ -1,4 +1,5 @@
 /** The onebudgetspec TypeScript SDK: check, validate and list budgets through the binary,
+ * check one selection once per subject with `checkSubjects`,
  * and `report` a `reported` budget's result from the command that measures it. */
 
 import type { CheckResult } from "./generated/check-report.ts";
@@ -10,6 +11,8 @@ export {
   CLI_PACKAGE,
   type CompareOptions,
   check,
+  type CheckSubjectsOptions,
+  checkSubjects,
   compare,
   type FileOptions,
   type ListOptions,
@@ -46,3 +49,9 @@ export type { DeliveryResult } from "./generated/delivery-result.ts";
 export type { HistoricalFlag, PublishRequest } from "./generated/publish-request.ts";
 export type { HistoryEntry, ReportHistory } from "./generated/report-history.ts";
 export type { RollingHistory } from "./generated/rolling-history.ts";
+export type { Subject, Subjects } from "./generated/subjects.ts";
+export type {
+  SubjectReport,
+  SubjectsReport,
+  Unanswered,
+} from "./generated/subjects-report.ts";

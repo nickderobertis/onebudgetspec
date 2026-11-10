@@ -12,6 +12,8 @@ import type { CheckReport } from "./generated/check-report.ts";
 import type { ComparisonReport } from "./generated/comparison-report.ts";
 import type { ListReport } from "./generated/list-report.ts";
 import { BUNDLE_ROOTS, reportSchemas } from "./generated/schemas.ts";
+import type { Subjects } from "./generated/subjects.ts";
+import type { SubjectsReport } from "./generated/subjects-report.ts";
 
 export { BUNDLE_ROOTS };
 
@@ -49,6 +51,20 @@ export type CheckOptions = FileOptions & SelectionOptions;
 export type ValidateOptions = FileOptions;
 export type ListOptions = FileOptions & SelectionOptions;
 export type SchemaOptions = { binary?: string | undefined };
+
+/** The subjects to check, the selection applied to each, and how to run the binary. */
+export type CheckSubjectsOptions = SelectionOptions & {
+  /** The subjects document. */
+  subjects: Subjects;
+  /** Let a subject's `files` name directories to search for `budgets.yaml` files. */
+  recursive?: boolean | undefined;
+  /** Keep only the results whose verdict is `over`. */
+  overOnly?: boolean | undefined;
+  /** The directory a relative subject `directory` is read from. */
+  cwd?: string | undefined;
+  /** The binary to run; see {@link resolveBinary}. */
+  binary?: string | undefined;
+};
 
 /** The binary refused the call, could not run, or printed no report. */
 export class OnebudgetspecError extends Error {
@@ -151,15 +167,27 @@ function selection(options: SelectionOptions): string[] {
   ];
 }
 
-/** Run the binary with `args` and resolve its stdout, or reject with its message. */
-function run(binary: string | undefined, args: string[], cwd: string | undefined): Promise<string> {
+/** Run the binary with `args` and resolve its stdout, or reject with its message. `input`
+ * is written to its standard input; without it, the binary reads none. */
+function run(
+  binary: string | undefined,
+  args: string[],
+  cwd: string | undefined,
+  input?: string,
+): Promise<string> {
   const [program, ...prefix] = resolveBinary(optionalString("binary", binary));
   optionalString("cwd", cwd);
   return new Promise((resolve, reject) => {
-    const child = spawn(program, [...prefix, ...args], {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const argv = [...prefix, ...args];
+    const child =
+      input === undefined
+        ? spawn(program, argv, { cwd, stdio: ["ignore", "pipe", "pipe"] })
+        : spawn(program, argv, { cwd, stdio: ["pipe", "pipe", "pipe"] });
+    if (input !== undefined) {
+      // A binary that exits before reading all of it closes the pipe; its status says why.
+      child.stdin?.on("error", () => {});
+      child.stdin?.end(input);
+    }
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
@@ -267,6 +295,7 @@ const ajv = new Ajv2020({
 });
 const checkReport = ajv.compile<CheckReport>(reportSchemas["check-report"]);
 const listReport = ajv.compile<ListReport>(reportSchemas["list-report"]);
+const subjectsReport = ajv.compile<SubjectsReport>(reportSchemas["subjects-report"]);
 
 /** `stdout` as the report `validator` accepts, or the reason it is not one. */
 function report<T>(validator: ValidateFunction<T>, root: string, stdout: string): T {
@@ -293,6 +322,43 @@ function report<T>(validator: ValidateFunction<T>, root: string, stdout: string)
 export async function check(options: CheckOptions = {}): Promise<CheckReport> {
   const args = ["check", "--json", ...selection(options), ...files(options)];
   return report(checkReport, "check-report", await run(options.binary, args, options.cwd));
+}
+
+/**
+ * Check the selection once per subject: `onebudgetspec check --subjects -`. Each subject's
+ * budgets files are read from its `directory` and its commands run there, with its `env`
+ * added to the inherited environment. Resolves with each checked subject's report, with its
+ * `id` and `context`, and every subject that could not be checked under `unanswered`, with
+ * its reason; rejects with the binary's own message when the document or the invocation is
+ * invalid (exit status 2).
+ */
+export async function checkSubjects(options: CheckSubjectsOptions): Promise<SubjectsReport> {
+  const { subjects, recursive, overOnly } = options;
+  if (!isObject(subjects)) {
+    throw new TypeError(`subjects must be a subjects document, not ${JSON.stringify(subjects)}`);
+  }
+  for (const [name, value] of [
+    ["recursive", recursive],
+    ["overOnly", overOnly],
+  ] as const) {
+    if (value !== undefined && typeof value !== "boolean") {
+      throw new TypeError(`${name} must be true or false, not ${JSON.stringify(value)}`);
+    }
+  }
+  const args = [
+    "check",
+    "--json",
+    "--subjects",
+    "-",
+    ...(overOnly ? ["--over-only"] : []),
+    ...(recursive ? ["--recursive"] : []),
+    ...selection(options),
+  ];
+  return report(
+    subjectsReport,
+    "subjects-report",
+    await run(options.binary, args, options.cwd, JSON.stringify(subjects)),
+  );
 }
 
 /**
