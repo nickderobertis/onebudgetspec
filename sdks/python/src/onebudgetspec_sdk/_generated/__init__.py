@@ -1,7 +1,7 @@
 """Models generated from `onebudgetspec schema`; see sdks/python/generate.py."""
 
 #: The version of the schema bundle these models were generated from.
-SCHEMA_BUNDLE_VERSION = 3
+SCHEMA_BUNDLE_VERSION = 4
 
 #: Every root the schema bundle carries, which the client requires of one.
 BUNDLE_ROOTS = (
@@ -15,4 +15,6 @@ BUNDLE_ROOTS = (
     "publish-request",
     "report-history",
     "rolling-history",
+    "subjects",
+    "subjects-report",
 )

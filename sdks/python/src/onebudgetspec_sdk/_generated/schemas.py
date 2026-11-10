@@ -1976,4 +1976,272 @@ REPORT_SCHEMAS: dict[str, dict[str, object]] = {
         "title": "ReportHistory",
         "type": "object",
     },
+    "subjects": {
+        "$defs": {
+            "Subject": {
+                "additionalProperties": False,
+                "description": "One subject: where its budgets files are, and the environment its commands run with.",
+                "properties": {
+                    "context": {
+                        "default": None,
+                        "description": "Any JSON, echoed back beside the subject's answer; null when omitted.",
+                    },
+                    "directory": {
+                        "description": "The directory the subject's budgets files are read from and its commands run in; a\nrelative one is read from the working directory.",
+                        "minLength": 1,
+                        "type": "string",
+                    },
+                    "env": {
+                        "additionalProperties": {"type": "string"},
+                        "description": "Variables added to the inherited environment of every command the subject runs.",
+                        "type": "object",
+                    },
+                    "files": {
+                        "default": ["budgets.yaml"],
+                        "description": 'The budgets files, relative to `directory`; `["budgets.yaml"]` when omitted. With\n`--recursive`, a directory is searched for files named `budgets.yaml`.',
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                        "type": "array",
+                    },
+                    "id": {
+                        "description": "The caller's key for the subject, non-empty and unique in the document.",
+                        "minLength": 1,
+                        "type": "string",
+                    },
+                },
+                "required": ["id", "directory"],
+                "type": "object",
+            }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": False,
+        "description": "The subjects `check --subjects` checks, each once.",
+        "properties": {
+            "schema_version": {"const": 1, "description": "Always `1`.", "type": "integer"},
+            "subjects": {
+                "description": "The subjects, checked and reported in this order.",
+                "items": {"$ref": "#/$defs/Subject"},
+                "type": "array",
+            },
+        },
+        "required": ["schema_version", "subjects"],
+        "title": "subjects",
+        "type": "object",
+    },
+    "subjects-report": {
+        "$defs": {
+            "CheckReport": {
+                "additionalProperties": False,
+                "description": "What `check` answers with: one result per selected budget, in measurement order.",
+                "properties": {
+                    "results": {
+                        "description": "One result per selected budget.",
+                        "items": {"$ref": "#/$defs/CheckResult"},
+                        "type": "array",
+                    },
+                    "schema_version": {"const": 1, "description": "Always `1`.", "type": "integer"},
+                },
+                "required": ["schema_version", "results"],
+                "title": "check-report",
+                "type": "object",
+            },
+            "CheckResult": {
+                "additionalProperties": False,
+                "description": "One budget's measurement.",
+                "properties": {
+                    "actual": {
+                        "description": "The measured value; null on an error.",
+                        "format": "double",
+                        "type": ["number", "null"],
+                    },
+                    "detail": {
+                        "description": "The `detail` a `reported` command wrote; null when it wrote none.",
+                        "type": ["string", "null"],
+                    },
+                    "direction": {
+                        "$ref": "#/$defs/Direction",
+                        "description": "The budget's direction.",
+                    },
+                    "ended_at": {
+                        "description": "When the measurement ended (RFC 3339), never before `started_at`.",
+                        "format": "date-time",
+                        "type": "string",
+                    },
+                    "error": {
+                        "description": "Why the measurement failed; null unless `verdict` is `error`.",
+                        "type": ["string", "null"],
+                    },
+                    "file": {
+                        "description": "The budgets file's path, as discovered or given.",
+                        "type": "string",
+                    },
+                    "headroom": {
+                        "description": "`threshold - actual` under `max`, `actual - threshold` under `min`; negative when\nover, null on an error.",
+                        "format": "double",
+                        "type": ["number", "null"],
+                    },
+                    "headroom_percent": {
+                        "description": "`headroom / threshold * 100`; null on an error or when the threshold is 0.",
+                        "format": "double",
+                        "type": ["number", "null"],
+                    },
+                    "host": {
+                        "$ref": "#/$defs/Host",
+                        "description": "The host conditions recorded beside this result.",
+                    },
+                    "id": {"description": "The budget's id.", "type": "string"},
+                    "labels": {
+                        "description": "The budget's labels, empty when it has none.",
+                        "items": {"type": "string"},
+                        "type": "array",
+                    },
+                    "started_at": {
+                        "description": "When the measurement started (RFC 3339).",
+                        "format": "date-time",
+                        "type": "string",
+                    },
+                    "threshold": {
+                        "description": "The budget's threshold.",
+                        "format": "double",
+                        "type": "number",
+                    },
+                    "unit": {"description": "The budget's unit.", "type": "string"},
+                    "verdict": {
+                        "$ref": "#/$defs/Verdict",
+                        "description": "`within`, `over` or `error`.",
+                    },
+                },
+                "required": [
+                    "actual",
+                    "detail",
+                    "direction",
+                    "ended_at",
+                    "error",
+                    "file",
+                    "headroom",
+                    "headroom_percent",
+                    "host",
+                    "id",
+                    "labels",
+                    "started_at",
+                    "threshold",
+                    "unit",
+                    "verdict",
+                ],
+                "type": "object",
+            },
+            "Direction": {
+                "description": "Which side of the threshold is within.",
+                "oneOf": [
+                    {
+                        "const": "max",
+                        "description": "Within when `actual <= threshold`.",
+                        "type": "string",
+                    },
+                    {
+                        "const": "min",
+                        "description": "Within when `actual >= threshold`.",
+                        "type": "string",
+                    },
+                ],
+            },
+            "Host": {
+                "additionalProperties": False,
+                "description": "The host conditions recorded beside a result.",
+                "properties": {
+                    "conditions": {
+                        "additionalProperties": {"type": "string"},
+                        "description": "Each condition the file declares, and for a `reported` result each condition its\ncommand returned, by name.",
+                        "type": "object",
+                    },
+                    "cpus": {
+                        "description": "The CPUs available to this process.",
+                        "format": "uint32",
+                        "minimum": 0,
+                        "type": "integer",
+                    },
+                    "load1": {
+                        "description": "The 1-minute load average; null where unreadable.",
+                        "format": "double",
+                        "type": ["number", "null"],
+                    },
+                    "mem_available_mib": {
+                        "description": "Available memory in MiB; null where unreadable.",
+                        "format": "uint64",
+                        "minimum": 0,
+                        "type": ["integer", "null"],
+                    },
+                },
+                "required": ["conditions", "cpus", "load1", "mem_available_mib"],
+                "type": "object",
+            },
+            "SubjectReport": {
+                "additionalProperties": False,
+                "description": "One checked subject.",
+                "properties": {
+                    "context": {"description": "The subject's context, echoed."},
+                    "id": {"description": "The subject's id.", "type": "string"},
+                    "report": {
+                        "$ref": "#/$defs/CheckReport",
+                        "description": "The check report `check` prints, over the subject's selected budgets.",
+                    },
+                },
+                "required": ["id", "context", "report"],
+                "type": "object",
+            },
+            "Unanswered": {
+                "additionalProperties": False,
+                "description": "A subject that could not be checked, and why.",
+                "properties": {
+                    "context": {"description": "The subject's context, echoed."},
+                    "id": {"description": "The subject's id.", "type": "string"},
+                    "reason": {
+                        "description": "Why it could not be checked: its directory or a budgets file could not be read or\nis invalid, or the selection keeps none of its budgets.",
+                        "type": "string",
+                    },
+                },
+                "required": ["id", "context", "reason"],
+                "type": "object",
+            },
+            "Verdict": {
+                "description": "A result's verdict.",
+                "oneOf": [
+                    {
+                        "const": "within",
+                        "description": "The actual value is on the budget's side of the threshold.",
+                        "type": "string",
+                    },
+                    {
+                        "const": "over",
+                        "description": "The actual value is past the threshold.",
+                        "type": "string",
+                    },
+                    {
+                        "const": "error",
+                        "description": "No value was measured; `error` says why.",
+                        "type": "string",
+                    },
+                ],
+            },
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": False,
+        "description": "What `check --subjects` answers with: each subject's check report, and every subject\nthat could not be checked.",
+        "properties": {
+            "schema_version": {"const": 1, "description": "Always `1`.", "type": "integer"},
+            "subjects": {
+                "description": "One entry per checked subject, in document order.",
+                "items": {"$ref": "#/$defs/SubjectReport"},
+                "type": "array",
+            },
+            "unanswered": {
+                "description": "One entry per subject that could not be checked, in document order.",
+                "items": {"$ref": "#/$defs/Unanswered"},
+                "type": "array",
+            },
+        },
+        "required": ["schema_version", "subjects", "unanswered"],
+        "title": "subjects-report",
+        "type": "object",
+    },
 }
