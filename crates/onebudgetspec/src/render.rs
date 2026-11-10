@@ -3,7 +3,9 @@
 use std::fmt::Write as _;
 use std::io::{self, Write};
 
-use onebudgetspec_core::{CheckReport, CheckResult, Host, ListReport, UNKNOWN, Verdict};
+use onebudgetspec_core::{
+    CheckReport, CheckResult, Host, ListReport, SubjectsReport, UNKNOWN, Verdict,
+};
 use serde::Serialize;
 
 /// One JSON document, then a newline.
@@ -28,6 +30,89 @@ pub fn check_text(out: &mut impl Write, report: &CheckReport) -> io::Result<()> 
         }
     }
     Ok(())
+}
+
+/// Per subject, `subject <id>:` and then its results as [`check_text`] prints them,
+/// indented by two spaces; then `subject <id>: unanswered — <reason>` for each subject
+/// that could not be checked.
+pub fn subjects_text(out: &mut impl Write, answer: &SubjectsReport) -> io::Result<()> {
+    for subject in &answer.subjects {
+        writeln!(out, "subject {}:", subject.id)?;
+        let mut lines = Vec::new();
+        check_text(&mut lines, &subject.report)?;
+        for line in String::from_utf8_lossy(&lines).lines() {
+            writeln!(out, "  {line}")?;
+        }
+    }
+    for unanswered in &answer.unanswered {
+        writeln!(
+            out,
+            "subject {}: unanswered — {}",
+            unanswered.id, unanswered.reason
+        )?;
+    }
+    Ok(())
+}
+
+/// One section per checked subject, each a table of its results, then one listing every
+/// subject that could not be checked, with its reason.
+pub fn subjects_markdown(out: &mut impl Write, answer: &SubjectsReport) -> io::Result<()> {
+    writeln!(out, "# Budgets by subject")?;
+    for subject in &answer.subjects {
+        writeln!(out, "\n## Subject `{}`\n", code(&subject.id))?;
+        if subject.report.results.is_empty() {
+            writeln!(out, "No results.")?;
+            continue;
+        }
+        writeln!(
+            out,
+            "| Budget | Verdict | Actual | Budget limit | Headroom |"
+        )?;
+        writeln!(out, "| --- | --- | --- | --- | --- |")?;
+        for result in &subject.report.results {
+            let unit = &result.unit;
+            let with_unit = |value: Option<f64>| {
+                value.map_or_else(|| "—".to_owned(), |value| format!("{value} {unit}"))
+            };
+            let verdict = match (&result.verdict, &result.error) {
+                (Verdict::Error, Some(error)) => format!("error: {}", cell(error)),
+                (verdict, _) => verdict.as_str().to_owned(),
+            };
+            writeln!(
+                out,
+                "| `{}` | {verdict} | {} | {} {unit} | {} |",
+                code(&result.id),
+                with_unit(result.actual),
+                result.threshold,
+                with_unit(result.headroom),
+            )?;
+        }
+    }
+    if !answer.unanswered.is_empty() {
+        writeln!(out, "\n## Unanswered\n")?;
+        for unanswered in &answer.unanswered {
+            writeln!(
+                out,
+                "- `{}`: {}",
+                code(&unanswered.id),
+                cell(&unanswered.reason)
+            )?;
+        }
+    }
+    Ok(())
+}
+
+/// `text` safe inside a table cell or a list item: one line, with `|` escaped.
+fn cell(text: &str) -> String {
+    text.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace('|', "\\|")
+}
+
+/// `text` safe inside an inline code span.
+fn code(text: &str) -> String {
+    cell(text).replace('`', "'")
 }
 
 fn result_line(result: &CheckResult) -> String {

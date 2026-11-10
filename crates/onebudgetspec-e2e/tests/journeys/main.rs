@@ -26,6 +26,7 @@ mod save_results;
 mod saved_report;
 mod selection;
 mod standing_report;
+mod subjects;
 mod text_output;
 mod validate;
 mod verdicts;

@@ -12,9 +12,9 @@ use crate::report::{CheckReport, ListReport};
 
 /// The bundle's own version, bumped whenever any root's schema changes — added, removed,
 /// renamed or altered inside. The golden digest in `tests/schema.rs` fails until it moves.
-pub const SCHEMA_BUNDLE_VERSION: u32 = 3;
+pub const SCHEMA_BUNDLE_VERSION: u32 = 4;
 
-/// The bundle: `{"version": ..., "roots": {"budgets-file", "check-report", "list-report"}}`,
+/// The bundle: `{"version": ..., "roots": {"budgets-file", "check-report", "list-report", ...}}`,
 /// each root a self-contained JSON Schema (draft 2020-12).
 #[must_use]
 pub fn schema_bundle() -> Value {
@@ -31,7 +31,8 @@ pub fn schema_bundle() -> Value {
             "publish-request": schema_for!(crate::delivery::PublishRequest),
             "delivery-result": schema_for!(crate::delivery::DeliveryResult),
             "report-history": schema_for!(crate::delivery::ReportHistory),
-
+            "subjects": schema_for!(crate::subjects::Subjects),
+            "subjects-report": schema_for!(crate::subjects::SubjectsReport),
         },
     })
 }

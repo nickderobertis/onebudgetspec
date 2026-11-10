@@ -101,6 +101,13 @@ impl Run {
         report
     }
 
+    /// Stdout as a subjects report, validated against the `subjects-report` root.
+    pub fn subjects_report(&self) -> Value {
+        let report = self.json();
+        validate("subjects-report", &report);
+        report
+    }
+
     /// Stdout as a list report, validated against the `list-report` root.
     pub fn list_report(&self) -> Value {
         let report = self.json();

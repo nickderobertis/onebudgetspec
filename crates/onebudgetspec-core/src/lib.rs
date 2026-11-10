@@ -22,6 +22,9 @@
 //! no retry or repeat. Saved comparisons never execute a measuring command. Over budget
 //! is a result, not something to re-measure until it passes.
 //!
+//! [`check_subjects`] checks one selection once per subject, each in its own directory and
+//! environment, and reports each subject's verdicts apart.
+//!
 //! A `reported` budget's command, when written in Rust, writes its result with [`report()`].
 
 pub mod comparison;
@@ -35,6 +38,7 @@ pub mod report;
 mod reporter;
 mod schema;
 mod select;
+pub mod subjects;
 
 pub use error::Error;
 pub use load::{Budgets, Discovered, LoadedFile, discover, load, load_discovered};
@@ -44,6 +48,7 @@ pub use report::{CheckReport, CheckResult, Host, ListReport, ListedBudget, Verdi
 pub use reporter::report;
 pub use schema::{SCHEMA_BUNDLE_VERSION, schema_bundle};
 pub use select::{Selected, SelectedBudgets, Selection};
+pub use subjects::{Subject, SubjectReport, Subjects, SubjectsReport, Unanswered, check_subjects};
 
 pub use comparison::{compare, render_markdown};
 pub use delivery::merge_standing_report;
