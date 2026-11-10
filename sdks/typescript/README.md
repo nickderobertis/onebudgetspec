@@ -27,6 +27,9 @@ const bundle = await schema(); // the JSON Schema bundle
 ```
 
 - `check({paths, ids, labels, excludeLabels, recursive, cwd})` → `Promise<CheckReport>`
+- `checkSubjects({subjects, ids, labels, excludeLabels, recursive, overOnly, cwd})` →
+  `Promise<SubjectsReport>`: the selection checked once per subject of a `Subjects`
+  document, each in its own directory and environment; see `check --subjects`
 - `validate({paths, recursive, cwd})` → `Promise<ListReport>`
 - `listBudgets({paths, ids, labels, excludeLabels, recursive, cwd})` → `Promise<ListReport>`
 - `schema()` → `Promise<Record<string, unknown>>`

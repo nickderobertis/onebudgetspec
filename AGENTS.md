@@ -40,8 +40,11 @@ and npm, with Python and TypeScript SDKs, all released at one version.
 
 ## The contract
 
-The Rust types in `crates/onebudgetspec-core` are the one source of the budgets file and
-both reports; `onebudgetspec schema` emits them. Never hand-write a copy: generate it or
+The Rust types in `crates/onebudgetspec-core` are the one source of the budgets file, both
+reports, and `check --subjects`'s subjects document and answer (`subjects.rs`, the
+`subjects` and `subjects-report` roots, each `schema_version` 1; a subject's `report` is the
+`CheckReport` unchanged, which `tests/schema.rs` reconciles); `onebudgetspec schema` emits
+them. Never hand-write a copy: generate it or
 reconcile it with a test. A schema change bumps `SCHEMA_BUNDLE_VERSION` and re-records
 `schema.golden` in the same change. Other repositories build against this contract, so
 changing it is its owner's decision. The CLI parses, calls the SDK and renders; behaviour
@@ -61,22 +64,22 @@ regenerates them, and each generator's `--check` runs under its project's `lint`
 0, 1 and 3 return the report; 2 raises or rejects `OnebudgetspecError` with the CLI's message.
 
 - **Rust** — `onebudgetspec-core` (`cargo add onebudgetspec-core`): `load`, `select`,
-  `check`, `list_report`, `schema_bundle`, `report`, `compare`, `render_markdown` and
+  `check`, `check_subjects`, `list_report`, `schema_bundle`, `report`, `compare`, `render_markdown` and
   `merge_standing_report`, in process. Owes
-  `crates/onebudgetspec-core/tests/` and, through the binary, every journey and conformance
+  `crates/onebudgetspec-core/tests/` (`subjects.rs` for `check_subjects`) and, through the binary, every journey and conformance
   case; `report` the `rust_report.rs` journey.
 - **Python** — `onebudgetspec-sdk` (`pip install onebudgetspec-sdk`, requiring
-  `onebudgetspec-cli==` the workspace version): `check`, `validate`, `list_budgets`,
+  `onebudgetspec-cli==` the workspace version): `check`, `check_subjects`, `validate`, `list_budgets`,
   `schema`, `compare`, `render_markdown`, and `report`, which runs no binary. Binary: `binary=`, `ONEBUDGETSPEC_BIN`, the cli wheel's (`bin/onebudgetspec`,
   or `Scripts/onebudgetspec.exe` on Windows), `PATH`. Owes
   `sdks/python/tests/test_conformance.py` (every case), `test_binary.py` (resolution,
-  refusals), `test_generate.py` (the generator), `test_report.py` (`report`), `test_comparison.py` (saved reports) and the
+  refusals), `test_generate.py` (the generator), `test_report.py` (`report`), `test_comparison.py` (saved reports), `test_subjects.py` (`check_subjects`) and the
   `sdk_python.rs` journey.
 - **TypeScript** — `@onebudgetspec/sdk` (`npm install @onebudgetspec/sdk`, with
   `@onebudgetspec/cli` optional, `workspace:*` packed as the workspace version): `check`,
-  `validate`, `listBudgets`, `schema`, `compare`, `renderMarkdown`, and `report`, which runs no binary. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
+  `checkSubjects`, `validate`, `listBudgets`, `schema`, `compare`, `renderMarkdown`, and `report`, which runs no binary. Binary: `binary`, `ONEBUDGETSPEC_BIN`, the resolved
   `@onebudgetspec/cli` launcher. Owes `sdks/typescript/tests/conformance.test.ts`,
-  `binary.test.ts`, `errors.test.ts`, `generator.test.ts`, `report.test.ts`, `comparison.test.ts`, `build.test.ts` (a rebuild never empties `dist`) and the
+  `binary.test.ts`, `errors.test.ts`, `generator.test.ts`, `report.test.ts`, `comparison.test.ts`, `subjects.test.ts`, `build.test.ts` (a rebuild never empties `dist`) and the
   `sdk_typescript.rs` journey.
 
 A new conformance case must use only flags both SDK runners parse; each fails on any other.
@@ -99,6 +102,7 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 - `crates/onebudgetspec-e2e/tests/journeys/saved_report.rs` — saved comparisons reproduce offline with all catalog rows, ordinary exits and real external reporter diagnostics; a row's result note is a Details bullet, never in a table, and a document without notes renders with no Notes block; standing history deduplicates and bounds reports.
 - `crates/onebudgetspec-e2e/tests/journeys/report_layout.rs` — over real saved inputs (onepipeline-ui #676, #686, and #686 with a flagged and an enforced `error` row), every row in exactly one of Needs attention (open), Within budget and Not measured (collapsed), each reason and diagnostic once inside Details, no row marked, and v0.2.0's verdicts, flags, statistics and exits.
 - `crates/onebudgetspec-e2e/tests/journeys/standing_report.rs` — across successive heads, earlier heads' flags sit in one collapsed section after Details, never the current head's; the section is absent with no earlier flag and no omission, holds only the capacity line when heads were left out; a v0.2.0 body is read and its hidden block round-trips byte-for-byte.
+- `crates/onebudgetspec-e2e/tests/journeys/subjects.rs` — `check --subjects` checks each subject from its own directory with its own environment, echoes each `context`, puts an unreadable or empty-selection subject under `unanswered` with its reason, keeps only over results under `--over-only`, renders a section per subject in markdown and text, exits 0, 1, 3 and 2 as `check` does, and answers as the library and a plain `check` do.
 - `crates/onebudgetspec-e2e/tests/journeys/save_results.rs` — `check --save-results` leaves the JSON document under every verdict with stdout and status unchanged, creates parents, replaces atomically, writes nothing on a refusal, and exits 3 when it cannot write.
 - `crates/onebudgetspec-e2e/tests/journeys/rust_report.rs` — a Rust measurement's `report` under a check gives `actual` and `detail`; outside one it writes nothing; a non-finite value or a failed write is an error.
 - `crates/onebudgetspec-e2e/tests/journeys/output_streams.rs` — command output on stderr only; an unwritable report exits 3.
@@ -113,7 +117,7 @@ A new conformance case must use only flags both SDK runners parse; each fails on
 - `crates/onebudgetspec-e2e/tests/journeys/validate.rs` — `validate` accepts a good file, running nothing.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/cli_wheel.rs` — the wheel's binary checks a case exactly as the cargo build does; the sequential native release builder installs wheel, npm and Cargo products, drives a real check, and proves payload reuse.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/npm_launcher.rs` — the launcher runs its carrier like the cargo build, and refuses a missing, broken or killed one.
-- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` — the SDK wheel pins `onebudgetspec-cli` at the workspace version, and installed beside it answers a conformance case through every call, typed; a Python runner's `report` reaches that binary's check.
+- `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_python.rs` — the SDK wheel pins `onebudgetspec-cli` at the workspace version, and installed beside it answers a conformance case through every call, `check_subjects` included, typed; a Python runner's `report` reaches that binary's check.
 - `crates/onebudgetspec-packaging-e2e/tests/packaging/sdk_typescript.rs` — the SDK tarball takes `@onebudgetspec/cli` as an optional dependency at the workspace version, answers a conformance case through every call beside the launcher, and type-checks a consumer; a JavaScript runner's `report` reaches the launcher's check.
 
 ## Commits, releases, and merging

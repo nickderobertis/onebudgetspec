@@ -27,6 +27,9 @@ bundle = schema()  # the JSON Schema bundle, as a dict
 ```
 
 - `check(paths=None, ids=None, labels=None, exclude_labels=None, recursive=False, cwd=None) -> CheckReport`
+- `check_subjects(subjects, ids=None, labels=None, exclude_labels=None, recursive=False, over_only=False, cwd=None) -> SubjectsReport`:
+  the selection checked once per subject of a `Subjects` document (or the same as plain
+  JSON data), each in its own directory and environment; see `check --subjects`
 - `validate(paths=None, recursive=False, cwd=None) -> ListReport`
 - `list_budgets(paths=None, ids=None, labels=None, exclude_labels=None, recursive=False, cwd=None) -> ListReport`
 - `schema() -> dict`
