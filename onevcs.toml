@@ -8,7 +8,14 @@
 # (in deps/, .fingerprint/, build/ and incremental/) modified more than 2 days ago, and
 # keeps each unit's newest build, every build modified within those 2 days, and everything
 # else in the target dir. `just bootstrap` installs the pinned pruner.
-schema_version = 1
+schema_version = 2
+
+[policy]
+publication = "change-auto"
+approvals = "none"
+
+[policy.checks]
+wait_seconds = 10500  # recorded max 8342 s (run 38410505674) + 25% margin
 
 [pool.maintain]
 command = ["just", "pool-maintenance"]
